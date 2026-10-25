@@ -167,15 +167,15 @@ function HullShell({ lod, m }: { lod: Lod; m: GalleonMaterials }) {
 /* -------------------------------------------------------------------------------------------- castles & decks */
 
 function Castles({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; livery: Livery }) {
-  // kit `Railing`: `position` is the start of the rail, which runs along local +x after `rotationY`
+  // kit `Railing`: `position` is the centre of the rail, which runs along local ±x/2 after `rotationY`
   const railSeg = (x0: number, x1: number, y: number, side: 1 | -1) => {
     const z0 = side * (halfWidth(x0, y) - G.plank - 0.03)
     const z1 = side * (halfWidth(x1, y) - G.plank - 0.03)
     const len = Math.hypot(x1 - x0, z1 - z0)
-    return { position: [x0, y, z0] as Vec3, length: len, rotationY: -Math.atan2(z1 - z0, x1 - x0), height: 0.2, lod }
+    return { position: [(x0 + x1) / 2, y, (z0 + z1) / 2] as Vec3, length: len, rotationY: -Math.atan2(z1 - z0, x1 - x0), height: 0.2, lod }
   }
-  /** Rail across the ship at `x` from `zA` to `zB` (runs toward −z from the +z end). */
-  const railAcross = (x: number, y: number, zA: number, zB: number) => ({ position: [x, y, Math.max(zA, zB)] as Vec3, length: Math.abs(zA - zB), rotationY: Math.PI / 2, height: 0.2, lod })
+  /** Rail across the ship at `x` from `zA` to `zB`. */
+  const railAcross = (x: number, y: number, zA: number, zB: number) => ({ position: [x, y, (zA + zB) / 2] as Vec3, length: Math.abs(zA - zB), rotationY: Math.PI / 2, height: 0.2, lod })
   const sides: (1 | -1)[] = [1, -1]
   const fcY = G.forecastleDeckY + G.toeRail + 0.03
   const qdY = G.quarterDeckY + G.toeRail + 0.03
@@ -265,7 +265,7 @@ function SternWorks({ lod, m, livery, sink }: { lod: Lod; m: GalleonMaterials; l
         <boxGeometry args={[0.02, 0.06, 0.34]} />
       </mesh>
       {/* taffrail across the top of the transom, with the three stern lanterns */}
-      <Railing position={[x + 0.02, G.poopDeckY + G.toeRail + 0.03, halfWidth(x, G.poopDeckY) - 0.05]} length={2 * halfWidth(x, G.poopDeckY) - 0.1} livery={livery} rotationY={Math.PI / 2} height={0.2} lod={lod} />
+      <Railing position={[x + 0.02, G.poopDeckY + G.toeRail + 0.03, 0]} length={2 * halfWidth(x, G.poopDeckY) - 0.1} livery={livery} rotationY={Math.PI / 2} height={0.2} lod={lod} />
       {([
         [x + 0.02, G.poopDeckY + 0.42, 0],
         [x + 0.04, G.poopDeckY + 0.3, 0.23],

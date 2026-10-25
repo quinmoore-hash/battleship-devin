@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import type { Livery, Lod } from '../types'
 import { shipMaterials } from './materials'
-import { Rope } from './Rope'
+import { mergeBuffers, ropeCurve, ropeGeometry } from './Rope'
 
 export interface CannonProps {
   position: Vec3
@@ -26,30 +26,79 @@ const BARREL_PROFILE: [number, number][] = [
 ]
 
 const GEOM = new Map<string, THREE.BufferGeometry>()
-function barrelGeometry(lod: Lod) {
-  const key = `barrel${lod}`
+const _e = new THREE.Euler()
+
+/** Clone `g`, rotate (Euler xyz) and translate it — a tiny helper for assembling merged parts. */
+function place(g: THREE.BufferGeometry, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0): THREE.BufferGeometry {
+  const c = g.clone()
+  if (rx || ry || rz) c.applyQuaternion(new THREE.Quaternion().setFromEuler(_e.set(rx, ry, rz)))
+  c.translate(x, y, z)
+  return c
+}
+const box = (w: number, h: number, d: number, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) => place(new THREE.BoxGeometry(w, h, d), x, y, z, rx, ry, rz)
+const cyl = (rt: number, rb: number, h: number, seg: number, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) => place(new THREE.CylinderGeometry(rt, rb, h, seg), x, y, z, rx, ry, rz)
+
+const CHEEK_H = 0.19
+
+/**
+ * All static cannon geometry merged into one mesh per material (iron barrel + trunnions, oak carriage, brass cap
+ * squares) so a gun costs 3 draw calls instead of ~30. Cached per LOD and shared by every cannon.
+ */
+function cannonGeometry(lod: Lod) {
+  const key = `cannon${lod}`
+  let g = GEOM.get(key) as THREE.BufferGeometry & { oak?: THREE.BufferGeometry; brass?: THREE.BufferGeometry | null }
+  if (g) return { iron: g, oak: g.oak!, brass: g.brass ?? null }
+  const radial = lod === 0 ? 18 : lod === 1 ? 10 : 6
+  const pts = (lod === 2 ? BARREL_PROFILE.filter((_, i) => i % 2 === 0 || i > 20) : BARREL_PROFILE).map(([r, z]) => new THREE.Vector2(r, z))
+  const barrel = new THREE.LatheGeometry(pts, radial)
+  barrel.rotateX(Math.PI / 2)
+  barrel.translate(0, 0.2, 0)
+  const iron = mergeBuffers([barrel, cyl(0.03, 0.03, 0.26, lod === 0 ? 10 : 6, 0, 0.2, 0.02, 0, 0, Math.PI / 2)])
+  const oak: THREE.BufferGeometry[] = []
+  for (const s of [-1, 1]) {
+    oak.push(box(0.05, CHEEK_H, 0.46, s * 0.1, 0.095, 0.06))
+    oak.push(box(0.05, 0.04, 0.12, s * 0.1, 0.095 + CHEEK_H / 2 - 0.02, -0.12))
+    if (lod < 2) oak.push(box(0.05, 0.06, 0.1, s * 0.1, 0.03, -0.17))
+    oak.push(cyl(0.075, 0.075, 0.045, lod === 0 ? 14 : 8, s * 0.15, 0.075, 0.2, 0, 0, Math.PI / 2))
+    oak.push(cyl(0.065, 0.065, 0.045, lod === 0 ? 14 : 8, s * 0.14, 0.065, -0.14, 0, 0, Math.PI / 2))
+  }
+  oak.push(box(0.2, 0.03, 0.46, 0, 0.06, -0.02), box(0.3, 0.05, 0.05, 0, 0.03, 0.2), box(0.28, 0.05, 0.05, 0, 0.03, -0.14))
+  oak.push(box(0.07, 0.035, 0.14, 0, 0.13, -0.17, -0.22), cyl(0.012, 0.012, 0.08, 6, 0, 0.17, -0.09, 0, 0, Math.PI / 2))
+  let brass: THREE.BufferGeometry | null = null
+  if (lod < 2) {
+    brass = mergeBuffers([
+      ...[-1, 1].map((s) => place(new THREE.TorusGeometry(0.034, 0.008, 6, 12, Math.PI), s * 0.1, 0.2, 0.02, 0, 0, Math.PI / 2)),
+      ...[-1, 1].map((s) => cyl(0.014, 0.014, 0.02, 6, s * 0.17, 0.075, 0.2, 0, 0, Math.PI / 2)),
+      ...[-1, 1].map((s) => cyl(0.012, 0.012, 0.02, 6, s * 0.16, 0.065, -0.14, 0, 0, Math.PI / 2)),
+    ])
+  }
+  g = Object.assign(iron, { oak: mergeBuffers(oak), brass })
+  GEOM.set(key, g)
+  return { iron: g, oak: g.oak!, brass }
+}
+
+const RING_L: Vec3 = [-0.26, 0.2, 0.42]
+const RING_R: Vec3 = [0.26, 0.2, 0.42]
+const RECOIL_STEPS = 8
+
+/** Breeching rope for a quantised recoil (slack when run out, taut when recoiled) — cached per step. */
+function breechingGeometry(lod: Lod, step: number) {
+  const key = `breech${lod}:${step}`
   let g = GEOM.get(key)
   if (!g) {
-    const radial = lod === 0 ? 18 : lod === 1 ? 10 : 6
-    const pts = (lod === 2 ? BARREL_PROFILE.filter((_, i) => i % 2 === 0 || i > 20) : BARREL_PROFILE).map(([r, z]) => new THREE.Vector2(r, z))
-    g = new THREE.LatheGeometry(pts, radial)
-    g.rotateX(Math.PI / 2)
-    g.scale(1, 1, -1)
-    g.computeVertexNormals()
+    const recoil = step / RECOIL_STEPS
+    const cascabel = new THREE.Vector3(0, 0.2, -0.33 - recoil * 0.32)
+    const sag = 0.1 * (1 - recoil) + 0.004
+    const r = lod === 0 ? 6 : 4
+    g = mergeBuffers([
+      ropeGeometry(ropeCurve(RING_L, cascabel.toArray() as Vec3, sag, 10), 0.016, r),
+      ropeGeometry(ropeCurve(cascabel.toArray() as Vec3, RING_R, sag, 10), 0.016, r),
+    ])
     GEOM.set(key, g)
   }
   return g
 }
-function truckGeometry(r: number, lod: Lod) {
-  const key = `truck${r.toFixed(3)}${lod}`
-  let g = GEOM.get(key)
-  if (!g) {
-    g = new THREE.CylinderGeometry(r, r, 0.045, lod === 0 ? 14 : 8)
-    g.rotateZ(Math.PI / 2)
-    GEOM.set(key, g)
-  }
-  return g
-}
+const RING_BOLTS = mergeBuffers([RING_L, RING_R].map((p) => place(new THREE.TorusGeometry(0.025, 0.006, 5, 10), p[0], p[1], p[2], 0, Math.PI / 2)))
 
 /**
  * Naval gun on a four-truck carriage. Muzzle at local z = +0.45 (× scale) when run out; `recoil`
@@ -57,88 +106,20 @@ function truckGeometry(r: number, lod: Lod) {
  */
 export function Cannon({ position, rotationY = 0, livery, recoil = 0, scale = 1, lod = 0 }: CannonProps) {
   const m = shipMaterials(livery)
-  const barrel = useMemo(() => barrelGeometry(lod), [lod])
-  const slide = -recoil * 0.32
-  const cheekH = 0.19
-  const ringL: Vec3 = [-0.26, 0.2, 0.42]
-  const ringR: Vec3 = [0.26, 0.2, 0.42]
-  const cascabel: Vec3 = [0, 0.2, -0.33 + slide]
-  const sag = 0.1 * (1 - recoil) + 0.004
+  const geo = cannonGeometry(lod)
+  const step = Math.round(Math.min(1, Math.max(0, recoil)) * RECOIL_STEPS)
+  const slide = -(step / RECOIL_STEPS) * 0.32
   return (
     <group position={position} rotation-y={rotationY} scale={scale}>
       <group position-z={slide}>
-        <mesh geometry={barrel} material={m.iron} position-y={0.2} castShadow receiveShadow />
-        {/* trunnions + cap squares */}
-        <mesh material={m.iron} position={[0, 0.2, 0.02]} rotation-z={Math.PI / 2} castShadow>
-          <cylinderGeometry args={[0.03, 0.03, 0.26, lod === 0 ? 10 : 6]} />
-        </mesh>
-        {lod < 2 &&
-          [-1, 1].map((s) => (
-            <mesh key={s} material={m.brass} position={[s * 0.1, 0.2, 0.02]} rotation-z={Math.PI / 2}>
-              <torusGeometry args={[0.034, 0.008, 6, 12, Math.PI]} />
-            </mesh>
-          ))}
-        {/* carriage cheeks (stepped) */}
-        {[-1, 1].map((s) => (
-          <group key={s} position-x={s * 0.1}>
-            <mesh material={m.oak} position={[0, 0.095, 0.06]} castShadow receiveShadow>
-              <boxGeometry args={[0.05, cheekH, 0.46]} />
-            </mesh>
-            <mesh material={m.oak} position={[0, 0.095 + cheekH / 2 - 0.02, -0.12]} castShadow>
-              <boxGeometry args={[0.05, 0.04, 0.12]} />
-            </mesh>
-            {lod < 2 && (
-              <mesh material={m.oak} position={[0, 0.03, -0.17]} castShadow>
-                <boxGeometry args={[0.05, 0.06, 0.1]} />
-              </mesh>
-            )}
-          </group>
-        ))}
-        {/* bed / transom / axletrees */}
-        <mesh material={m.oak} position={[0, 0.06, -0.02]} receiveShadow>
-          <boxGeometry args={[0.2, 0.03, 0.46]} />
-        </mesh>
-        <mesh material={m.oak} position={[0, 0.03, 0.2]} castShadow>
-          <boxGeometry args={[0.3, 0.05, 0.05]} />
-        </mesh>
-        <mesh material={m.oak} position={[0, 0.03, -0.14]} castShadow>
-          <boxGeometry args={[0.28, 0.05, 0.05]} />
-        </mesh>
-        {/* quoin + bed */}
-        <mesh material={m.oak} position={[0, 0.13, -0.17]} rotation-x={-0.22} castShadow>
-          <boxGeometry args={[0.07, 0.035, 0.14]} />
-        </mesh>
-        <mesh material={m.oak} position={[0, 0.17, -0.09]} rotation-z={Math.PI / 2}>
-          <cylinderGeometry args={[0.012, 0.012, 0.08, 6]} />
-        </mesh>
-        {/* trucks */}
-        {[-1, 1].map((s) => (
-          <group key={s}>
-            <mesh geometry={truckGeometry(0.075, lod)} material={m.oak} position={[s * 0.15, 0.075, 0.2]} castShadow receiveShadow />
-            <mesh geometry={truckGeometry(0.065, lod)} material={m.oak} position={[s * 0.14, 0.065, -0.14]} castShadow receiveShadow />
-            {lod < 2 && (
-              <>
-                <mesh material={m.iron} position={[s * 0.17, 0.075, 0.2]} rotation-z={Math.PI / 2}>
-                  <cylinderGeometry args={[0.014, 0.014, 0.02, 6]} />
-                </mesh>
-                <mesh material={m.iron} position={[s * 0.16, 0.065, -0.14]} rotation-z={Math.PI / 2}>
-                  <cylinderGeometry args={[0.012, 0.012, 0.02, 6]} />
-                </mesh>
-              </>
-            )}
-          </group>
-        ))}
+        <mesh geometry={geo.iron} material={m.iron} castShadow receiveShadow />
+        <mesh geometry={geo.oak} material={m.oak} castShadow receiveShadow />
+        {geo.brass && <mesh geometry={geo.brass} material={m.brass} />}
       </group>
-      {/* breeching rope: bulwark ring bolt → cascabel → ring bolt */}
       {lod < 2 && (
         <>
-          <Rope from={ringL} to={cascabel} sag={sag} livery={livery} radius={0.016} lod={lod} />
-          <Rope from={cascabel} to={ringR} sag={sag} livery={livery} radius={0.016} lod={lod} />
-          {[ringL, ringR].map((p, i) => (
-            <mesh key={i} material={m.iron} position={p} rotation-y={Math.PI / 2}>
-              <torusGeometry args={[0.025, 0.006, 5, 10]} />
-            </mesh>
-          ))}
+          <mesh geometry={breechingGeometry(lod, step)} material={m.rope} castShadow />
+          <mesh geometry={RING_BOLTS} material={m.iron} />
         </>
       )}
     </group>
