@@ -13,6 +13,7 @@ import {
   bulkheadGeometry,
   clothGeometry,
   deckGeometry,
+  dropTopSkin,
   hullBand,
   hullSections,
   loftCurves,
@@ -139,8 +140,8 @@ const innerSkin = (x: number, y: number) => hullHalfWidth(x, y) - 0.045
 // hull
 
 const hullGeo = once(() => ({
-  above: loftHull(hullSections('above'), 12),
-  below: loftHull(hullSections('below'), 12),
+  above: dropTopSkin(loftHull(hullSections('above'), 12), railY),
+  below: dropTopSkin(loftHull(hullSections('below'), 12), () => 0),
   keel: (() => {
     const xs = stations(X_STERN + 0.05, X_BOW - 0.02, 20)
     const lo = (s: 1 | -1): Vec3[] => xs.map((x) => [x, keelY(x) - 0.045, s * 0.03])
@@ -450,10 +451,10 @@ function galleryFacePoint(y: number, z: number, off = 0): { pos: Vec3; rotY: num
   const f = (zz: number) => xb + (X_STERN - xb) * Math.pow(Math.abs(zz) / gw, 3)
   const x = f(z)
   const dx = (f(z + 0.01) - f(z - 0.01)) / 0.02
-  // surface tangent (dx, 1) in (x,z); outward normal (-1, dx) normalised → yaw about y
-  const rotY = Math.atan2(-1, dx) + Math.PI / 2
+  // surface tangent (dx, 1) in (x,z); outward normal (-1, dx) normalised; a +z-facing plane yawed by atan2(nx, nz) faces it
   const nx = -1 / Math.hypot(1, dx)
   const nz = dx / Math.hypot(1, dx)
+  const rotY = Math.atan2(nx, nz)
   return { pos: [x + nx * off, y, z + nz * off], rotY }
 }
 
@@ -990,7 +991,7 @@ const boatGeo = once(() => {
     const w = Math.max(0.012, 0.11 * t)
     return { x, keelY: -0.1 * (0.5 + 0.5 * t), railY: 0.02, halfWidths: [0.01, w * 0.6, w * 0.92, w] }
   })
-  return loftHull(sections, 4)
+  return loftHull(sections, 4) // kept closed: reads as a canvas-covered boat and avoids single-sided insides
 })
 
 function ShipsBoat({ m, lod }: { m: ManOWarMaterials; lod: Lod }) {

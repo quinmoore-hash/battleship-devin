@@ -378,7 +378,7 @@ export function manOWarMaterials(livery: Livery): ManOWarMaterials {
     }),
     lanternGlass: std({ color: '#ffd9a0', transparent: true, opacity: 0.6, emissive: '#ff9a2c', emissiveIntensity: 1.6, roughness: 0.2, depthWrite: false }),
     flame: new THREE.MeshBasicMaterial({ color: '#ffd27a', toneMapped: false }),
-    char: std({ color: '#0d0907', roughness: 1, emissive: '#ff3800', emissiveIntensity: 0.25 }),
+    char: std({ color: '#0d0907', roughness: 1, emissive: '#5a1200', emissiveIntensity: 0.08 }),
     splinter: std({ color: '#2b1a0e', roughness: 0.95 }),
     lidInner: std({ color: livery === 'pirate' ? '#7a1515' : '#9c1b1b', roughness: 0.6 }),
     portDark: new THREE.MeshBasicMaterial({ color: '#07050a', polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
