@@ -7,7 +7,7 @@ import { shipMaterials } from './materials'
 import { Rope } from './Rope'
 
 export interface RailingProps {
-  /** Start of the rail (the rail runs along +x after `rotationY`). */
+  /** Centre of the rail (it runs along ±x/2 of `length` after `rotationY`). */
   position: Vec3
   length: number
   livery: Livery
@@ -27,7 +27,7 @@ const BALUSTER = (() => {
 const POST_SIMPLE = new THREE.CylinderGeometry(0.016, 0.02, 1, 5).translate(0, 0.5, 0)
 const _m = new THREE.Matrix4()
 
-/** Rail with turned balusters (one InstancedMesh per railing) and a capped top rail. */
+/** Rail centred on `position` with turned balusters (one InstancedMesh per railing) and a capped top rail. */
 export function Railing({ position, length, livery, rotationY = 0, height = 0.3, spacing = 0.28, lod = 0 }: RailingProps) {
   const m = shipMaterials(livery)
   const count = Math.max(2, Math.round(length / spacing) + 1)
@@ -37,18 +37,18 @@ export function Railing({ position, length, livery, rotationY = 0, height = 0.3,
     if (!mesh) return
     for (let i = 0; i < count; i++) {
       const x = (i / (count - 1)) * length
-      mesh.setMatrixAt(i, _m.makeScale(1, height, 1).setPosition(x, 0, 0))
+      mesh.setMatrixAt(i, _m.makeScale(1, height, 1).setPosition(x - length / 2, 0, 0))
     }
     mesh.instanceMatrix.needsUpdate = true
   }, [count, length, height])
   return (
     <group position={position} rotation-y={rotationY}>
       <instancedMesh ref={inst} args={[lod === 0 ? BALUSTER : POST_SIMPLE, m.oak, count]} castShadow receiveShadow frustumCulled={false} />
-      <mesh material={m.trim} position={[length / 2, height + 0.015, 0]} castShadow receiveShadow>
+      <mesh material={m.trim} position={[0, height + 0.015, 0]} castShadow receiveShadow>
         <boxGeometry args={[length + 0.04, 0.03, 0.07]} />
       </mesh>
       {lod < 2 && (
-        <mesh material={m.oak} position={[length / 2, height * 0.5, 0]} castShadow>
+        <mesh material={m.oak} position={[0, height * 0.5, 0]} castShadow>
           <boxGeometry args={[length, 0.025, 0.025]} />
         </mesh>
       )}

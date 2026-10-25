@@ -538,7 +538,7 @@ export function Boat({ position, livery, length = 1.6, rotationY = 0, lod = 0 }:
 }
 
 export interface NettingProps {
-  /** Start of the netting (runs along +x after `rotationY`). */
+  /** Centre of the netting (runs along ±x/2 of `length` after `rotationY`). */
   position: Vec3
   length: number
   height?: number
@@ -556,7 +556,7 @@ export function Netting({ position, length, height = 0.5, livery, rotationY = 0,
     const ny = Math.round(height / pitch)
     for (let i = 0; i <= nx; i++) {
       for (let j = 0; j <= ny; j++) {
-        const x = (i / nx) * length
+        const x = (i / nx) * length - length / 2
         const y = (j / ny) * height
         if (i < nx) pos.push(x, y, 0, x + length / nx, Math.min(height, y + height / ny), 0)
         if (i < nx && j > 0) pos.push(x, y, 0, x + length / nx, y - height / ny, 0)
@@ -571,8 +571,8 @@ export function Netting({ position, length, height = 0.5, livery, rotationY = 0,
   return (
     <group position={position} rotation-y={rotationY}>
       <lineSegments geometry={geom} material={line} />
-      <Rope from={[0, height, 0]} to={[length, height, 0]} sag={0.015} livery={livery} radius={0.009} />
-      {[0, length].map((x) => (
+      <Rope from={[-length / 2, height, 0]} to={[length / 2, height, 0]} sag={0.015} livery={livery} radius={0.009} />
+      {[-length / 2, length / 2].map((x) => (
         <mesh key={x} material={m.oak} position={[x, height / 2, 0]} castShadow>
           <cylinderGeometry args={[0.014, 0.018, height, 6]} />
         </mesh>
