@@ -71,14 +71,16 @@ describe('useAudioSettings', () => {
     expect(useAudioSettings.getState().muted).toBe(true)
   })
 
-  it('persists only the three settings to localStorage', () => {
+  it('persists only the five settings to localStorage', () => {
     const s = useAudioSettings.getState()
     s.setSfxVolume(0.25)
     s.setMusicVolume(0.75)
+    s.setMasterVolume(0.9)
+    s.setAmbienceVolume(0.1)
     s.setMuted(true)
     const stored = persisted()
-    expect(stored.state).toEqual({ sfxVolume: 0.25, musicVolume: 0.75, muted: true })
-    expect(stored.version).toBe(1)
+    expect(stored.state).toEqual({ masterVolume: 0.9, sfxVolume: 0.25, musicVolume: 0.75, ambienceVolume: 0.1, muted: true })
+    expect(stored.version).toBe(2)
   })
 
   it('rehydrates from localStorage and sanitises bad values', async () => {
@@ -96,5 +98,30 @@ describe('useAudioSettings', () => {
     storage.setItem(AUDIO_SETTINGS_STORAGE_KEY, JSON.stringify({ state: { sfxVolume: 0.1, musicVolume: 0.2, muted: true }, version: 1 }))
     await useAudioSettings.persist.rehydrate()
     expect(useAudioSettings.getState()).toMatchObject({ sfxVolume: 0.1, musicVolume: 0.2, muted: true })
+  })
+})
+
+describe('mergeAudioSettings (v1 → v2 migration)', () => {
+  it('fills in the new buses from defaults and keeps old values', async () => {
+    const { mergeAudioSettings, DEFAULT_AUDIO_SETTINGS } = await import('./settings')
+    expect(mergeAudioSettings({ sfxVolume: 0.3, musicVolume: 0.9, muted: true })).toEqual({
+      masterVolume: 1,
+      sfxVolume: 0.3,
+      musicVolume: 0.9,
+      ambienceVolume: DEFAULT_AUDIO_SETTINGS.ambienceVolume,
+      muted: true,
+    })
+  })
+
+  it('clamps and ignores garbage', async () => {
+    const { mergeAudioSettings } = await import('./settings')
+    expect(mergeAudioSettings({ masterVolume: 7, sfxVolume: -1, musicVolume: 'loud', ambienceVolume: NaN, muted: 'yes' })).toEqual({
+      masterVolume: 1,
+      sfxVolume: 0,
+      musicVolume: 0.5,
+      ambienceVolume: 0,
+      muted: false,
+    })
+    expect(mergeAudioSettings(null)).toEqual({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, ambienceVolume: 0.6, muted: false })
   })
 })
