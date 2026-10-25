@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { loadSettings, saveSettings, SETTINGS_STORAGE_KEY, useGameStore } from './gameStore'
 
