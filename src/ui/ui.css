@@ -4,7 +4,7 @@
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  overflow: auto;
+  overflow: hidden auto;
   display: grid;
   align-content: start;
   padding: clamp(0.75rem, 2vw, 1.5rem);
@@ -1318,7 +1318,8 @@
       'log';
   }
   .grid-wrap {
-    --cell: clamp(22px, 7.6vw, 34px);
+    /* 10 cells + gaps + labels + panel padding must fit 100vw minus root padding and a scrollbar */
+    --cell: clamp(18px, calc((100vw - 130px) / 10), 34px);
   }
   .devin-bubble {
     max-width: none;
@@ -1335,9 +1336,6 @@
   }
 }
 @media (max-width: 420px) {
-  .grid-wrap {
-    --cell: clamp(20px, 7.2vw, 30px);
-  }
   .tray-ship .meta small {
     display: none;
   }
