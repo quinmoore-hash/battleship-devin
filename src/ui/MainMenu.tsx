@@ -21,7 +21,6 @@ export const LOADING_TIPS = [
 ]
 
 const BOUNTY: Record<string, string> = { easy: '500', medium: '2,000', hard: '10,000' }
-const WANTED: Record<string, string> = { easy: 'Greenhorn Gus', medium: 'Captain Redbeard', hard: 'Admiral Devin' }
 
 export function MainMenu() {
   const startGame = useGameStore((s) => s.startGame)
@@ -52,8 +51,8 @@ export function MainMenu() {
             <span className="poster-portrait" aria-hidden>
               <Skull size={44} />
             </span>
-            <span className="poster-name">{WANTED[d.id]}</span>
-            <span className="poster-level">{d.label}</span>
+            <span className="poster-name">{d.label}</span>
+            <span className="poster-level">{d.tagline}</span>
             <span className="poster-waves" aria-label={`${d.waves} of 3 skulls`}>
               {Array.from({ length: 3 }, (_, k) => (
                 <Skull key={k} size={14} />
