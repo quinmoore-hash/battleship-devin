@@ -182,7 +182,7 @@ export function BattleScreen() {
       </header>
       {confirmQuit && (
         <Modal title="Abandon the battle?" testId="quit-modal" onClose={() => setConfirmQuit(false)}>
-          <p>Devin will count this as a win. Your fleet stays where it is if you rematch.</p>
+          <p>Devin will count this as a win and gloat about it. You can start a fresh game from the menu.</p>
           <div className="modal-actions">
             <button type="button" className="btn ghost" onClick={withSfx(() => setConfirmQuit(false), 'ui-click')}>
               Keep playing
