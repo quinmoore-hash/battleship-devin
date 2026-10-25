@@ -7,7 +7,7 @@ import type { ReplayBoards } from './replayModel'
 import type { Board } from '../engine'
 
 /** Sunk ships stay as listing wrecks instead of vanishing below the waves, so replay/photo show what was lost. */
-const WRECK_SINK = 0.8
+const WRECK_SINK = 0.6
 const wrecks = (board: Board): Partial<Record<string, number>> =>
   Object.fromEntries(board.ships.filter(isSunk).map((s) => [s.spec.id, WRECK_SINK]))
 
