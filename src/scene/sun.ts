@@ -7,7 +7,11 @@ import type { Vec3 } from './layout'
  */
 export const GOLDEN_HOUR = 0.72
 
+export type Weather = 'calm' | 'stormy'
+
 export interface Atmosphere {
+  /** 0 = calm, 1 = full storm (overcast, grey-green sea, heavy swell). */
+  storm: number
   /** Unit direction *toward* the sun. y < 0 means night. */
   sunDir: Vec3
   /** Sun elevation in [-1, 1] (sin of the altitude angle). */
@@ -146,8 +150,19 @@ const AMBIENT = stops([
   [1, '#2a3566'],
 ])
 
-export function computeAtmosphere(timeOfDay: number): Atmosphere {
+/** Blend a hex colour toward `target` by `k`, dropping saturation on the way (overcast look). */
+function stormTint(hex: string, target: string, k: number): string {
+  if (k <= 0) return hex
+  const a = hexToRgb(hex)
+  const b = hexToRgb(target)
+  const lum = (a[0] * 0.3 + a[1] * 0.59 + a[2] * 0.11)
+  const grey: [number, number, number] = [lerp(a[0], lum, 0.6), lerp(a[1], lum, 0.6), lerp(a[2], lum, 0.6)]
+  return rgbToHex([lerp(grey[0], b[0], k), lerp(grey[1], b[1], k), lerp(grey[2], b[2], k)])
+}
+
+export function computeAtmosphere(timeOfDay: number, weather: Weather = 'calm'): Atmosphere {
   const t = ((timeOfDay % 1) + 1) % 1
+  const storm = weather === 'stormy' ? 1 : 0
   const angle = (t - 0.25) * Math.PI * 2 // 0 at sunrise, PI/2 at noon, PI at sunset
   const elevation = Math.sin(angle)
   // sun travels east -> west across the bay, arcing over the far shoreline (-z)
@@ -156,25 +171,33 @@ export function computeAtmosphere(timeOfDay: number): Atmosphere {
   const dir: Vec3 = [sunDir[0] / len, sunDir[1] / len, sunDir[2] / len]
 
   const daylight = smoothstep(-0.12, 0.18, elevation)
-  const stars = 1 - smoothstep(-0.22, 0.02, elevation)
-  const sunIntensity = lerp(0.08, 2.4, smoothstep(-0.05, 0.35, elevation))
-  const ambientIntensity = lerp(0.18, 0.75, daylight)
-  const moonIntensity = (1 - daylight) * 0.35
+  const stars = (1 - smoothstep(-0.22, 0.02, elevation)) * (1 - storm)
+  const sunIntensity = lerp(0.08, 2.4, smoothstep(-0.05, 0.35, elevation)) * lerp(1, 0.28, storm)
+  const ambientIntensity = lerp(0.18, 0.75, daylight) * lerp(1, 0.7, storm)
+  const moonIntensity = (1 - daylight) * 0.35 * (1 - storm * 0.8)
+
+  // a storm pulls every colour toward a bruised grey-green overcast, darker at night
+  const k = storm * 0.72
+  const dark = lerp(1, 0.45, 1 - daylight)
+  const overcast = rgbToHex([74 * dark, 84 * dark, 92 * dark])
+  const seaStorm = rgbToHex([38 * dark, 60 * dark, 62 * dark])
+  const shallowStorm = rgbToHex([70 * dark, 110 * dark, 108 * dark])
 
   return {
+    storm,
     sunDir: dir,
     elevation,
     daylight,
-    sunColor: ramp(SUN, t),
+    sunColor: stormTint(ramp(SUN, t), '#c9d2d8', storm * 0.5),
     sunIntensity,
-    ambientColor: ramp(AMBIENT, t),
+    ambientColor: stormTint(ramp(AMBIENT, t), overcast, k),
     ambientIntensity,
-    skyZenith: ramp(ZENITH, t),
-    skyHorizon: ramp(HORIZON, t),
-    sunGlow: ramp(GLOW, t),
-    fogColor: ramp(HORIZON, t),
-    waterDeep: ramp(DEEP, t),
-    waterShallow: ramp(SHALLOW, t),
+    skyZenith: stormTint(ramp(ZENITH, t), rgbToHex([44 * dark, 52 * dark, 60 * dark]), k),
+    skyHorizon: stormTint(ramp(HORIZON, t), overcast, k),
+    sunGlow: stormTint(ramp(GLOW, t), '#b8c0c8', storm * 0.8),
+    fogColor: stormTint(ramp(HORIZON, t), overcast, k),
+    waterDeep: stormTint(ramp(DEEP, t), seaStorm, k),
+    waterShallow: stormTint(ramp(SHALLOW, t), shallowStorm, k),
     stars,
     moonIntensity,
   }

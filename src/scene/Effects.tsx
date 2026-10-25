@@ -1,14 +1,25 @@
-import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
+import { Bloom, BrightnessContrast, EffectComposer, HueSaturation, SMAA, Vignette } from '@react-three/postprocessing'
+import type { Quality } from './Water'
 
-/**
- * Optional post-processing (high quality only): a soft bloom that picks up the sun disc,
- * water specular, the lighthouse lamp and the glowing grid lines, plus a gentle vignette.
- */
-export function Effects({ night }: { night: number }) {
+export interface EffectsProps {
+  /** 0 = full day, 1 = deep night. Bloom gets stronger so lanterns and fire glow after dark. */
+  night: number
+  /** 0..1 storm intensity: desaturates and deepens the vignette. */
+  storm?: number
+  /** `low` renders no post-processing at all. */
+  quality?: Quality
+}
+
+/** Bloom tuned for lantern/fire highlights, a soft vignette and a warm tropical colour grade. */
+export function Effects({ night, storm = 0, quality = 'high' }: EffectsProps) {
+  if (quality === 'low') return null
   return (
-    <EffectComposer multisampling={4}>
-      <Bloom luminanceThreshold={0.95} luminanceSmoothing={0.2} intensity={0.55 + night * 0.4} mipmapBlur radius={0.6} />
-      <Vignette eskil={false} offset={0.25} darkness={0.55} />
+    <EffectComposer multisampling={0}>
+      <SMAA />
+      <Bloom luminanceThreshold={0.9} luminanceSmoothing={0.25} intensity={0.5 + night * 0.6 + storm * 0.15} mipmapBlur radius={0.65} />
+      <HueSaturation saturation={0.12 - storm * 0.35 - night * 0.1} hue={0} />
+      <BrightnessContrast brightness={-0.01 - storm * 0.03} contrast={0.08 + storm * 0.06} />
+      <Vignette eskil={false} offset={0.22} darkness={0.5 + storm * 0.2 + night * 0.1} />
     </EffectComposer>
   )
 }
