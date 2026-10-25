@@ -34,6 +34,19 @@ function rotY(v: Vec3, a: number): Vec3 {
   return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c]
 }
 
+/**
+ * The impact point for cell `idx` of a ship with `length` cells: the one nearest the cell's local x
+ * (`cells[0]` is at the stern, −x; `cells[length-1]` at the bow, +x per ARCHITECTURE.md), so a model
+ * that lists its points bow-first still gets the breach on the right cell.
+ */
+export function impactPointFor(points: readonly Vec3[], idx: number, length: number, cellSize = 1): Vec3 | undefined {
+  if (points.length === 0) return undefined
+  const localX = (idx - (length - 1) / 2) * cellSize
+  let best = points[0]
+  for (const p of points) if (Math.abs(p[0] - localX) < Math.abs(best[0] - localX)) best = p
+  return best
+}
+
 /** Pure: everything the layer renders for a fleet, so the per-frame cost is only the effects themselves. */
 export function damageEntries(ships: PlacedShip[], boardOrigin: Vec3, cellSize: number, breachSide: Side | 'both' | null): Entry[] {
   const out: Entry[] = []
@@ -53,7 +66,7 @@ export function damageEntries(ships: PlacedShip[], boardOrigin: Vec3, cellSize: 
       const deckY = sunk ? boardOrigin[1] + 0.05 : boardOrigin[1] + def.anchors.deckY
       const deck: Vec3 = [centre[0] + (ship.orientation === 'vertical' ? jitter : 0), deckY, centre[2] + (ship.orientation === 'horizontal' ? jitter : 0)]
       const breaches: Entry['breaches'] = []
-      const ip = def.anchors.impactPoints[idx]
+      const ip = impactPointFor(def.anchors.impactPoints, idx, ship.spec.length, cellSize)
       if (ip && breachSide && !sunk) {
         const sides: Side[] = breachSide === 'both' ? ['port', 'starboard'] : [breachSide]
         for (const side of sides) {

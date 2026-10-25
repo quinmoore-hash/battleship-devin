@@ -7,7 +7,7 @@ import { Fleet, SHIPS, shipWorldTransform } from '../ships'
 import * as THREE from 'three'
 import { useGameStore } from '../store/gameStore'
 import { seededRandom } from './random'
-import { DamageLayer, ImpactFlash, SplinterBurst } from './damage'
+import { DamageLayer, ImpactFlash, SplinterBurst, impactPointFor } from './damage'
 import { GridBuoys, ShotMarkers } from './markers'
 
 /**
@@ -93,7 +93,7 @@ export function VfxDamageDemo() {
       const cell = ship.cells[cellIdx]
       const def = SHIPS[ship.spec.id]
       const { position, rotationY } = shipWorldTransform(ship, origin)
-      const ip = def.anchors.impactPoints[cellIdx]
+      const ip = impactPointFor(def.anchors.impactPoints, cellIdx, ship.spec.length) ?? [0, def.anchors.deckY * 0.4, 0]
       const c = Math.cos(rotationY)
       const s = Math.sin(rotationY)
       // starboard side (local +z), matching DamageLayer's default breach side

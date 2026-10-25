@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { impactPointFor } from './DamageLayer'
 import { emberAt, emberSeeds } from './embers'
 import { FireLightBudget, lightCountFor, planFireLights, type FireSource } from './fireBudget'
 import { smokePuffAt, smokeSeeds } from './smoke'
@@ -114,5 +115,18 @@ describe('fire light budget', () => {
     expect(b.hostId).toBe('b')
     expect(b.lights()[0].fires).toEqual(['b'])
     expect(notified).toBe(3)
+  })
+})
+
+describe('impactPointFor', () => {
+  const bowFirst = [2, 1, 0, -1, -2].map((x) => [x, 0.3, -0.5] as [number, number, number])
+  it('picks the point nearest the cell, whatever order the model lists them in', () => {
+    expect(impactPointFor(bowFirst, 0, 5)![0]).toBe(-2)
+    expect(impactPointFor(bowFirst, 4, 5)![0]).toBe(2)
+    expect(impactPointFor([...bowFirst].reverse(), 0, 5)![0]).toBe(-2)
+  })
+  it('handles even lengths and empty lists', () => {
+    expect(impactPointFor([[-0.5, 0, 0], [0.5, 0, 0]], 1, 2)![0]).toBe(0.5)
+    expect(impactPointFor([], 0, 2)).toBeUndefined()
   })
 })
