@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Coord } from '../engine'
 import { cellToWorld, worldToCell, type Vec3 } from './layout'
-import { getSeaState, sampleWaveHeight } from './waves'
+import { gerstnerDisplaceGlsl, WAVE_COUNT, waveUniforms } from './waves'
 
 export interface BoardGridProps {
   origin: Vec3
@@ -111,65 +111,64 @@ export function BoardGrid({
   const ropeGeo = useMemo(() => new THREE.CylinderGeometry(0.018, 0.018, 1, 5, 1, true), [])
   const floatGeo = useMemo(() => new THREE.CylinderGeometry(0.07, 0.055, 0.12, 8), [])
   const ropeTex = useMemo(() => makeRopeTexture(), [])
-  const ropeMat = useMemo(() => new THREE.MeshStandardMaterial({ map: ropeTex, color, roughness: 1 }), [ropeTex, color])
-  const floatMat = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.85), roughness: 0.9 }), [color])
+  const ropeMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ map: ropeTex, color, roughness: 1 }), 0.07), [ropeTex, color])
+  const floatMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.85), roughness: 0.9 }), 0.03), [color])
+  const plateMat = useMemo(() => rideTheWaves(new THREE.MeshBasicMaterial({ color: highlightColor, transparent: true, opacity: 0.4, toneMapped: false, depthWrite: false })), [highlightColor])
   useEffect(() => () => void (ropeGeo.dispose(), floatGeo.dispose(), ropeTex.dispose()), [ropeGeo, floatGeo, ropeTex])
 
-  // one rope segment per cell edge so each can follow the water between its two floats
   const ropeCount = 2 * size * (size + 1)
   const floatCount = (size + 1) * (size + 1)
 
-  useFrame((state) => {
-    const t = state.clock.elapsedTime
+  // Static rest-level layout; the wave motion is added per vertex on the GPU (`rideTheWaves`).
+  useEffect(() => {
     const h = extent / 2
-    const yAt = (lx: number, lz: number) => sampleWaveHeight(center[0] + lx, center[2] + lz, t) - center[1] + 0.08 + getSeaState() * 0.25
+    const rest = -center[1] + 0.075
     const floats = floatsRef.current
     const ropes = ropesRef.current
     if (floats) {
       let k = 0
       for (let i = 0; i <= size; i++) {
         for (let j = 0; j <= size; j++) {
-          const lx = -h + i * cellSize
-          const lz = -h + j * cellSize
-          dummy.position.set(lx, yAt(lx, lz), lz)
-          dummy.rotation.set(Math.sin(t * 1.3 + i) * 0.08, 0, Math.cos(t * 1.1 + j) * 0.08)
+          dummy.position.set(-h + i * cellSize, rest, -h + j * cellSize)
+          dummy.rotation.set(Math.sin(i * 1.7 + j) * 0.06, 0, Math.cos(i + j * 1.3) * 0.06)
           dummy.scale.setScalar(1)
           dummy.updateMatrix()
           floats.setMatrixAt(k++, dummy.matrix)
         }
       }
       floats.instanceMatrix.needsUpdate = true
+      floats.computeBoundingSphere()
     }
     if (ropes) {
       let k = 0
-      const a = new THREE.Vector3()
-      const b = new THREE.Vector3()
-      const seg = (ax: number, az: number, bx: number, bz: number) => {
-        a.set(ax, yAt(ax, az), az)
-        b.set(bx, yAt(bx, bz), bz)
-        dummy.position.copy(a).add(b).multiplyScalar(0.5)
-        dummy.position.y -= 0.012 // ropes sag a touch between floats
-        dummy.scale.set(1, a.distanceTo(b), 1)
-        dummy.quaternion.setFromUnitVectors(UP, b.sub(a).normalize())
+      const seg = (x: number, z: number, alongX: boolean) => {
+        dummy.position.set(x, rest - 0.012, z)
+        dummy.rotation.set(alongX ? 0 : Math.PI / 2, 0, alongX ? Math.PI / 2 : 0)
+        dummy.scale.set(1, cellSize, 1)
         dummy.updateMatrix()
         ropes.setMatrixAt(k++, dummy.matrix)
       }
       for (let i = 0; i <= size; i++) {
         const o = -h + i * cellSize
         for (let j = 0; j < size; j++) {
-          const s0 = -h + j * cellSize
-          seg(o, s0, o, s0 + cellSize)
-          seg(s0, o, s0 + cellSize, o)
+          const m = -h + (j + 0.5) * cellSize
+          seg(o, m, false)
+          seg(m, o, true)
         }
       }
       ropes.instanceMatrix.needsUpdate = true
+      ropes.computeBoundingSphere()
     }
+  }, [size, cellSize, extent, center, dummy])
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
     if (highlightRef.current) {
       const g = highlightRef.current
       const plate = g.children[0] as THREE.Mesh
       const m = plate.material as THREE.MeshBasicMaterial
       m.opacity = 0.32 + 0.14 * Math.sin(t * 4)
-      g.position.y = yAt(g.position.x, g.position.z) + 0.03
+      g.position.y = -center[1] + 0.09
     }
   })
 
@@ -215,18 +214,17 @@ export function BoardGrid({
 
   return (
     <group position={center}>
-      {/* invisible pointer target; a faint tint so the board reads as a zone */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={1} onPointerMove={handleMove} onPointerLeave={handleLeave} onClick={handleClick}>
+      {/* pointer target only: writes neither colour nor depth, so it can never occlude the ropes */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} onPointerMove={handleMove} onPointerLeave={handleLeave} onClick={handleClick}>
         <planeGeometry args={[extent, extent]} />
-        <meshBasicMaterial color={color} transparent opacity={0.03} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial colorWrite={false} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       <instancedMesh ref={ropesRef} args={[ropeGeo, ropeMat, ropeCount]} frustumCulled={false} renderOrder={2} />
-      <instancedMesh ref={floatsRef} args={[floatGeo, floatMat, floatCount]} frustumCulled={false} renderOrder={2} castShadow />
+      <instancedMesh ref={floatsRef} args={[floatGeo, floatMat, floatCount]} frustumCulled={false} renderOrder={2} />
       {hl && (
         <group ref={highlightRef} position={[hl[0] - center[0], 0.04, hl[2] - center[2]]} renderOrder={4}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <mesh material={plateMat} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[cellSize * 0.9, cellSize * 0.9]} />
-            <meshBasicMaterial color={highlightColor} transparent opacity={0.4} toneMapped={false} depthWrite={false} />
           </mesh>
           {/* brass frame that bloom picks up */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
@@ -253,4 +251,40 @@ export function BoardGrid({
   )
 }
 
-const UP = new THREE.Vector3(0, 1, 0)
+
+/**
+ * Moves vertices with the same Gerstner bank the water uses, on the GPU, so floats and ropes
+ * ride the surface exactly (no CPU/GPU time or tessellation mismatch).
+ */
+function rideTheWaves<T extends THREE.Material>(mat: T, growPerMetre = 0): T {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = waveUniforms.uTime
+    shader.uniforms.uStorm = waveUniforms.uStorm
+    shader.vertexShader =
+      gerstnerDisplaceGlsl(WAVE_COUNT.high) +
+      shader.vertexShader.replace(
+        '#include <project_vertex>',
+        /* glsl */ `
+        vec3 rtw = transformed;
+        #ifdef USE_INSTANCING
+          vec3 rtwOrigin = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #else
+          vec3 rtwOrigin = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #endif
+        // keep thin ropes/floats at least ~2 px wide at a distance so they don't alias away
+        rtw.xz *= max(1.0, length(cameraPosition - rtwOrigin) * ${growPerMetre.toFixed(4)});
+        vec4 mvPosition = vec4(rtw, 1.0);
+        #ifdef USE_INSTANCING
+          mvPosition = instanceMatrix * mvPosition;
+        #endif
+        vec4 wpos = modelMatrix * mvPosition;
+        wpos.xyz += gerstnerDisplace(wpos.xz);
+        mvPosition = viewMatrix * wpos;
+        gl_Position = projectionMatrix * mvPosition;
+        `,
+      )
+  }
+  mat.customProgramCacheKey = () => `ride-the-waves-${growPerMetre}`
+  return mat
+}
+
