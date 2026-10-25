@@ -10,7 +10,7 @@ import { useMemo } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import { Flag } from '../kit'
 import type { ShipDefinition, ShipModelProps } from '../types'
-import { Bowsprit, DeckFurniture, Damage, Figurehead, Flags, GunDecks, Hull, Jibs, Mast, Rigging, SternGallery, type SailState } from './parts'
+import { Bowsprit, DeckFurniture, Damage, Figurehead, Flags, GunDecks, Hull, Jibs, Mast, NoShadowCasting, Rigging, SternGallery, type SailState } from './parts'
 import { MAN_O_WAR_ANCHORS, MASTS, mastOnCell, mastSnap, sinkTorn, smoothstep } from './spec'
 import { manOWarMaterials } from './textures'
 
@@ -55,7 +55,9 @@ function ManOWarModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'hi
           phase={phase + i}
           flag={
             snaps[i] > 0.4 ? null : i === 1 ? (
-              <Flag position={[0.1, spec.height - 0.02, 0]} livery={livery} width={0.5} height={0.3} phase={phase} />
+              <NoShadowCasting>
+                <Flag position={[0.1, spec.height - 0.02, 0]} livery={livery} width={0.5} height={0.3} phase={phase} />
+              </NoShadowCasting>
             ) : null // no truck pennants: a second kit Flag next to the main flag whites out the bloom pass (bugs.md BUG-107 / BUG-113)
           }
         />

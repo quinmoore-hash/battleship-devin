@@ -44,7 +44,7 @@ export const CALM_FALLOFF = 9
  * `<Water>` sets it from the scene's `weather`; floating props read it through `sampleWaveHeight`.
  */
 export const STORM_AMPLITUDE = 2.4
-export const STORM_CALM_MIN = 0.5
+export const STORM_CALM_MIN = 0.4
 const seaState = { storm: 0 }
 export function setSeaState(storm: number): void {
   seaState.storm = Math.min(1, Math.max(0, storm))
@@ -112,6 +112,37 @@ export function sampleWaveNormal(x: number, z: number, t: number, count: number 
   }
   const l = Math.hypot(nx, 1, nz)
   return [nx / l, 1 / l, nz / l]
+}
+
+/**
+ * Per-frame wave uniforms shared by every GPU-displaced surface (water sheets, rope grid) so
+ * they all evaluate the bank at exactly the same time/sea state within a frame.
+ */
+export const waveUniforms = { uTime: { value: 0 }, uStorm: { value: 0 } }
+
+/** `wavesToGlsl` plus `vec3 gerstnerDisplace(vec2 xz)` — the water surface displacement at world xz. */
+export function gerstnerDisplaceGlsl(count: number): string {
+  return `
+  ${wavesToGlsl(count)}
+  uniform float uTime;
+  vec3 gerstnerDisplace(vec2 xz) {
+    float cf = calm(xz);
+    vec3 disp = vec3(0.0);
+    for (int i = 0; i < WAVE_COUNT; i++) {
+      vec2 d = WAVES[i].xy;
+      float k = WAVES[i].z;
+      float a = WAVES[i].w;
+      float q = STEEP[i] / (k * a * float(WAVE_COUNT));
+      float f = k * (dot(d, xz) - SPEED[i] * uTime);
+      float s = sin(f) * cf;
+      float c = cos(f) * cf;
+      disp.x += q * a * d.x * c;
+      disp.z += q * a * d.y * c;
+      disp.y += a * s;
+    }
+    return disp;
+  }
+  `
 }
 
 /** GLSL array literal for the wave bank, injected into the water shader. */
