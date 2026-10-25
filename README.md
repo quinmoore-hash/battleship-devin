@@ -21,7 +21,7 @@ Deployed from `main` to GitHub Pages: https://quinmoore-hash.github.io/battleshi
 
 ```bash
 npm ci
-npm run dev        # http://localhost:5173   (?no3d, ?scene-demo, ?ship-demo, ?audio-demo)
+npm run dev        # http://localhost:5173   (?no3d, ?scene-demo, ?ship-demo, ?audio-demo, ?kit-demo)
 npm run lint       # oxlint
 npm run typecheck  # tsc -b
 npm test           # vitest unit tests
