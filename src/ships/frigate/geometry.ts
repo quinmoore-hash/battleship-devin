@@ -150,8 +150,8 @@ export function deckPlate(outline: [number, number][], y: number, uvScale = 1): 
   for (let i = outline.length - 1; i >= 0; i--) shape.lineTo(outline[i][0], -outline[i][1])
   shape.closePath()
   const g = new THREE.ShapeGeometry(shape, 1)
-  // ShapeGeometry lies in the xy plane; rotate to xz with +y up and set uvs from x/z
-  g.rotateX(Math.PI / 2)
+  // ShapeGeometry lies in the xy plane facing +z; rotate so it lies in xz facing +y (not down, or it is back-face culled from above)
+  g.rotateX(-Math.PI / 2)
   g.translate(0, y, 0)
   const p = g.getAttribute('position')
   const uv = new Float32Array(p.count * 2)

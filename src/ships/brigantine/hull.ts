@@ -354,7 +354,16 @@ export function buildHullGeometry(opts: { belowRings?: number; columns?: number;
  * Deck planking surface: the deck outline at DECK_Y inset by the bulwark thickness, with a slight camber.
  * Covers x ∈ [x0, x1]; `y` is the top surface height.
  */
-export function buildDeckGeometry(x0: number, x1: number, y = DECK_Y, camber = 0.012, steps = 40): THREE.BufferGeometry {
+export const DECK_CAMBER = 0.012
+export const CABIN_CAMBER = 0.008
+
+/** Height of the cambered deck surface at (x, z): `y` at the edges, `y + camber` on the centre line. */
+export function deckSurfaceY(x: number, z: number, y = DECK_Y, camber = DECK_CAMBER): number {
+  const w = Math.max(0.002, hullHalfWidth(x, DECK_Y) - BULWARK_THICKNESS + 0.005)
+  return y + camber * Math.max(0, 1 - (z / w) ** 2)
+}
+
+export function buildDeckGeometry(x0: number, x1: number, y = DECK_Y, camber = DECK_CAMBER, steps = 40): THREE.BufferGeometry {
   const pos: number[] = []
   const uv: number[] = []
   const idx: number[] = []
@@ -365,8 +374,7 @@ export function buildDeckGeometry(x0: number, x1: number, y = DECK_Y, camber = 0
     for (let j = 0; j <= across; j++) {
       const s = j / across
       const z = -w + 2 * w * s
-      const yy = y + camber * (1 - (z / Math.max(w, 1e-3)) ** 2)
-      pos.push(x, yy, z)
+      pos.push(x, deckSurfaceY(x, z, y, camber), z)
       uv.push(x, z)
     }
   }

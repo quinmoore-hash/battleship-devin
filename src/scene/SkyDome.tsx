@@ -193,10 +193,14 @@ export function SkyDome({ atmosphere, clouds = 1, lightning }: SkyDomeProps) {
     if (lightning) uniforms.uFlashDir.value.copy(lightning.dir)
   })
 
+  const material = useMemo(
+    () => new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms, side: THREE.BackSide, depthWrite: false }),
+    [uniforms],
+  )
+  useEffect(() => () => material.dispose(), [material])
   return (
-    <mesh frustumCulled={false} renderOrder={-100}>
+    <mesh frustumCulled={false} renderOrder={-100} material={material}>
       <sphereGeometry args={[800, 48, 24]} />
-      <shaderMaterial vertexShader={vertexShader} fragmentShader={fragmentShader} uniforms={uniforms} side={THREE.BackSide} depthWrite={false} />
     </mesh>
   )
 }

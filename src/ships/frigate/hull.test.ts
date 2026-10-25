@@ -61,6 +61,13 @@ describe('frigate geometry', () => {
     expect(copper.boundingBox!.min.y).toBeGreaterThanOrEqual(-FRIGATE.draft)
   })
 
+  it('deck plates face up so they render from above', () => {
+    for (const lod of [0, 2] as const) {
+      const n = buildHullParts(lod).deck!.getAttribute('normal')
+      for (let i = 0; i < n.count; i++) expect(n.getY(i)).toBeGreaterThan(0.99)
+    }
+  })
+
   it('wall strips follow the half-width function on the requested side', () => {
     const hw = (x: number) => 0.3 + 0.1 * x
     for (const side of [1, -1] as const) {
