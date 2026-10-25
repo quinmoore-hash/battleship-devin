@@ -9,8 +9,8 @@ export default defineConfig({
   // The WebGL smoke test gets SwiftShader to itself: several software GL contexts starting at once
   // make the canvas fail to mount (bugs.md BUG-030), so it runs after the flow tests finish.
   projects: [
-    { name: 'flows', testIgnore: /scene\.spec\.ts/ },
-    { name: 'scene', testMatch: /scene\.spec\.ts/, dependencies: ['flows'] },
+    { name: 'flows', testIgnore: /(scene|vfx-.*)\.spec\.ts/ },
+    { name: 'scene', testMatch: /(scene|vfx-.*)\.spec\.ts/, dependencies: ['flows'], workers: 1 },
   ],
   use: {
     baseURL: 'http://localhost:4173',
