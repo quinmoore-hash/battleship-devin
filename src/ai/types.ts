@@ -1,7 +1,7 @@
 import type { Coord, Difficulty, EnemyBoardView, ShotResult } from '../engine'
 
 /**
- * An AI opponent decides where Devin the Otter fires next.
+ * An AI opponent decides where the enemy fleet fires next.
  * Implementations must be deterministic given the same `rng` sequence so they can be unit-tested.
  */
 export interface AiOpponent {

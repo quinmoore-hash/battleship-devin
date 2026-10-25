@@ -7,12 +7,7 @@ export interface Coord {
 
 export type Orientation = 'horizontal' | 'vertical'
 
-export type ShipId =
-  | 'kelp-carrier'
-  | 'clam-cruiser'
-  | 'driftwood-destroyer'
-  | 'stream-sub'
-  | 'pebble-patrol'
+export type ShipId = 'man-o-war' | 'galleon' | 'frigate' | 'brigantine' | 'sloop'
 
 export interface ShipSpec {
   id: ShipId
@@ -55,6 +50,7 @@ export interface EnemyBoardView {
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
-export type Player = 'human' | 'otter'
+/** `human` is the pirate player; `enemy` is the AI-controlled Royal Navy fleet. */
+export type Player = 'human' | 'enemy'
 
 export type CellView = 'unknown' | 'miss' | 'hit' | 'sunk'

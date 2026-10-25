@@ -50,9 +50,9 @@ describe('createOpponent', () => {
 })
 
 describe('describeStrategy', () => {
-  it.each(DIFFICULTIES)('%s has one line of flavour text mentioning Devin', (d) => {
+  it.each(DIFFICULTIES)('%s has one line of flavour text', (d) => {
     const text = describeStrategy(d)
-    expect(text).toContain('Devin')
+    expect(text.length).toBeGreaterThan(20)
     expect(text).not.toContain('\n')
   })
 })

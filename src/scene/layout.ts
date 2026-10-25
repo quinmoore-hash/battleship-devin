@@ -14,10 +14,10 @@ export interface BoardPlacement {
 
 /**
  * Where the two boards float on the bay. The boards are stacked front/back: the human's
- * fleet is near the camera (+z) and Devin's waters are across the gap behind it (-z), so the
+ * fleet is near the camera (+z) and enemy's waters are across the gap behind it (-z), so the
  * battle camera looks "across the water" at the enemy. Both share x extents [-5, 5].
  *
- *   z = -13 ┌──────────┐  Devin's board  (rows 1..10 run toward the camera)
+ *   z = -13 ┌──────────┐  enemy's board  (rows 1..10 run toward the camera)
  *   z =  -3 └──────────┘
  *             ~ gap ~
  *   z =   1 ┌──────────┐  player's board
@@ -26,17 +26,17 @@ export interface BoardPlacement {
  * `cellToWorld(coord, origin, cellSize)` gives the centre of a cell on either board.
  */
 export const BOARD_LAYOUT = {
-  /** The human's own fleet (Devin fires at it). Nearest the camera. */
+  /** The human's own fleet (the enemy fires at it). Nearest the camera. */
   player: { origin: [-5, 0.2, 1] as Vec3, size: 10, cellSize: 1 } satisfies BoardPlacement,
-  /** Devin the Otter's waters (the human fires at it). Across the gap, further from the camera. */
-  otter: { origin: [-5, 0.2, -13] as Vec3, size: 10, cellSize: 1 } satisfies BoardPlacement,
+  /** The enemy's waters (the human fires at it). Across the gap, further from the camera. */
+  enemy: { origin: [-5, 0.2, -13] as Vec3, size: 10, cellSize: 1 } satisfies BoardPlacement,
   /** Open water between the two boards, in world units along z. */
   gap: 4,
   /** Height above the resting water line at which boards, ships and markers should sit. */
   surfaceY: 0.2,
 } as const
 
-export type BoardKey = keyof Pick<typeof BOARD_LAYOUT, 'player' | 'otter'>
+export type BoardKey = keyof Pick<typeof BOARD_LAYOUT, 'player' | 'enemy'>
 
 /** World-space centre of `coord` on a board whose (0,0) corner is at `origin`. */
 export function cellToWorld(coord: Coord, origin: Vec3, cellSize = 1): Vec3 {

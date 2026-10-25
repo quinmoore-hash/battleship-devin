@@ -1,36 +1,36 @@
 import type { ShipSpec } from './types'
 
-/** Devin the Otter's river fleet. Lengths follow classic Battleship (5,4,3,3,2). */
+/** The pirate fleet. Lengths follow classic Battleship (5,4,3,3,2). */
 export const FLEET: readonly ShipSpec[] = [
   {
-    id: 'kelp-carrier',
-    name: 'Kelp Carrier',
+    id: 'man-o-war',
+    name: 'Man-o’-War',
     length: 5,
-    description: 'A floating kelp raft big enough to carry the whole otter squad.',
+    description: 'Three masts, two gun decks and a gilded stern. The flagship.',
   },
   {
-    id: 'clam-cruiser',
-    name: 'Clam Cruiser',
+    id: 'galleon',
+    name: 'Galleon',
     length: 4,
-    description: 'Armoured with the finest shells from the riverbed.',
+    description: 'Tall castles fore and aft, holds full of plunder.',
   },
   {
-    id: 'driftwood-destroyer',
-    name: 'Driftwood Destroyer',
+    id: 'frigate',
+    name: 'Frigate',
     length: 3,
-    description: 'Fast, splintery, and surprisingly hard to spot.',
+    description: 'Sleek, fast and copper-bottomed. A single deadly gun deck.',
   },
   {
-    id: 'stream-sub',
-    name: 'Stream Sub',
+    id: 'brigantine',
+    name: 'Brigantine',
     length: 3,
-    description: 'Dives deep where only an otter can follow.',
+    description: 'Two masts and a shallow draft; the raider’s favourite.',
   },
   {
-    id: 'pebble-patrol',
-    name: 'Pebble Patrol',
+    id: 'sloop',
+    name: 'Sloop',
     length: 2,
-    description: 'Two otters, one favourite rock, zero fear.',
+    description: 'One mast, two guns, and a crew that fears nothing.',
   },
 ]
 

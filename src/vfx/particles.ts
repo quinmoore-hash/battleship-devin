@@ -1,4 +1,4 @@
-import { seededRandom } from './layout'
+import { seededRandom } from './random'
 
 export interface Particle {
   px: number

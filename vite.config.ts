@@ -9,7 +9,7 @@ export default defineConfig({
   base: process.env.GITHUB_PAGES ? '/battleship-devin/' : '/',
   build: { chunkSizeWarningLimit: 1500 },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
     environment: 'node',
   },
 })

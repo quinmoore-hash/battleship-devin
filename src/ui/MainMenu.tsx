@@ -1,7 +1,5 @@
 import { DIFFICULTIES } from './difficulties'
 import { useGameStore } from '../store/gameStore'
-import { DevinBubble, OTTER_SRC } from './DevinBubble'
-import { pickLine } from './dialogue'
 import { withSfx } from './sfx'
 import { useUi } from './UiContext'
 
@@ -13,21 +11,15 @@ export function MainMenu() {
   return (
     <section className="menu" data-testid="main-menu">
       <div className="menu-hero">
-        <div className="otter-stage">
-          <img className="otter-hero" src={OTTER_SRC} alt="Devin the Otter with his laptop" />
-          <span className="ripple" aria-hidden />
-        </div>
         <div className="title-block">
-          <p className="eyebrow">Devin the Otter presents</p>
+          <p className="eyebrow">Hoist the colours</p>
           <h1 className="title">
-            <span>Battle</span>
-            <span className="accent">ship</span>
+            <span>Pirate</span>
+            <span className="accent">Battleship</span>
           </h1>
-          <p className="subtitle">Sink five otter boats before Devin sinks yours. Pick how awake he is today.</p>
+          <p className="subtitle">Sink the Royal Navy’s five ships before they send yours to the depths. Choose your enemy’s skill.</p>
         </div>
       </div>
-
-      <DevinBubble text={pickLine('intro', { difficulty: 'medium' }, () => 0)} mood="taunt" compact />
 
       <div className="difficulty-row">
         {DIFFICULTIES.map((d, i) => (

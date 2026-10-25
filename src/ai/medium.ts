@@ -17,7 +17,7 @@ import type { AiOpponent } from './types'
  * Hunts with random shots until something is hit, then pushes the hit's orthogonal neighbours
  * onto a target stack. Once two hits line up, the cells extending that line (in both directions)
  * take priority. When a ship sinks, its hits are retired; hits that belong to a different,
- * still-afloat ship stay on the books so Devin keeps working on them.
+ * still-afloat ship stay on the books so the AI keeps working on them.
  */
 export class MediumOpponent implements AiOpponent {
   readonly difficulty: Difficulty = 'medium'

@@ -10,7 +10,7 @@ describe('cellToWorld', () => {
   })
 
   it('round-trips through worldToCell for every cell on both boards', () => {
-    for (const board of [BOARD_LAYOUT.player, BOARD_LAYOUT.otter]) {
+    for (const board of [BOARD_LAYOUT.player, BOARD_LAYOUT.enemy]) {
       for (const coord of allCoords()) {
         const [x, , z] = cellToWorld(coord, board.origin, board.cellSize)
         expect(worldToCell({ x, z }, board.origin, board.cellSize, board.size)).toEqual(coord)
@@ -28,12 +28,12 @@ describe('cellToWorld', () => {
 describe('BOARD_LAYOUT', () => {
   it('matches the engine board size', () => {
     expect(BOARD_LAYOUT.player.size).toBe(BOARD_SIZE)
-    expect(BOARD_LAYOUT.otter.size).toBe(BOARD_SIZE)
+    expect(BOARD_LAYOUT.enemy.size).toBe(BOARD_SIZE)
   })
 
   it('places both boards on the same surface height', () => {
     expect(BOARD_LAYOUT.player.origin[1]).toBe(BOARD_LAYOUT.surfaceY)
-    expect(BOARD_LAYOUT.otter.origin[1]).toBe(BOARD_LAYOUT.surfaceY)
+    expect(BOARD_LAYOUT.enemy.origin[1]).toBe(BOARD_LAYOUT.surfaceY)
   })
 
   it('never lets a cell of one board overlap a cell of the other', () => {
@@ -43,24 +43,24 @@ describe('BOARD_LAYOUT', () => {
       player.add(`${x},${z}`)
     }
     for (const c of allCoords()) {
-      const [x, , z] = cellToWorld(c, BOARD_LAYOUT.otter.origin, BOARD_LAYOUT.otter.cellSize)
+      const [x, , z] = cellToWorld(c, BOARD_LAYOUT.enemy.origin, BOARD_LAYOUT.enemy.cellSize)
       expect(player.has(`${x},${z}`)).toBe(false)
-      // a point on Devin's board must not resolve to a cell on the player's board and vice versa
+      // a point on the enemy's board must not resolve to a cell on the player's board and vice versa
       expect(worldToCell({ x, z }, BOARD_LAYOUT.player.origin, BOARD_LAYOUT.player.cellSize)).toBeNull()
     }
   })
 
   it('keeps the documented gap of open water between the boards', () => {
-    const [, otterMinZ, , otterMaxZ] = boardBounds(BOARD_LAYOUT.otter)
+    const [, enemyMinZ, , enemyMaxZ] = boardBounds(BOARD_LAYOUT.enemy)
     const [, playerMinZ, , playerMaxZ] = boardBounds(BOARD_LAYOUT.player)
-    expect(otterMaxZ).toBeLessThan(playerMinZ)
-    expect(playerMinZ - otterMaxZ).toBe(BOARD_LAYOUT.gap)
-    expect(otterMaxZ - otterMinZ).toBe(10)
+    expect(enemyMaxZ).toBeLessThan(playerMinZ)
+    expect(playerMinZ - enemyMaxZ).toBe(BOARD_LAYOUT.gap)
+    expect(enemyMaxZ - enemyMinZ).toBe(10)
     expect(playerMaxZ - playerMinZ).toBe(10)
   })
 
   it('centres both boards on x = 0', () => {
     expect(boardCenter(BOARD_LAYOUT.player)[0]).toBe(0)
-    expect(boardCenter(BOARD_LAYOUT.otter)[0]).toBe(0)
+    expect(boardCenter(BOARD_LAYOUT.enemy)[0]).toBe(0)
   })
 })

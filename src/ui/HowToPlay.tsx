@@ -11,11 +11,11 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           hit <em>Auto-place</em>.
         </li>
         <li>
-          <strong>Take turns firing.</strong> Click a cell on Devin&apos;s radar. Orange means hit, blue
-          means miss, red means you sank something. Then Devin fires back.
+          <strong>Take turns firing.</strong> Click a cell in the enemy waters. Orange means hit, blue
+          means miss, red means you sank something. Then the enemy fires back.
         </li>
         <li>
-          <strong>Sink all five</strong> of Devin&apos;s ships before he sinks yours.
+          <strong>Sink all five</strong> enemy ships before they sink yours.
         </li>
       </ol>
       <h3>The fleet</h3>

@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLEET } from '../engine'
 import { useGameStore } from '../store/gameStore'
 import { GameUI } from './index'
-import { DIALOGUE_LINE_COUNT, pickLine } from './dialogue'
 import { clampOrigin } from './placementUtils'
 
 const store = () => useGameStore.getState()
@@ -55,7 +54,7 @@ describe('placement', () => {
 
   it('selects the first unplaced ship and previews a valid footprint on hover', () => {
     ui()
-    expect(screen.getByTestId('ship-tray-kelp-carrier').getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('ship-tray-man-o-war').getAttribute('aria-pressed')).toBe('true')
     fireEvent.mouseEnter(cell('player-grid', 2, 3))
     for (let x = 2; x < 7; x++) expect(cell('player-grid', x, 3).dataset.preview).toBe('valid')
     expect(cell('player-grid', 7, 3).dataset.preview).toBeUndefined()
@@ -71,10 +70,10 @@ describe('placement', () => {
   it('places on click, rotates with R, flags overlaps as invalid and picks ships back up', () => {
     ui()
     fireEvent.click(cell('player-grid', 0, 0))
-    expect(store().playerBoard.ships.map((s) => s.spec.id)).toEqual(['kelp-carrier'])
+    expect(store().playerBoard.ships.map((s) => s.spec.id)).toEqual(['man-o-war'])
     for (let x = 0; x < 5; x++) expect(cell('player-grid', x, 0).dataset.state).toBe('ship')
-    expect(screen.getByTestId('ship-tray-kelp-carrier').dataset.placed).toBe('true')
-    expect(screen.getByTestId('ship-tray-clam-cruiser').getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('ship-tray-man-o-war').dataset.placed).toBe('true')
+    expect(screen.getByTestId('ship-tray-galleon').getAttribute('aria-pressed')).toBe('true')
 
     fireEvent.keyDown(window, { key: 'r' })
     fireEvent.mouseEnter(cell('player-grid', 1, 0))
@@ -83,22 +82,22 @@ describe('placement', () => {
     fireEvent.mouseEnter(cell('player-grid', 7, 2))
     for (let y = 2; y < 6; y++) expect(cell('player-grid', 7, y).dataset.preview).toBe('valid')
     fireEvent.click(cell('player-grid', 7, 2))
-    expect(store().playerBoard.ships.find((s) => s.spec.id === 'clam-cruiser')?.orientation).toBe('vertical')
+    expect(store().playerBoard.ships.find((s) => s.spec.id === 'galleon')?.orientation).toBe('vertical')
 
     fireEvent.click(cell('player-grid', 3, 0))
-    expect(store().playerBoard.ships.map((s) => s.spec.id)).toEqual(['clam-cruiser'])
-    expect(screen.getByTestId('ship-tray-kelp-carrier').getAttribute('aria-pressed')).toBe('true')
+    expect(store().playerBoard.ships.map((s) => s.spec.id)).toEqual(['galleon'])
+    expect(screen.getByTestId('ship-tray-man-o-war').getAttribute('aria-pressed')).toBe('true')
   })
 
   it('supports drag and drop from the tray', () => {
     ui()
     const dt = { setData: vi.fn(), effectAllowed: '' }
-    fireEvent.dragStart(screen.getByTestId('ship-tray-pebble-patrol'), { dataTransfer: dt })
+    fireEvent.dragStart(screen.getByTestId('ship-tray-sloop'), { dataTransfer: dt })
     fireEvent.dragOver(cell('player-grid', 4, 4), { dataTransfer: dt })
     expect(cell('player-grid', 4, 4).dataset.preview).toBe('valid')
     expect(cell('player-grid', 5, 4).dataset.preview).toBe('valid')
     fireEvent.drop(cell('player-grid', 4, 4), { dataTransfer: dt })
-    expect(store().playerBoard.ships.map((s) => s.spec.id)).toEqual(['pebble-patrol'])
+    expect(store().playerBoard.ships.map((s) => s.spec.id)).toEqual(['sloop'])
   })
 
   it('auto-place / clear / start battle', () => {
@@ -125,7 +124,7 @@ describe('battle', () => {
     store().confirmPlacement()
   })
 
-  it('fires, blocks input while Devin thinks, then hands the turn back', () => {
+  it('fires, blocks input while the enemy aims, then hands the turn back', () => {
     vi.useFakeTimers()
     ui()
     expect(screen.getByTestId('status').textContent).toContain('Your turn')
@@ -138,12 +137,11 @@ describe('battle', () => {
     expect(store().events).toHaveLength(1)
 
     act(() => vi.advanceTimersByTime(800))
-    expect(screen.getByTestId('status').textContent).toContain('Devin is thinking')
-    expect(screen.getByTestId('devin-bubble').dataset.mood).toBe('think')
+    expect(screen.getByTestId('status').textContent).toContain('The enemy is aiming')
 
     act(() => vi.advanceTimersByTime(1400))
     expect(store().events).toHaveLength(2)
-    expect(store().events[1].by).toBe('otter')
+    expect(store().events[1].by).toBe('enemy')
     act(() => vi.advanceTimersByTime(600))
     expect(screen.getByTestId('status').textContent).toContain('Your turn')
     expect(screen.getByTestId('shot-log').querySelectorAll('li')).toHaveLength(2)
@@ -173,14 +171,14 @@ describe('battle', () => {
   })
 
   it('shows fleet status that greys out sunk ships', () => {
-    const target = store().otterBoard.ships.find((s) => s.spec.id === 'pebble-patrol')!
+    const target = store().enemyBoard.ships.find((s) => s.spec.id === 'sloop')!
     ui()
     vi.useFakeTimers()
     for (const c of target.cells) {
       fireEvent.click(cell('enemy-grid', c.x, c.y))
       act(() => vi.advanceTimersByTime(3000))
     }
-    expect(screen.getByTestId('fleet-status-enemy-pebble-patrol').dataset.sunk).toBe('true')
+    expect(screen.getByTestId('fleet-status-enemy-sloop').dataset.sunk).toBe('true')
     expect(screen.getByTestId('fleet-status-enemy-afloat').textContent).toBe('4/5 afloat')
   })
 })
@@ -190,10 +188,10 @@ describe('game over', () => {
     store().startGame('hard')
     store().autoPlacePlayerFleet()
     store().confirmPlacement()
-    for (const ship of store().otterBoard.ships) {
+    for (const ship of store().enemyBoard.ships) {
       for (const c of ship.cells) {
         if (store().phase !== 'battle') break
-        if (store().fireAt(c)) store().otterTurn()
+        if (store().fireAt(c)) store().enemyTurn()
       }
     }
     expect(store().phase).toBe('gameover')
@@ -216,11 +214,3 @@ describe('game over', () => {
   })
 })
 
-describe('dialogue', () => {
-  it('has a healthy pool of lines and fills placeholders', () => {
-    expect(DIALOGUE_LINE_COUNT).toBeGreaterThanOrEqual(40)
-    const line = pickLine('player-sunk', { difficulty: 'easy', shipId: 'kelp-carrier', coord: 'B4' }, () => 0)
-    expect(line).toContain('Kelp Carrier')
-    expect(line).not.toContain('{')
-  })
-})

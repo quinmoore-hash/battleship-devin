@@ -26,19 +26,23 @@ export interface GameEvent {
   result: ShotResult
 }
 
+/** How much of each shot is played out as a cinematic. `off` = instant results (used by e2e). */
+export type CinematicsLevel = 'full' | 'fast' | 'off'
+
 export interface Settings {
   sfxVolume: number
   musicVolume: number
   reducedMotion: boolean
+  cinematics: CinematicsLevel
 }
 
 export interface GameState {
   phase: Phase
   difficulty: Difficulty
-  /** The human's own board (Devin fires at this one). */
+  /** The human's own board (the enemy fires at this one). */
   playerBoard: Board
-  /** Devin the Otter's board (the human fires at this one). */
-  otterBoard: Board
+  /** The enemy's board (the human fires at this one). */
+  enemyBoard: Board
   turn: Player
   winner?: Player
   events: GameEvent[]
@@ -51,23 +55,23 @@ export interface GameState {
   removePlayerShip: (shipId: ShipSpec['id']) => void
   autoPlacePlayerFleet: () => void
   confirmPlacement: () => void
-  /** Human fires at Devin's board. Returns the result, or undefined if the move was illegal. */
+  /** Human fires at the enemy board. Returns the result, or undefined if the move was illegal. */
   fireAt: (coord: Coord) => ShotResult | undefined
-  /** Devin takes a turn. Returns the result. Call after `fireAt` (UI controls the pacing). */
-  otterTurn: () => ShotResult | undefined
+  /** The enemy takes a turn. Returns the result. Call after `fireAt` (UI controls the pacing). */
+  enemyTurn: () => ShotResult | undefined
   updateSettings: (patch: Partial<Settings>) => void
   reset: () => void
 }
 
 let eventId = 0
 
-const initialSettings: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false }
+const initialSettings: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full' }
 
 export const useGameStore = create<GameState>((set, get) => ({
   phase: 'menu',
   difficulty: 'medium',
   playerBoard: createBoard(),
-  otterBoard: createBoard(),
+  enemyBoard: createBoard(),
   turn: 'human',
   events: [],
   settings: initialSettings,
@@ -77,7 +81,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       phase: 'placement',
       difficulty,
       playerBoard: createBoard(),
-      otterBoard: randomPlacement(),
+      enemyBoard: randomPlacement(),
       opponent: createOpponent(difficulty),
       turn: 'human',
       winner: undefined,
@@ -95,9 +99,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  removePlayerShip: (shipId) => set((s) => ({ playerBoard: removeShip(s.playerBoard, shipId) })),
+  removePlayerShip: (shipId) =>
+    set((s) => (s.phase === 'placement' ? { playerBoard: removeShip(s.playerBoard, shipId) } : {})),
 
-  autoPlacePlayerFleet: () => set({ playerBoard: randomPlacement() }),
+  autoPlacePlayerFleet: () => set((s) => (s.phase === 'placement' ? { playerBoard: randomPlacement() } : {})),
 
   confirmPlacement: () => {
     const { playerBoard, phase } = get()
@@ -106,38 +111,38 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   fireAt: (coord) => {
-    const { phase, turn, otterBoard, events } = get()
+    const { phase, turn, enemyBoard, events } = get()
     if (phase !== 'battle' || turn !== 'human') return undefined
     let next: ReturnType<typeof fire>
     try {
-      next = fire(otterBoard, coord)
+      next = fire(enemyBoard, coord)
     } catch {
       return undefined
     }
     const won = isFleetSunk(next.board)
     set({
-      otterBoard: next.board,
+      enemyBoard: next.board,
       events: [...events, { id: ++eventId, by: 'human', result: next.result }],
-      turn: won ? 'human' : 'otter',
+      turn: won ? 'human' : 'enemy',
       phase: won ? 'gameover' : 'battle',
       winner: won ? 'human' : undefined,
     })
     return next.result
   },
 
-  otterTurn: () => {
+  enemyTurn: () => {
     const { phase, turn, playerBoard, opponent, events } = get()
-    if (phase !== 'battle' || turn !== 'otter' || !opponent) return undefined
+    if (phase !== 'battle' || turn !== 'enemy' || !opponent) return undefined
     const coord = opponent.nextShot(enemyView(playerBoard))
     const next = fire(playerBoard, coord)
     opponent.observe(next.result)
     const lost = isFleetSunk(next.board)
     set({
       playerBoard: next.board,
-      events: [...events, { id: ++eventId, by: 'otter', result: next.result }],
+      events: [...events, { id: ++eventId, by: 'enemy', result: next.result }],
       turn: 'human',
       phase: lost ? 'gameover' : 'battle',
-      winner: lost ? 'otter' : undefined,
+      winner: lost ? 'enemy' : undefined,
     })
     return next.result
   },
@@ -148,7 +153,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({
       phase: 'menu',
       playerBoard: createBoard(),
-      otterBoard: createBoard(),
+      enemyBoard: createBoard(),
       opponent: undefined,
       turn: 'human',
       winner: undefined,

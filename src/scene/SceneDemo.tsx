@@ -15,7 +15,7 @@ interface Pick {
   board: BoardKey
   coord: Coord
 }
-const pickLabel = (p: Pick | null) => (p ? `${p.board === 'otter' ? 'Devin' : 'you'} ${coordLabel(p.coord)}` : '—')
+const pickLabel = (p: Pick | null) => (p ? `${p.board === 'enemy' ? 'enemy' : 'you'} ${coordLabel(p.coord)}` : '—')
 
 /** Counts rendered frames and reports frames-per-second once a second. */
 function FpsProbe({ onFps }: { onFps: (fps: number) => void }) {
@@ -49,7 +49,7 @@ export function SceneDemo() {
     const v = param('view') as CameraView | null
     return v && VIEWS.includes(v) ? v : 'battle'
   })
-  const [hover, setHover] = useState<Pick | null>({ board: 'otter', coord: { x: 5, y: 4 } })
+  const [hover, setHover] = useState<Pick | null>({ board: 'enemy', coord: { x: 5, y: 4 } })
   const [lastClick, setLastClick] = useState<Pick | null>(null)
   const gridProps = (board: BoardKey) => ({
     origin: BOARD_LAYOUT[board].origin,
@@ -72,7 +72,7 @@ export function SceneDemo() {
   return (
     <>
       <OceanScene quality={quality} timeOfDay={timeOfDay} view={view} dressing={dressing}>
-        <BoardGrid {...gridProps('otter')} />
+        <BoardGrid {...gridProps('enemy')} />
         <BoardGrid {...gridProps('player')} color="#9cffb0" />
         <FpsProbe onFps={setFps} />
       </OceanScene>

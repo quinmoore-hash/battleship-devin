@@ -9,7 +9,7 @@ describe('gameStore', () => {
     const s = () => useGameStore.getState()
     s().startGame('easy')
     expect(s().phase).toBe('placement')
-    expect(s().otterBoard.ships).toHaveLength(FLEET.length)
+    expect(s().enemyBoard.ships).toHaveLength(FLEET.length)
 
     s().confirmPlacement()
     expect(s().phase).toBe('placement')
@@ -21,20 +21,20 @@ describe('gameStore', () => {
 
     const result = s().fireAt({ x: 0, y: 0 })
     expect(result).toBeDefined()
-    expect(s().turn).toBe('otter')
+    expect(s().turn).toBe('enemy')
     expect(s().fireAt({ x: 1, y: 0 })).toBeUndefined()
 
-    const otter = s().otterTurn()
-    expect(otter).toBeDefined()
+    const enemy = s().enemyTurn()
+    expect(enemy).toBeDefined()
     expect(s().turn).toBe('human')
 
     let guard = 0
     while (s().phase === 'battle' && guard++ < 300) {
-      for (const ship of s().otterBoard.ships) {
+      for (const ship of s().enemyBoard.ships) {
         if (s().phase !== 'battle') break
         for (const c of ship.cells) {
           if (s().phase !== 'battle') break
-          if (s().fireAt(c)) s().otterTurn()
+          if (s().fireAt(c)) s().enemyTurn()
         }
       }
     }
@@ -50,7 +50,7 @@ describe('gameStore', () => {
     s().autoPlacePlayerFleet()
     s().confirmPlacement()
     expect(s().fireAt({ x: 3, y: 3 })).toBeDefined()
-    s().otterTurn()
+    s().enemyTurn()
     expect(s().fireAt({ x: 3, y: 3 })).toBeUndefined()
   })
 })

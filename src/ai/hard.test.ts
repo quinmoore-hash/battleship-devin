@@ -24,7 +24,7 @@ describe('HardOpponent', () => {
     const view: EnemyBoardView = {
       size: 10,
       shots: [miss(1, 0), miss(0, 1)],
-      remainingShips: [FLEET_BY_ID['pebble-patrol']],
+      remainingShips: [FLEET_BY_ID['sloop']],
     }
     for (let seed = 0; seed < 50; seed++) {
       const shot = new HardOpponent(seededRng(seed)).nextShot(view)
@@ -53,7 +53,7 @@ describe('HardOpponent', () => {
   it('finishes off a hit ship before wandering away', () => {
     for (let seed = 0; seed < 20; seed++) {
       const opponent = new HardOpponent(seededRng(seed))
-      let board = placeShip(createBoard(), FLEET_BY_ID['driftwood-destroyer'], { x: 5, y: 5 }, 'vertical')
+      let board = placeShip(createBoard(), FLEET_BY_ID['frigate'], { x: 5, y: 5 }, 'vertical')
       const first = fire(board, { x: 5, y: 6 })
       opponent.observe(first.result)
       board = first.board
@@ -71,15 +71,15 @@ describe('HardOpponent', () => {
   it('separates two adjacent ships after the first one sinks', () => {
     // Patrol (2) at row 2, Sub (3) directly below it. Hit the sub, then sink the patrol.
     const opponent = new HardOpponent(seededRng(1))
-    let board = placeShip(createBoard(), FLEET_BY_ID['pebble-patrol'], { x: 2, y: 2 }, 'horizontal')
-    board = placeShip(board, FLEET_BY_ID['stream-sub'], { x: 2, y: 3 }, 'horizontal')
+    let board = placeShip(createBoard(), FLEET_BY_ID['sloop'], { x: 2, y: 2 }, 'horizontal')
+    board = placeShip(board, FLEET_BY_ID['brigantine'], { x: 2, y: 3 }, 'horizontal')
     for (const c of [{ x: 3, y: 3 }, { x: 2, y: 2 }, { x: 3, y: 2 }]) {
       const next = fire(board, c)
       opponent.observe(next.result)
       board = next.board
     }
     const view = enemyView(board)
-    expect(view.remainingShips.map((s) => s.id)).toEqual(['stream-sub'])
+    expect(view.remainingShips.map((s) => s.id)).toEqual(['brigantine'])
     const shot = opponent.nextShot(view)
     // The only unexplained hit is (3,3); the patrol's cells are known sunk, so the next shot
     // must be in line with (3,3) and not on the sunk cells.
@@ -87,7 +87,7 @@ describe('HardOpponent', () => {
   })
 
   it('uses parity while hunting on an empty board', () => {
-    const view: EnemyBoardView = { size: 10, shots: [], remainingShips: [FLEET_BY_ID['pebble-patrol']] }
+    const view: EnemyBoardView = { size: 10, shots: [], remainingShips: [FLEET_BY_ID['sloop']] }
     const opponent = new HardOpponent(seededRng(8))
     const first = opponent.nextShot(view)
     const second = opponent.nextShot({ ...view, shots: [{ coord: first, outcome: 'miss' }] })

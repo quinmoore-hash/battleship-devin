@@ -12,7 +12,7 @@ export interface BoardGridProps {
   highlight?: Coord | null
   /** Accent colour for lines and highlight. */
   color?: string
-  /** Hex colour of the highlight cell (defaults to a warm otter-orange). */
+  /** Hex colour of the highlight cell (defaults to a warm lantern-orange). */
   highlightColor?: string
   /** Show A–J / 1–10 along the edges. */
   labels?: boolean

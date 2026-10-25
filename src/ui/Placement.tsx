@@ -12,8 +12,6 @@ import {
   type ShipId,
 } from '../engine'
 import { useGameStore } from '../store/gameStore'
-import { DevinBubble } from './DevinBubble'
-import { pickLine } from './dialogue'
 import { Grid, type GridCellInfo } from './Grid'
 import { clampOrigin } from './placementUtils'
 import { withSfx } from './sfx'
@@ -21,7 +19,6 @@ import { withSfx } from './sfx'
 
 export function PlacementScreen() {
   const playerBoard = useGameStore((s) => s.playerBoard)
-  const difficulty = useGameStore((s) => s.difficulty)
   const placePlayerShip = useGameStore((s) => s.placePlayerShip)
   const removePlayerShip = useGameStore((s) => s.removePlayerShip)
   const autoPlace = useGameStore((s) => s.autoPlacePlayerFleet)
@@ -34,7 +31,6 @@ export function PlacementScreen() {
   const selected = picked && !placedIds.has(picked) ? picked : firstUnplaced
   const [orientation, setOrientation] = useState<Orientation>('horizontal')
   const [hover, setHover] = useState<Coord | null>(null)
-  const [line] = useState(() => pickLine('placement', { difficulty }))
 
   const rotate = useCallback(() => {
     playSfx('ui-click')
@@ -192,7 +188,6 @@ export function PlacementScreen() {
       </div>
 
       <footer className="screen-foot">
-        <DevinBubble text={line} mood="taunt" compact />
         <button
           type="button"
           className="btn primary big"

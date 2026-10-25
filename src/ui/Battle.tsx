@@ -6,48 +6,36 @@ import {
   enemyView,
   FLEET,
   FLEET_BY_ID,
-  isSunk,
   viewGrid,
   type Coord,
   type Difficulty,
   type ShotResult,
 } from '../engine'
 import { useGameStore } from '../store/gameStore'
-import { DevinBubble } from './DevinBubble'
 import { FleetStatus } from './FleetStatus'
 import { Grid, type GridCellInfo } from './Grid'
 import { Modal } from './Modal'
 import { ShotLog } from './ShotLog'
-import { moodFor, pickLine, type DialogueEvent, type Mood } from './dialogue'
 import { PACING } from './pacing'
 import { withSfx } from './sfx'
 
 const between = ([a, b]: [number, number]) => a + Math.random() * (b - a)
 
-interface Dialogue {
-  text: string
-  mood: Mood
-}
-
 export function BattleScreen() {
-  const otterBoard = useGameStore((s) => s.otterBoard)
+  const enemyBoard = useGameStore((s) => s.enemyBoard)
   const playerBoard = useGameStore((s) => s.playerBoard)
   const turn = useGameStore((s) => s.turn)
   const difficulty = useGameStore((s) => s.difficulty)
   const events = useGameStore((s) => s.events)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const fireAt = useGameStore((s) => s.fireAt)
-  const otterTurn = useGameStore((s) => s.otterTurn)
+  const enemyTurn = useGameStore((s) => s.enemyTurn)
   const reset = useGameStore((s) => s.reset)
 
   const [busy, setBusy] = useState(false)
   const [thinking, setThinking] = useState(false)
   const [confirmQuit, setConfirmQuit] = useState(false)
-  const [flash, setFlash] = useState<{ by: 'human' | 'otter'; result: ShotResult } | null>(null)
-  const [dialogue, setDialogue] = useState<Dialogue>(() => ({
-    text: pickLine('battle-start', { difficulty }),
-    mood: moodFor('battle-start'),
-  }))
+  const [flash, setFlash] = useState<{ by: 'human' | 'enemy'; result: ShotResult } | null>(null)
   const timers = useRef<number[]>([])
 
   const later = useCallback((fn: () => void, ms: number) => {
@@ -61,43 +49,6 @@ export function BattleScreen() {
     return () => pending.forEach((id) => clearTimeout(id))
   }, [])
 
-  const say = useCallback(
-    (event: DialogueEvent, result?: ShotResult) => {
-      setDialogue({
-        text: pickLine(event, {
-          difficulty,
-          shipId: result?.shipId,
-          coord: result ? coordLabel(result.coord) : undefined,
-        }),
-        mood: moodFor(event),
-      })
-    },
-    [difficulty],
-  )
-
-  const streakOf = (by: 'human' | 'otter') => {
-    const all = useGameStore.getState().events.filter((e) => e.by === by)
-    let n = 0
-    for (let i = all.length - 1; i >= 0; i--) {
-      if (all[i].result.outcome === 'miss') break
-      n++
-    }
-    return n
-  }
-
-  const describe = (by: 'human' | 'otter', result: ShotResult) => {
-    const state = useGameStore.getState()
-    const theirs = by === 'human' ? state.otterBoard : state.playerBoard
-    const remaining = theirs.ships.filter((s) => !isSunk(s)).length
-    if (result.outcome === 'sunk' && remaining === 1) {
-      say(by === 'human' ? 'near-end-player' : 'near-end-devin', result)
-    } else if (result.outcome !== 'miss' && streakOf(by) >= 3 && streakOf(by) % 3 === 0) {
-      say(by === 'human' ? 'player-streak' : 'devin-streak', result)
-    } else {
-      say(`${by === 'human' ? 'player' : 'devin'}-${result.outcome}` as DialogueEvent, result)
-    }
-  }
-
   const fire = (c: Coord) => {
     if (busy || turn !== 'human') return
     const result = fireAt(c)
@@ -110,29 +61,27 @@ export function BattleScreen() {
     later(() => {
       playSfx(result.outcome === 'miss' ? 'miss' : result.outcome)
       setFlash({ by: 'human', result })
-      describe('human', result)
       if (useGameStore.getState().phase !== 'battle') return
       setThinking(true)
       const think = between(reducedMotion ? PACING.think.reduced : PACING.think[difficulty])
       later(() => {
-        const otter = otterTurn()
+        const enemy = enemyTurn()
         setThinking(false)
-        if (otter) {
-          playSfx(otter.outcome === 'miss' ? 'miss' : otter.outcome)
-          setFlash({ by: 'otter', result: otter })
-          describe('otter', otter)
+        if (enemy) {
+          playSfx(enemy.outcome === 'miss' ? 'miss' : enemy.outcome)
+          setFlash({ by: 'enemy', result: enemy })
         }
-        later(() => setBusy(false), reducedMotion ? PACING.afterOtter.reduced : PACING.afterOtter.normal)
+        later(() => setBusy(false), reducedMotion ? PACING.afterEnemy.reduced : PACING.afterEnemy.normal)
       }, think)
     }, resultDelay)
   }
 
-  const enemyGrid = useMemo(() => viewGrid(enemyView(otterBoard), otterBoard), [otterBoard])
+  const enemyGrid = useMemo(() => viewGrid(enemyView(enemyBoard), enemyBoard), [enemyBoard])
   const ownGrid = useMemo(() => viewGrid(enemyView(playerBoard), playerBoard), [playerBoard])
   const ownShips = useMemo(() => new Set(playerBoard.ships.flatMap((s) => s.cells.map(coordKey))), [playerBoard])
 
   const lastHuman = [...events].reverse().find((e) => e.by === 'human')
-  const lastOtter = [...events].reverse().find((e) => e.by === 'otter')
+  const lastEnemy = [...events].reverse().find((e) => e.by === 'enemy')
 
   const enemyCell = (c: Coord): GridCellInfo => ({
     state: enemyGrid[c.y][c.x],
@@ -142,17 +91,17 @@ export function BattleScreen() {
     const v = ownGrid[c.y][c.x]
     return {
       state: v !== 'unknown' ? v : ownShips.has(coordKey(c)) ? 'ship' : 'unknown',
-      className: lastOtter && coordKey(lastOtter.result.coord) === coordKey(c) ? 'latest' : undefined,
+      className: lastEnemy && coordKey(lastEnemy.result.coord) === coordKey(c) ? 'latest' : undefined,
     }
   }
 
   const yourTurn = turn === 'human' && !busy
   const statusText = yourTurn
-    ? 'Your turn — fire at Devin’s radar'
+    ? 'Your turn — fire at the enemy waters'
     : thinking
-      ? 'Devin is thinking…'
+      ? 'The enemy is aiming…'
       : flash
-        ? `${flash.by === 'human' ? 'You' : 'Devin'} fired at ${coordLabel(flash.result.coord)}: ${flash.result.outcome}`
+        ? `${flash.by === 'human' ? 'You' : 'The enemy'} fired at ${coordLabel(flash.result.coord)}: ${flash.result.outcome}`
         : 'Firing…'
 
   const shots = events.filter((e) => e.by === 'human')
@@ -160,7 +109,7 @@ export function BattleScreen() {
   const accuracy = shots.length ? Math.round((hits / shots.length) * 100) : 0
 
   return (
-    <section className={`battle${busy ? ' busy' : ''}`} data-testid="battle" data-turn={yourTurn ? 'human' : 'otter'}>
+    <section className={`battle${busy ? ' busy' : ''}`} data-testid="battle" data-turn={yourTurn ? 'human' : 'enemy'}>
       <header className="battle-top panel">
         <div className={`turn-indicator ${yourTurn ? 'you' : 'devin'}`} data-testid="turn-indicator">
           <span className="dot" aria-hidden />
@@ -182,7 +131,7 @@ export function BattleScreen() {
       </header>
       {confirmQuit && (
         <Modal title="Abandon the battle?" testId="quit-modal" onClose={() => setConfirmQuit(false)}>
-          <p>Devin will count this as a win and gloat about it. You can start a fresh game from the menu.</p>
+          <p>Striking your colours counts as a defeat. You can start a fresh game from the menu.</p>
           <div className="modal-actions">
             <button type="button" className="btn ghost" onClick={withSfx(() => setConfirmQuit(false), 'ui-click')}>
               Keep playing
@@ -197,9 +146,9 @@ export function BattleScreen() {
       <div className="battle-grid">
         <div className="panel board-panel enemy-panel">
           <h3 className="board-title">
-            Devin’s waters <small>radar — click to fire</small>
+            Enemy waters <small>click a cell to fire</small>
           </h3>
-          <Grid testId="enemy-grid" label="Devin's waters" cell={enemyCell} onCell={fire} disabled={!yourTurn} />
+          <Grid testId="enemy-grid" label="Enemy waters" cell={enemyCell} onCell={fire} disabled={!yourTurn} />
           {flash && flash.by === 'human' && !reducedMotion && (
             <div key={`${flash.result.coord.x}-${flash.result.coord.y}`} className={`result-flash ${flash.result.outcome}`} aria-hidden>
               {flash.result.outcome === 'sunk'
@@ -211,20 +160,17 @@ export function BattleScreen() {
 
         <div className="panel board-panel own-panel">
           <h3 className="board-title">
-            Your waters <small>Devin fires here</small>
+            Your waters <small>the enemy fires here</small>
           </h3>
           <Grid testId="player-grid" label="Your waters" cell={ownCell} />
         </div>
 
-        <FleetStatus board={otterBoard} side="enemy" title="Devin’s fleet" />
+        <FleetStatus board={enemyBoard} side="enemy" title="Enemy fleet" />
         <FleetStatus board={playerBoard} side="player" title="Your fleet" />
         <ShotLog events={events} />
-        <div className="bubble-slot">
-          <DevinBubble text={dialogue.text} mood={thinking ? 'think' : dialogue.mood} />
-        </div>
       </div>
       <span className="sr-only" aria-live="assertive">
-        {flash && `${flash.by === 'human' ? 'You' : 'Devin'} fired at ${coordLabel(flash.result.coord)}: ${flash.result.outcome}`}
+        {flash && `${flash.by === 'human' ? 'You' : 'The enemy'} fired at ${coordLabel(flash.result.coord)}: ${flash.result.outcome}`}
       </span>
       <span hidden data-testid="fleet-sizes">{FLEET.length}</span>
     </section>

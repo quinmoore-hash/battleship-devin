@@ -15,7 +15,7 @@ export function ShotLog({ events }: { events: GameEvent[] }) {
         <ol>
           {recent.map((e) => (
             <li key={e.id} className={`log-${e.result.outcome} by-${e.by}`}>
-              <span className="who">{e.by === 'human' ? 'You' : 'Devin'}</span>
+              <span className="who">{e.by === 'human' ? 'You' : 'Enemy'}</span>
               <span className="coord">{coordLabel(e.result.coord)}</span>
               <span className="outcome">
                 {e.result.outcome === 'sunk' && e.result.shipId

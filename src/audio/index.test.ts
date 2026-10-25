@@ -178,8 +178,8 @@ describe('bindGameAudio', () => {
 
     useGameStore.getState().autoPlacePlayerFleet()
     useGameStore.getState().confirmPlacement()
-    const otterShip = useGameStore.getState().otterBoard.ships[0]
-    useGameStore.getState().fireAt(otterShip.cells[0])
+    const enemyShip = useGameStore.getState().enemyBoard.ships[0]
+    useGameStore.getState().fireAt(enemyShip.cells[0])
     expect(playedNames()).toContain('fire')
     vi.advanceTimersByTime(400)
     expect(playedNames()).toContain('hit')

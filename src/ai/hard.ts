@@ -18,7 +18,7 @@ const HIT_WEIGHT = 25
  *
  * Every turn, for each ship still afloat, enumerate every placement that avoids misses and sunk
  * cells. Each placement adds weight to the unshot cells it covers; placements that explain open
- * (unsunk) hits are weighted exponentially higher, so once something is hit Devin converges on
+ * (unsunk) hits are weighted exponentially higher, so once something is hit the AI converges on
  * it. While hunting (no open hits) shots are restricted to a parity class chosen from the
  * smallest remaining ship, since any ship of length L must cover a cell with (x + y) % L == k.
  * Ships that touch are handled naturally: a hit never "belongs" to anything until its ship sinks.

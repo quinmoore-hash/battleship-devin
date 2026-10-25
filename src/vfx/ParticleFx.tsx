@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { burstDuration, makeBurst, particleAt, smokePuff, type BurstOptions, type SmokeOptions } from './particles'
-import type { Vec3 } from './layout'
+import type { Vec3 } from '../scene/layout'
 
 export type ParticleShape = 'sphere' | 'box' | 'shard'
 

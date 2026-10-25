@@ -6,7 +6,7 @@ test('a ship can be placed manually, rotated, picked back up and re-placed', asy
   await expect(page.getByTestId('placement')).toBeVisible()
 
   // Kelp Carrier (5) is pre-selected; hovering previews a horizontal footprint.
-  const tray = page.getByTestId('ship-tray-kelp-carrier')
+  const tray = page.getByTestId('ship-tray-man-o-war')
   await expect(tray).toHaveAttribute('aria-pressed', 'true')
   await page.getByTestId('player-grid-2-2').hover()
   for (let x = 2; x < 7; x++) {

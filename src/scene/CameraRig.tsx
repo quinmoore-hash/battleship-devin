@@ -8,8 +8,8 @@ import { BOARD_LAYOUT, boardCenter } from './layout'
 export type CameraView = 'menu' | 'placement' | 'battle' | 'gameover'
 
 const playerCenter = boardCenter(BOARD_LAYOUT.player)
-const otterCenter = boardCenter(BOARD_LAYOUT.otter)
-const midZ = (playerCenter[2] + otterCenter[2]) / 2
+const enemyCenter = boardCenter(BOARD_LAYOUT.enemy)
+const midZ = (playerCenter[2] + enemyCenter[2]) / 2
 
 /** Fixed shots. `menu` orbits slowly around its target instead of using `position`. */
 export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target: THREE.Vector3; fov: number }> = {
@@ -25,8 +25,8 @@ export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target:
     fov: 40,
   },
   gameover: {
-    position: new THREE.Vector3(-21, 6, otterCenter[2] + 17),
-    target: new THREE.Vector3(2, 1.2, otterCenter[2] + 1),
+    position: new THREE.Vector3(-21, 6, enemyCenter[2] + 17),
+    target: new THREE.Vector3(2, 1.2, enemyCenter[2] + 1),
     fov: 40,
   },
 }

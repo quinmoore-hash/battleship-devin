@@ -13,8 +13,8 @@ import {
 } from './board'
 import { FLEET, FLEET_BY_ID } from './fleet'
 
-const carrier = FLEET_BY_ID['kelp-carrier']
-const patrol = FLEET_BY_ID['pebble-patrol']
+const carrier = FLEET_BY_ID['man-o-war']
+const patrol = FLEET_BY_ID['sloop']
 
 describe('placement', () => {
   it('rejects ships that run off the board', () => {
@@ -64,7 +64,7 @@ describe('firing', () => {
   it('reports hits and sinks', () => {
     const first = fire(board, { x: 2, y: 2 })
     expect(first.result.outcome).toBe('hit')
-    expect(first.result.shipId).toBe('pebble-patrol')
+    expect(first.result.shipId).toBe('sloop')
     const second = fire(first.board, { x: 3, y: 2 })
     expect(second.result.outcome).toBe('sunk')
     expect(isFleetSunk(second.board)).toBe(true)
@@ -83,7 +83,7 @@ describe('firing', () => {
     const { board: after } = fire(board, { x: 2, y: 2 })
     const view = enemyView(after)
     expect(view.shots).toHaveLength(1)
-    expect(view.remainingShips.map((s) => s.id)).toEqual(['pebble-patrol'])
+    expect(view.remainingShips.map((s) => s.id)).toEqual(['sloop'])
     expect(viewGrid(view)[2][2]).toBe('hit')
     expect(viewGrid(view)[0][0]).toBe('unknown')
   })

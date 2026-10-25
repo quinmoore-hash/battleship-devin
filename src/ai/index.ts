@@ -20,12 +20,12 @@ export function createOpponent(difficulty: Difficulty, rng: () => number = Math.
 }
 
 const STRATEGY: Record<Difficulty, string> = {
-  easy: 'Devin is napping on his back, flicking pebbles at the water between snores.',
-  medium: 'Devin is paying attention: one splash and he circles the spot until something sinks.',
-  hard: 'Devin has a clipboard, a heatmap and a grudge. Every shot is the most likely cell.',
+  easy: 'A green crew firing blind: every broadside lands at random.',
+  medium: 'A seasoned captain: one hit and the enemy circles the spot until the ship goes down.',
+  hard: 'An admiral with charts and a grudge: every shot is the most likely cell on the board.',
 }
 
-/** One-line flavour text describing how Devin plays at this difficulty. */
+/** One-line flavour text describing how the enemy fleet plays at this difficulty. */
 export function describeStrategy(difficulty: Difficulty): string {
   return STRATEGY[difficulty]
 }

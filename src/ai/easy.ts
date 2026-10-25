@@ -4,7 +4,7 @@ import { pick } from './rng'
 import type { AiOpponent } from './types'
 
 /**
- * Easy: Devin is napping. Every shot is a uniformly random unshot cell and a hit is never followed up.
+ * Easy: a green crew. Every shot is a uniformly random unshot cell and a hit is never followed up.
  */
 export class EasyOpponent implements AiOpponent {
   readonly difficulty: Difficulty = 'easy'

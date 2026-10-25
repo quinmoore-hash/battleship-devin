@@ -1,5 +1,5 @@
 /**
- * Howler-based audio for Devin the Otter: Battleship.
+ * Howler-based audio for Pirate Battleship.
  *
  *  - `playSfx(name)` picks a random variant and nudges pitch ±5% so repeats don't sound robotic.
  *  - `startMusic()` / `stopMusic()` crossfade the 64 s loop; `sunk` / `victory` / `defeat` duck it briefly.
