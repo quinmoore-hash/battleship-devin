@@ -649,7 +649,8 @@
   z-index: 6;
 }
 .battle .hint {
-  top: 108px;
+  top: 104px;
+  max-width: min(440px, 92vw);
 }
 .hint kbd {
   background: rgba(255, 255, 255, 0.12);
@@ -1044,7 +1045,8 @@
   font-size: 0.85rem;
 }
 .ui-root[data-no3d='true'] .battle .grid-wrap {
-  --cell: clamp(22px, min(4vw, 5.2vh), 40px);
+  /* two charts side by side between the two side panels (~560px) */
+  --cell: clamp(17px, min((100vw - 600px) / 28, 5.2vh), 40px);
 }
 .ui-root[data-no3d='true'] .battle-body {
   align-items: center;
