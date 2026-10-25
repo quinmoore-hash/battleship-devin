@@ -89,7 +89,7 @@ export function frigateMaterials(livery: Livery, quality: Quality = 'high'): Fri
   const m: FrigateMaterials = {
     hull: std({ map: withTexture(hullTex.map, [2.2, 7]), bumpMap: quality === 'high' ? withTexture(hullTex.bump!, [2.2, 7]) : null, bumpScale, roughness: pirate ? 0.78 : 0.82 }),
     black: std({ map: withTexture(blackTex.map, [3, 4]), roughness: 0.6, color: '#8a8a8a' }),
-    stripe: std({ map: withTexture(blackTex.map, [3, 6]), color: pirate ? '#7a1616' : '#e2b45a', roughness: 0.7 }),
+    stripe: std({ color: pirate ? '#9c1c1c' : '#d9a84f', roughness: 0.7 }),
     copper: std({ map: withTexture(copper.map, [3, 1.6]), bumpMap: quality === 'high' ? withTexture(copper.bump!, [3, 1.6]) : null, bumpScale: bumpScale * 1.5, roughness: 0.55, metalness: 0.45 }),
     waterline: std({ map: withTexture(waterline.map, [6, 1]), bumpMap: quality === 'high' ? withTexture(waterline.bump!, [6, 1]) : null, bumpScale: bumpScale * 2, roughness: 0.95 }),
     deck: std({ map: withTexture(deckTex.map, [1.2, 1.2]), bumpMap: quality === 'high' ? withTexture(deckTex.bump!, [1.2, 1.2]) : null, bumpScale, roughness: 0.9 }),
