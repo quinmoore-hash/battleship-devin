@@ -1723,3 +1723,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* game over: the after-action report waits for the victory flyover (cinematics director) */
+.gameover.flyover .report {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}

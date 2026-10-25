@@ -80,7 +80,9 @@ export function BattleScreen() {
 
   const statusText = yourTurn
     ? 'Your turn — fire at the enemy waters'
-    : beat.phase === 'enemy-aiming'
+    : beat.phase === 'intro'
+      ? 'Battle stations! The fleets take position…'
+      : beat.phase === 'enemy-aiming'
       ? 'The enemy is aiming…'
       : beat.phase === 'player-shot' || beat.phase === 'player-sink'
         ? `You fired at ${coordLabel(beat.result!.coord)}: ${outcomeWord(beat.result!)}`

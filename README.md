@@ -33,6 +33,12 @@ npm run build
 
 Stack: Vite, React 19, TypeScript, react-three-fiber / drei / three, zustand, GSAP, Howler, Vitest, Playwright.
 
+How a turn plays: place your fleet on the water (drag / click, R to rotate — the HTML grid is the accessible mirror), then
+click the enemy waters. The cinematics director flies the camera to your firing ship, the broadside lands on the target
+(splash, or splinters and fire — a sunk ship rolls over in slow motion and leaves flotsam), the enemy aims and answers.
+Settings › Cinematics: `full` (default), `fast` (one ball, short cuts) or `off` (instant results); click, Space or Esc
+skips the current shot. Salvo and Stormy-seas rules are on the menu; the after-action report offers Replay and Photo mode.
+
 Graphics quality (Settings › first row, or `?quality=`): `auto` picks `medium` for integrated GPUs (Apple M-series,
 Intel Iris/Xe — the tuned 60 fps target is a MacBook Air M4 at native resolution), `low` for phones / old GPUs, and
 `high` (2k shadows, bloom, full-detail fleet) only on discrete GPUs that pass a ≥ 90 fps probe. If a battle runs

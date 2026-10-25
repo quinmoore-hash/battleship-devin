@@ -25,7 +25,7 @@ export const AIM_DELAY: Record<Difficulty | 'reduced', [number, number]> = {
 export const TIMER_SCALE = 0.15
 export const OFF_DELAY_MS = 30
 
-export type TurnPhase = 'idle' | 'player-shot' | 'player-sink' | 'enemy-aiming' | 'enemy-shot' | 'enemy-sink' | 'done'
+export type TurnPhase = 'idle' | 'intro' | 'player-shot' | 'player-sink' | 'enemy-aiming' | 'enemy-shot' | 'enemy-sink' | 'victory' | 'done'
 
 export interface TurnBeat {
   phase: TurnPhase
@@ -41,6 +41,8 @@ export function setDirector(d: CinematicDirector | null) {
   directorListeners.forEach((l) => l())
 }
 export const getDirector = () => director
+/** The director the flow will actually use: the real one only when the 3D world is on screen (`?no3d` / no WebGL → timers). */
+export const activeDirector = (fallback: CinematicDirector, no3d: boolean = is3dDisabled()): CinematicDirector => (director && !no3d ? director : fallback)
 export function onDirectorChange(listener: () => void) {
   directorListeners.add(listener)
   return () => void directorListeners.delete(listener)
@@ -119,8 +121,10 @@ export interface TurnFlowOptions {
 }
 
 export interface TurnFlow {
-  /** Fire at `coord` and play the whole turn (player shot → sink? → enemy aims → enemy shot → sink?). Resolves when input may resume. */
+  /** Fire at `coord` and play the whole turn (player shot → sink? → enemy aims → enemy shot → sink? → victory?). Resolves when input may resume. */
   fire: (coord: Coord) => Promise<ShotResult | undefined>
+  /** Play the battle-start flyover (3D + real director only). A `fire()` during it skips it and proceeds. */
+  intro: () => Promise<void>
   /** Skip whatever is currently playing (click / Space). */
   skip: () => void
   readonly busy: boolean
@@ -129,18 +133,20 @@ export interface TurnFlow {
 
 /**
  * Drives one complete turn through the store. The flow reads the store directly so it stays
- * correct if the phase changes under it (quit, game over).
+ * correct if the phase changes under it (quit, game over). In salvo mode `fireAt` resolves a whole
+ * volley at once; every shot of it (and of the enemy's reply) is played in order.
  */
 export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = {}): TurnFlow {
   const timers = new TimerDirector(() => useGameStore.getState().settings.reducedMotion)
   const aim = new Sleeper()
   let busy = false
   let disposed = false
+  let introPlaying: Promise<void> | null = null
 
   const play = async (event: CinematicEvent) => {
     // Without the 3D world (`?no3d` / no WebGL) there is nothing to watch, so 'full' pacing drops to 'fast'.
     const cinematics = effectiveLevel(useGameStore.getState().settings.cinematics)
-    const d = director ?? timers
+    const d = activeDirector(timers)
     try {
       await d.play(event, cinematics)
     } catch (err) {
@@ -152,19 +158,62 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
     if (!disposed) onBeat?.({ phase, result })
   }
 
+  const playVolley = async (side: 'player' | 'enemy', results: readonly ShotResult[]) => {
+    const by = side === 'player' ? 'human' : 'enemy'
+    for (const result of results) {
+      beat(`${side}-shot`, result)
+      await play({ type: 'shot', by, target: result.coord, result })
+      if (result.outcome === 'sunk' && result.shipId) {
+        beat(`${side}-sink`, result)
+        await play({ type: 'sink', owner: side === 'player' ? 'enemy' : 'human', shipId: result.shipId })
+      }
+    }
+  }
+
+  /** Volley resolved by the last `fireAt` / `enemyTurn` for `by`, falling back to the single returned result. */
+  const volleyOf = (by: 'human' | 'enemy', fallback: ShotResult): ShotResult[] => {
+    const volley = useGameStore.getState().lastVolley.filter((e) => e.by === by).map((e) => e.result)
+    return volley.length ? volley : [fallback]
+  }
+
+  /** When the shot ended the game, play the victory / defeat flyover. Returns true if the game is over. */
+  const maybeGameOver = async (last: ShotResult) => {
+    const state = useGameStore.getState()
+    if (state.phase !== 'gameover') return false
+    beat('victory', last)
+    await play({ type: 'victory', winner: state.winner ?? 'enemy' })
+    beat('done', last)
+    return true
+  }
+
+  const intro = async () => {
+    // only worth it with a real director and a 3D world to fly over; timers would just delay the first shot
+    if (useGameStore.getState().phase !== 'battle' || activeDirector(timers) === timers) return
+    busy = true
+    beat('intro')
+    introPlaying = play({ type: 'battle-start' })
+    try {
+      await introPlaying
+    } finally {
+      introPlaying = null
+      busy = false
+      beat('done')
+    }
+  }
+
   const fire = async (coord: Coord) => {
+    if (introPlaying) {
+      activeDirector(timers).skip()
+      await introPlaying
+    }
     const store = useGameStore.getState()
     if (busy || store.phase !== 'battle' || store.turn !== 'human') return undefined
     const result = store.fireAt(coord)
     if (!result) return undefined
     busy = true
     try {
-      beat('player-shot', result)
-      await play({ type: 'shot', by: 'human', target: coord, result })
-      if (result.outcome === 'sunk' && result.shipId) {
-        beat('player-sink', result)
-        await play({ type: 'sink', owner: 'enemy', shipId: result.shipId })
-      }
+      await playVolley('player', volleyOf('human', result))
+      if (await maybeGameOver(result)) return result
       if (useGameStore.getState().phase !== 'battle') {
         beat('done', result)
         return result
@@ -177,12 +226,8 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
 
       const enemy = useGameStore.getState().enemyTurn()
       if (enemy) {
-        beat('enemy-shot', enemy)
-        await play({ type: 'shot', by: 'enemy', target: enemy.coord, result: enemy })
-        if (enemy.outcome === 'sunk' && enemy.shipId) {
-          beat('enemy-sink', enemy)
-          await play({ type: 'sink', owner: 'human', shipId: enemy.shipId })
-        }
+        await playVolley('enemy', volleyOf('enemy', enemy))
+        if (await maybeGameOver(enemy)) return result
       }
       beat('done', enemy)
       return result
@@ -192,19 +237,21 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
   }
 
   const skip = () => {
-    ;(director ?? timers).skip()
+    activeDirector(timers).skip()
     aim.skip()
   }
 
   return {
     fire,
+    intro,
     skip,
     get busy() {
       return busy
     },
     dispose: () => {
       disposed = true
-      skip()
+      // the battle screen unmounts at game over while the victory flyover is still playing; let it finish
+      if (useGameStore.getState().phase !== 'gameover') skip()
     },
   }
 }
