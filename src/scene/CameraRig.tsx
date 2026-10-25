@@ -37,6 +37,12 @@ export interface CameraRigProps {
   view: CameraView
   /** Let the player orbit/zoom (battle only by default). */
   interactive?: boolean
+  /**
+   * Hand the camera to someone else (the cinematics director's `<CinematicCamera />`): the rig stops
+   * writing position / target / fov and disables orbit. When it flips back to false the rig damps from
+   * wherever the camera was left toward the current shot.
+   */
+  override?: boolean
 }
 
 /**
@@ -44,7 +50,7 @@ export interface CameraRigProps {
  * view change mid-flight simply re-targets. In battle the player may orbit and zoom within
  * limits once the camera has arrived; polar angle is clamped so you can never see under the water.
  */
-export function CameraRig({ view, interactive = view === 'battle' }: CameraRigProps) {
+export function CameraRig({ view, interactive = view === 'battle', override = false }: CameraRigProps) {
   const get = useThree((s) => s.get)
   const controls = useRef<OrbitControlsImpl>(null)
   const target = useRef(new THREE.Vector3().copy(CAMERA_SHOTS[view].target))
@@ -72,6 +78,10 @@ export function CameraRig({ view, interactive = view === 'battle' }: CameraRigPr
   }, [view, get])
 
   useFrame((state, delta) => {
+    if (override) {
+      settled.current = false
+      return
+    }
     const dt = Math.min(delta, 0.1)
     const camera = state.camera as THREE.PerspectiveCamera
     const shot = CAMERA_SHOTS[view]
@@ -118,7 +128,7 @@ export function CameraRig({ view, interactive = view === 'battle' }: CameraRigPr
     <OrbitControls
       ref={controls}
       makeDefault={false}
-      enabled={interactive}
+      enabled={interactive && !override}
       enablePan={false}
       enableDamping
       dampingFactor={0.08}
