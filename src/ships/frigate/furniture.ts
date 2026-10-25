@@ -155,13 +155,13 @@ export function buildFurniture(lod: Lod): HullParts {
 
 /** Positions for the kit props placed by the model (barrels, crates, coils) — kept here so they're deterministic. */
 export const PROP_SPOTS: { kind: 'barrel' | 'crate' | 'coil'; at: Vec3; scale?: number }[] = [
-  { kind: 'barrel', at: [-0.7, FRIGATE.deckY, 0.3], scale: 0.55 },
-  { kind: 'barrel', at: [-0.7, FRIGATE.deckY, 0.38], scale: 0.5 },
-  { kind: 'crate', at: [0.62, FRIGATE.deckY, -0.32] },
-  { kind: 'crate', at: [0.62, FRIGATE.deckY, -0.2], scale: 0.8 },
-  { kind: 'coil', at: [0.55, FRIGATE.deckY, 0.33] },
-  { kind: 'coil', at: [-0.15, FRIGATE.deckY, -0.36] },
-  { kind: 'coil', at: [-1.2, FRIGATE.qdY, -0.2] },
-  { kind: 'coil', at: [1.25, FRIGATE.fcY, 0.08] },
-  { kind: 'barrel', at: [-1.33, FRIGATE.qdY, 0.18], scale: 0.45 },
+  { kind: 'barrel', at: [-0.7, FRIGATE.deckY, 0.22], scale: 0.3 },
+  { kind: 'barrel', at: [-0.72, FRIGATE.deckY, 0.3], scale: 0.26 },
+  { kind: 'crate', at: [0.62, FRIGATE.deckY, -0.26] },
+  { kind: 'crate', at: [0.62, FRIGATE.deckY, -0.14], scale: 0.8 },
+  { kind: 'coil', at: [0.55, FRIGATE.deckY, 0.3] },
+  { kind: 'coil', at: [-0.15, FRIGATE.deckY, -0.3] },
+  { kind: 'coil', at: [-1.2, FRIGATE.qdY, -0.16] },
+  { kind: 'coil', at: [1.25, FRIGATE.fcY, 0.06] },
+  { kind: 'barrel', at: [-1.33, FRIGATE.qdY, 0.14], scale: 0.24 },
 ]
