@@ -111,8 +111,8 @@ export function BoardGrid({
   const ropeGeo = useMemo(() => new THREE.CylinderGeometry(0.018, 0.018, 1, 5, 1, true), [])
   const floatGeo = useMemo(() => new THREE.CylinderGeometry(0.07, 0.055, 0.12, 8), [])
   const ropeTex = useMemo(() => makeRopeTexture(), [])
-  const ropeMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ map: ropeTex, color, roughness: 1 })), [ropeTex, color])
-  const floatMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.85), roughness: 0.9 })), [color])
+  const ropeMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ map: ropeTex, color, roughness: 1 }), 0.07), [ropeTex, color])
+  const floatMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.85), roughness: 0.9 }), 0.03), [color])
   const plateMat = useMemo(() => rideTheWaves(new THREE.MeshBasicMaterial({ color: highlightColor, transparent: true, opacity: 0.4, toneMapped: false, depthWrite: false })), [highlightColor])
   useEffect(() => () => void (ropeGeo.dispose(), floatGeo.dispose(), ropeTex.dispose()), [ropeGeo, floatGeo, ropeTex])
 
@@ -122,7 +122,7 @@ export function BoardGrid({
   // Static rest-level layout; the wave motion is added per vertex on the GPU (`rideTheWaves`).
   useEffect(() => {
     const h = extent / 2
-    const rest = -center[1] + 0.06
+    const rest = -center[1] + 0.075
     const floats = floatsRef.current
     const ropes = ropesRef.current
     if (floats) {
@@ -256,7 +256,7 @@ export function BoardGrid({
  * Moves vertices with the same Gerstner bank the water uses, on the GPU, so floats and ropes
  * ride the surface exactly (no CPU/GPU time or tessellation mismatch).
  */
-function rideTheWaves<T extends THREE.Material>(mat: T): T {
+function rideTheWaves<T extends THREE.Material>(mat: T, growPerMetre = 0): T {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = waveUniforms.uTime
     shader.uniforms.uStorm = waveUniforms.uStorm
@@ -265,7 +265,15 @@ function rideTheWaves<T extends THREE.Material>(mat: T): T {
       shader.vertexShader.replace(
         '#include <project_vertex>',
         /* glsl */ `
-        vec4 mvPosition = vec4(transformed, 1.0);
+        vec3 rtw = transformed;
+        #ifdef USE_INSTANCING
+          vec3 rtwOrigin = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #else
+          vec3 rtwOrigin = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #endif
+        // keep thin ropes/floats at least ~2 px wide at a distance so they don't alias away
+        rtw.xz *= max(1.0, length(cameraPosition - rtwOrigin) * ${growPerMetre.toFixed(4)});
+        vec4 mvPosition = vec4(rtw, 1.0);
         #ifdef USE_INSTANCING
           mvPosition = instanceMatrix * mvPosition;
         #endif
@@ -276,7 +284,7 @@ function rideTheWaves<T extends THREE.Material>(mat: T): T {
         `,
       )
   }
-  mat.customProgramCacheKey = () => 'ride-the-waves'
+  mat.customProgramCacheKey = () => `ride-the-waves-${growPerMetre}`
   return mat
 }
 

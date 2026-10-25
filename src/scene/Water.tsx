@@ -337,7 +337,10 @@ function WaterSheet({
   // Built imperatively so the material keeps *our* uniform objects (shared `waveUniforms`);
   // the JSX `uniforms` prop is re-applied by r3f and loses that identity.
   const material = useMemo(
-    () => new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader, uniforms, fog: true }),
+    // polygonOffset nudges the water back a few depth units so near-surface geometry (rope grid,
+    // floats) wins depth ties on low-precision/far pixels instead of flickering under the surface.
+    () =>
+      new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader, uniforms, fog: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2 }),
     [vs, uniforms],
   )
   useEffect(() => () => material.dispose(), [material])
