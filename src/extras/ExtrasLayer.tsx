@@ -7,7 +7,7 @@
  */
 import { useEffect } from 'react'
 import { coordKey, coordLabel } from '../engine'
-import { useGameStore } from '../store/gameStore'
+import { useGameStore, type GameModes } from '../store/gameStore'
 import { PhotoMode, requestPhotoMode, usePhotoEvent, usePhotoMode } from './photo'
 import { ReplayPlayer, requestReplay, useReplay, useReplayEvent } from './replay'
 import { bindStatsRecorder } from './stats'
@@ -53,9 +53,11 @@ export function ExtrasLayer() {
 }
 
 /** Salvo / stormy-seas toggles. Uses `setModes`, so the UI's own `startGame(difficulty)` picks them up. */
-export function ModesPicker({ className = '' }: { className?: string }) {
+/** Mode checkboxes. Defaults to `setModes` (menu/placement); pass `onChange` to restart a running sandbox instead. */
+export function ModesPicker({ className = '', onChange }: { className?: string; onChange?: (modes: Partial<GameModes>) => void }) {
   const modes = useGameStore((s) => s.modes)
-  const setModes = useGameStore((s) => s.setModes)
+  const storeSetModes = useGameStore((s) => s.setModes)
+  const setModes = onChange ?? storeSetModes
   return (
     <section className={`xt-panel xt-modes ${className}`} data-testid="modes-picker" aria-label="Game modes">
       <strong>Rules of engagement</strong>

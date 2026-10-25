@@ -521,6 +521,9 @@
 .xt-log li[data-outcome='sunk'] {
   color: #ff8a9a;
 }
+.xt-demo:has(.hud-hidden) .xt-tabs {
+  display: none;
+}
 .xt-tabs {
   position: fixed;
   left: 14px;

@@ -122,7 +122,7 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
       </header>
 
       <aside className="xt-dock xt-dock-left">
-        <ModesPicker />
+        <ModesPicker onChange={(m) => start({ ...modes, ...m })} />
         <div className="xt-panel xt-row wrap">
           <label className="xt-field inline">
             seed
