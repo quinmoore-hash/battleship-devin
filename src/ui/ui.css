@@ -1319,7 +1319,7 @@
   }
   .grid-wrap {
     /* 10 cells + gaps + labels + panel padding must fit 100vw minus root padding and a scrollbar */
-    --cell: clamp(18px, calc((100vw - 130px) / 10), 34px);
+    --cell: clamp(18px, calc((100vw - 140px) / 10), 34px);
   }
   .devin-bubble {
     max-width: none;
