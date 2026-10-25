@@ -1724,11 +1724,10 @@
   }
 }
 
-/* game over: the after-action report waits for the victory flyover (cinematics director) */
+/* game over: the after-action report waits for the final cinematic (visibility — `.ink-in` owns opacity/transform) */
 .gameover.flyover .report {
-  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transform: translateY(12px);
 }
 
 /* cinematics: parchment steps back while the director plays (filter, not opacity: `.ink-in` animates opacity; never reflow the grids, BUG-228) */

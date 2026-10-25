@@ -21,8 +21,8 @@ export function GameOverScreen() {
   const startGame = useGameStore((s) => s.startGame)
   const reset = useGameStore((s) => s.reset)
   const battleStartedAt = useUiStore((s) => s.battleStartedAt)
-  // the report slides in once the victory / defeat flyover has played (instantly without the director)
-  const flyover = useDirector((s) => s.active?.event.type === 'victory')
+  // the report inks in once the director has finished the last shot / sinking / victory flyover (instantly without the director)
+  const flyover = useDirector((s) => s.busy)
 
   const won = winner === 'human'
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt])
@@ -40,7 +40,7 @@ export function GameOverScreen() {
   return (
     <div className={`gameover hud${flyover ? ' flyover' : ''}`} data-testid="gameover" data-winner={winner ?? ''} data-flyover={flyover ? 'true' : 'false'}>
       {won && !reducedMotion && !flyover && <Confetti />}
-      <article className={`panel parchment report ink-in ${won ? 'report-won' : 'report-lost'}`}>
+      <article key={flyover ? 'waiting' : 'shown'} className={`panel parchment report ink-in ${won ? 'report-won' : 'report-lost'}`}>
         <header className="report-head">
           <span className="report-kicker">After-action report · {difficulty}</span>
           <h2 className="report-title">{won ? 'Victory!' : 'Sunk!'}</h2>
