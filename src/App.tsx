@@ -10,12 +10,13 @@ const KitDemo = lazy(() => import('./ships/kit/KitDemo').then((m) => ({ default:
 const SinkingDemo = lazy(() => import('./vfx/sinking/SinkingDemo').then((m) => ({ default: m.SinkingDemo })))
 const CannonDemo = lazy(() => import('./vfx/cannon/CannonDemo').then((m) => ({ default: m.CannonDemo })))
 const VfxDamageDemo = lazy(() => import('./vfx/VfxDamageDemo').then((m) => ({ default: m.VfxDamageDemo })))
+const CinematicsDemo = lazy(() => import('./cinematics/CinematicsDemo').then((m) => ({ default: m.CinematicsDemo })))
 const FrigateDemo = lazy(() => import('./ships/frigate/demo').then((m) => ({ default: m.FrigateDemoApp })))
 const ExtrasDemo = lazy(() => import('./extras/ExtrasDemo').then((m) => ({ default: m.ExtrasDemo })))
 
 /**
  * Review routes (one query flag each): `?scene-demo`, `?ship-demo`, `?audio-demo`, `?kit-demo`,
- * `?vfx-sinking-demo`, `?vfx-cannon-demo`, `?vfx-damage-demo`, `?extras-demo`. `?no3d` disables WebGL (used by e2e).
+ * `?vfx-sinking-demo`, `?vfx-cannon-demo`, `?vfx-damage-demo`, `?cinematics-demo`, `?extras-demo`. `?no3d` disables WebGL (used by e2e).
  * Add new demos here as one entry; keep the list alphabetical-ish to avoid merge conflicts.
  */
 const DEMOS: Record<string, React.LazyExoticComponent<() => React.JSX.Element>> = {
@@ -25,6 +26,7 @@ const DEMOS: Record<string, React.LazyExoticComponent<() => React.JSX.Element>> 
   'kit-demo': KitDemo,
   'vfx-sinking-demo': SinkingDemo,
   'vfx-cannon-demo': CannonDemo,
+  'cinematics-demo': CinematicsDemo,
   'vfx-damage-demo': VfxDamageDemo,
   'frigate-demo': FrigateDemo,
   'extras-demo': ExtrasDemo,
