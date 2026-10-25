@@ -656,8 +656,8 @@ function DeckFittings({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; liver
           {/* cargo lashed in the waist */}
           {[1, -1].map((s) => (
             <group key={s}>
-              <Barrel position={[0.45, G.mainDeckY, s * 0.3]} livery={livery} scale={0.8} lod={lod} />
-              <Barrel position={[0.58, G.mainDeckY, s * 0.42]} livery={livery} scale={0.72} lod={lod} />
+              <Barrel position={[0.45, G.mainDeckY, s * 0.3]} livery={livery} scale={0.42} lod={lod} />
+              <Barrel position={[0.58, G.mainDeckY, s * 0.42]} livery={livery} scale={0.36} lod={lod} />
               <Crate position={[0.05, G.mainDeckY, s * 0.42]} livery={livery} size={0.16} />
               <Rope from={[-0.04, G.mainDeckY + 0.165, s * 0.35]} to={[0.14, G.mainDeckY + 0.165, s * 0.49]} livery={livery} radius={0.007} />
               <RopeCoil position={[-0.35, G.mainDeckY, s * 0.44]} livery={livery} radius={0.07} />
