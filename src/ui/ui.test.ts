@@ -214,3 +214,15 @@ describe('game over', () => {
   })
 })
 
+
+describe('battle player chart', () => {
+  it('marks own ship cells on the player chart', () => {
+    store().startGame('easy')
+    store().autoPlacePlayerFleet()
+    store().confirmPlacement()
+    ui()
+    const own = store().playerBoard.ships.flatMap((s) => s.cells)
+    for (const c of own) expect(cell('player-grid', c.x, c.y).dataset.state).toBe('ship')
+    expect(screen.getByTestId('player-grid').querySelectorAll('[data-state="ship"]')).toHaveLength(17)
+  })
+})

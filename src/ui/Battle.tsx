@@ -69,6 +69,7 @@ export function BattleScreen() {
   const yourTurn = turn === 'human' && !busy
   const enemyCells = useMemo(() => viewGrid(enemyView(enemyBoard)), [enemyBoard])
   const playerView = useMemo(() => viewGrid(enemyView(playerBoard), playerBoard), [playerBoard])
+  const ownCells = useMemo(() => new Set(playerBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [playerBoard])
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt, tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const statusText = yourTurn
@@ -89,7 +90,10 @@ export function BattleScreen() {
     const aimed = target && target.x === c.x && target.y === c.y
     return { state, className: `${aimed && yourTurn ? 'is-aimed' : ''} ${pending && aimed ? 'is-pending' : ''}`, title: state === 'unknown' ? coordLabel(c) : `${coordLabel(c)} — ${state}` }
   }
-  const playerCell = (c: Coord): GridCellInfo => ({ state: playerView[c.y][c.x] })
+  const playerCell = (c: Coord): GridCellInfo => {
+    const state = playerView[c.y][c.x]
+    return { state: state === 'unknown' && ownCells.has(`${c.x},${c.y}`) ? 'ship' : state }
+  }
 
   const onEnemyCell = (c: Coord) => {
     if (!yourTurn) return
