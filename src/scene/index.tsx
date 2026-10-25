@@ -7,8 +7,19 @@ import { Effects } from './Effects'
 import { BayDressing } from './Environment'
 import { is3dDisabled } from './flags'
 import { Lighting, SkyDome } from './SkyDome'
-import { computeAtmosphere, GOLDEN_HOUR } from './sun'
+import { computeAtmosphere, GOLDEN_HOUR, type Weather } from './sun'
 import { Water, type Quality } from './Water'
+import { Rain, useLightning, type LightningStrike } from './Weather'
+
+// BUG-006: @react-three/fiber still constructs `THREE.Clock` for its root store, which three
+// r183+ flags as deprecated the moment it is instantiated. The scene cannot swap that clock out
+// before it is created, so this filters just that one warning and forwards everything else.
+if (typeof window !== 'undefined' && !THREE.getConsoleFunction()) {
+  THREE.setConsoleFunction((type: 'log' | 'warn' | 'error', message: unknown, ...params: unknown[]) => {
+    if (type === 'warn' && typeof message === 'string' && message.includes('Clock: This module has been deprecated')) return
+    console[type](message, ...params)
+  })
+}
 
 export { BoardGrid, type BoardGridProps } from './BoardGrid'
 export { CameraRig, CAMERA_SHOTS, type CameraRigProps, type CameraView } from './CameraRig'
@@ -23,7 +34,9 @@ export {
   type Vec3,
 } from './layout'
 export { SceneDemo } from './SceneDemo'
-export { computeAtmosphere, GOLDEN_HOUR, type Atmosphere } from './sun'
+export { computeAtmosphere, GOLDEN_HOUR, type Atmosphere, type Weather } from './sun'
+export { ISLANDS, LANDMARKS, isLand, terrainHeight, waterDepth } from './cove'
+export type { LightningStrike } from './Weather'
 export { sampleWaveHeight, sampleWaveNormal, WAVES } from './waves'
 export type { Quality } from './Water'
 
@@ -37,8 +50,12 @@ export interface OceanSceneProps {
   view?: CameraView
   /** Allow orbit/zoom. Defaults to true in the battle view only. */
   interactive?: boolean
-  /** Render the rocks / kelp / shoreline / wildlife (default true). */
+  /** Render the islands / landmarks / wildlife (default true). */
   dressing?: boolean
+  /** `calm` (default) or `stormy`: overcast, rain, bigger waves, lightning. Also read from `?weather=stormy`. */
+  weather?: Weather
+  /** Fired on every lightning strike while stormy, so audio can play a rumble. */
+  onLightning?: (strike: LightningStrike) => void
 }
 
 const PHASE_VIEW: Record<string, CameraView> = {
@@ -60,6 +77,10 @@ export function defaultQuality(): Quality {
   return 'high'
 }
 
+function defaultWeather(): Weather {
+  return readUrlParam('weather') === 'stormy' ? 'stormy' : 'calm'
+}
+
 function defaultTimeOfDay(): number {
   const t = readUrlParam('tod')
   const n = t === null ? NaN : Number(t)
@@ -67,25 +88,26 @@ function defaultTimeOfDay(): number {
 }
 
 /**
- * The 3D river bay. Renders a fixed, full-screen Canvas behind the HTML UI and places its
+ * The 3D Caribbean cove. Renders a fixed, full-screen Canvas behind the HTML UI and places its
  * children (ships, markers, grids, the mascot) inside the lit scene. Degrades to a flat
  * gradient when WebGL is unavailable or the URL has `?no3d`.
  */
-export function OceanScene({ children, quality, timeOfDay, view, interactive, dressing = true }: OceanSceneProps) {
+export function OceanScene({ children, quality, timeOfDay, view, interactive, dressing = true, weather, onLightning }: OceanSceneProps) {
   if (is3dDisabled()) return <OceanFallback />
   const q = quality ?? defaultQuality()
   const tod = timeOfDay ?? defaultTimeOfDay()
+  const w = weather ?? defaultWeather()
   return (
     <WebGLBoundary>
       <Canvas
-        shadows="percentage"
+        shadows={{ type: THREE.PCFShadowMap }}
         dpr={q === 'high' ? [1, 1.75] : [1, 1]}
         gl={{ antialias: q === 'low', powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         camera={{ position: [0, 9, 30], fov: 42, near: 0.5, far: 1500 }}
         style={{ position: 'fixed', inset: 0, zIndex: 0 }}
         data-testid="ocean-canvas"
       >
-        <SceneContents quality={q} timeOfDay={tod} view={view} interactive={interactive} dressing={dressing}>
+        <SceneContents quality={q} timeOfDay={tod} view={view} interactive={interactive} dressing={dressing} weather={w} onLightning={onLightning}>
           {children}
         </SceneContents>
       </Canvas>
@@ -100,19 +122,23 @@ function SceneContents({
   view,
   interactive,
   dressing,
-}: Required<Pick<OceanSceneProps, 'quality' | 'timeOfDay' | 'dressing'>> & Pick<OceanSceneProps, 'children' | 'view' | 'interactive'>) {
+  weather,
+  onLightning,
+}: Required<Pick<OceanSceneProps, 'quality' | 'timeOfDay' | 'dressing' | 'weather'>> & Pick<OceanSceneProps, 'children' | 'view' | 'interactive' | 'onLightning'>) {
   const phase = useGameStore((s) => s.phase)
   const activeView = view ?? PHASE_VIEW[phase] ?? 'menu'
-  const atmosphere = useMemo(() => computeAtmosphere(timeOfDay), [timeOfDay])
+  const atmosphere = useMemo(() => computeAtmosphere(timeOfDay, weather), [timeOfDay, weather])
+  const lightning = useLightning(atmosphere.storm, onLightning)
   return (
     <>
-      <SkyDome atmosphere={atmosphere} clouds={quality === 'high' ? 1 : 0.7} />
-      <Lighting atmosphere={atmosphere} quality={quality} />
-      <Water quality={quality} atmosphere={atmosphere} />
+      <SkyDome atmosphere={atmosphere} clouds={quality === 'high' ? 1 : 0.7} lightning={lightning} />
+      <Lighting atmosphere={atmosphere} quality={quality} lightning={lightning} />
+      <Water quality={quality} atmosphere={atmosphere} lightning={lightning} />
       {dressing && <BayDressing atmosphere={atmosphere} quality={quality} />}
+      <Rain storm={atmosphere.storm} quality={quality} />
       <CameraRig view={activeView} interactive={interactive ?? activeView === 'battle'} />
       {children}
-      {quality === 'high' && <Effects night={1 - atmosphere.daylight} />}
+      <Effects night={1 - atmosphere.daylight} storm={atmosphere.storm} quality={quality} />
     </>
   )
 }

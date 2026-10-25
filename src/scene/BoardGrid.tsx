@@ -1,8 +1,9 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Coord } from '../engine'
 import { cellToWorld, worldToCell, type Vec3 } from './layout'
+import { getSeaState, sampleWaveHeight } from './waves'
 
 export interface BoardGridProps {
   origin: Vec3
@@ -10,9 +11,9 @@ export interface BoardGridProps {
   cellSize?: number
   /** Cell to light up (hover / selected). */
   highlight?: Coord | null
-  /** Accent colour for lines and highlight. */
+  /** Accent colour for the rope lines and cork floats (defaults to sun-bleached hemp). */
   color?: string
-  /** Hex colour of the highlight cell (defaults to a warm lantern-orange). */
+  /** Hex colour of the highlight cell (defaults to polished brass). */
   highlightColor?: string
   /** Show A–J / 1–10 along the edges. */
   labels?: boolean
@@ -29,16 +30,46 @@ function makeLabelTexture(text: string, color: string): THREE.CanvasTexture {
   canvas.height = 128
   const ctx = canvas.getContext('2d')!
   ctx.clearRect(0, 0, 128, 128)
-  ctx.font = '700 86px Inter, system-ui, Helvetica, Arial, sans-serif'
+  // a small driftwood plaque behind each letter
+  ctx.fillStyle = 'rgba(70,50,30,0.75)'
+  ctx.beginPath()
+  ctx.roundRect(14, 22, 100, 84, 10)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(226,179,90,0.8)'
+  ctx.lineWidth = 3
+  ctx.stroke()
+  ctx.font = '700 70px Georgia, "Times New Roman", serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.shadowColor = 'rgba(0,0,0,0.55)'
-  ctx.shadowBlur = 10
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'
+  ctx.shadowBlur = 6
   ctx.fillStyle = color
-  ctx.fillText(text, 64, 70)
+  ctx.fillText(text, 64, 66)
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 4
+  return tex
+}
+
+function makeRopeTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 16
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#b89a6a'
+  ctx.fillRect(0, 0, 64, 16)
+  ctx.strokeStyle = 'rgba(60,40,20,0.55)'
+  ctx.lineWidth = 3
+  for (let x = -16; x < 80; x += 8) {
+    ctx.beginPath()
+    ctx.moveTo(x, 16)
+    ctx.lineTo(x + 8, 0)
+    ctx.stroke()
+  }
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = THREE.RepeatWrapping
+  tex.repeat.set(12, 1)
   return tex
 }
 
@@ -53,60 +84,92 @@ function Label({ text, position, size, color }: { text: string; position: Vec3; 
 }
 
 /**
- * A translucent 10x10 grid floating just above the water with glowing cell borders, an
- * optional highlighted cell and coordinate labels along the edges. Pointer events are
- * resolved to cells via `worldToCell` so the UI can hover/fire on the 3D board.
+ * A 10x10 firing grid marked out on the water the way a harbour master would: hemp rope lines
+ * strung between cork floats that bob on the swell, a brass-framed highlight cell and
+ * driftwood coordinate plaques. Pointer events are resolved to cells via `worldToCell` on an
+ * invisible plate so the UI can hover/fire on the 3D board.
  */
 export function BoardGrid({
   origin,
   size = 10,
   cellSize = 1,
   highlight = null,
-  color = '#7fe9ff',
-  highlightColor = '#ffb347',
+  color = '#d8bb8a',
+  highlightColor = '#e2b35a',
   labels = true,
   onCellPointerMove,
   onCellClick,
 }: BoardGridProps) {
   const extent = size * cellSize
   const center: Vec3 = [origin[0] + extent / 2, origin[1], origin[2] + extent / 2]
-  const highlightRef = useRef<THREE.Mesh>(null)
-  const lineMat = useRef<THREE.LineBasicMaterial>(null)
+  const highlightRef = useRef<THREE.Group>(null)
+  const floatsRef = useRef<THREE.InstancedMesh>(null)
+  const ropesRef = useRef<THREE.InstancedMesh>(null)
   const lastHover = useRef<string | null>(null)
+  const dummy = useMemo(() => new THREE.Object3D(), [])
 
-  const lines = useMemo(() => {
-    const pts: number[] = []
-    const y = 0
-    for (let i = 0; i <= size; i++) {
-      const o = -extent / 2 + i * cellSize
-      pts.push(o, y, -extent / 2, o, y, extent / 2)
-      pts.push(-extent / 2, y, o, extent / 2, y, o)
-    }
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
-    return g
-  }, [size, cellSize, extent])
+  const ropeGeo = useMemo(() => new THREE.CylinderGeometry(0.018, 0.018, 1, 5, 1, true), [])
+  const floatGeo = useMemo(() => new THREE.CylinderGeometry(0.07, 0.055, 0.12, 8), [])
+  const ropeTex = useMemo(() => makeRopeTexture(), [])
+  const ropeMat = useMemo(() => new THREE.MeshStandardMaterial({ map: ropeTex, color, roughness: 1 }), [ropeTex, color])
+  const floatMat = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.85), roughness: 0.9 }), [color])
+  useEffect(() => () => void (ropeGeo.dispose(), floatGeo.dispose(), ropeTex.dispose()), [ropeGeo, floatGeo, ropeTex])
 
-  const edge = useMemo(() => {
-    const h = extent / 2
-    const pts = [-h, 0, -h, h, 0, -h, h, 0, -h, h, 0, h, h, 0, h, -h, 0, h, -h, 0, h, -h, 0, -h]
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
-    return g
-  }, [extent])
-
-  const lineColor = useMemo(() => new THREE.Color(color), [color])
-  const glowColor = useMemo(() => new THREE.Color(color).multiplyScalar(1.6), [color])
+  // one rope segment per cell edge so each can follow the water between its two floats
+  const ropeCount = 2 * size * (size + 1)
+  const floatCount = (size + 1) * (size + 1)
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
-    if (highlightRef.current) {
-      const m = highlightRef.current.material as THREE.MeshBasicMaterial
-      m.opacity = 0.45 + 0.25 * Math.sin(t * 4)
-      highlightRef.current.position.y = 0.03 + 0.01 * Math.sin(t * 4)
+    const h = extent / 2
+    const yAt = (lx: number, lz: number) => sampleWaveHeight(center[0] + lx, center[2] + lz, t) - center[1] + 0.08 + getSeaState() * 0.25
+    const floats = floatsRef.current
+    const ropes = ropesRef.current
+    if (floats) {
+      let k = 0
+      for (let i = 0; i <= size; i++) {
+        for (let j = 0; j <= size; j++) {
+          const lx = -h + i * cellSize
+          const lz = -h + j * cellSize
+          dummy.position.set(lx, yAt(lx, lz), lz)
+          dummy.rotation.set(Math.sin(t * 1.3 + i) * 0.08, 0, Math.cos(t * 1.1 + j) * 0.08)
+          dummy.scale.setScalar(1)
+          dummy.updateMatrix()
+          floats.setMatrixAt(k++, dummy.matrix)
+        }
+      }
+      floats.instanceMatrix.needsUpdate = true
     }
-    if (lineMat.current) {
-      lineMat.current.opacity = 0.55 + 0.15 * Math.sin(t * 1.5)
+    if (ropes) {
+      let k = 0
+      const a = new THREE.Vector3()
+      const b = new THREE.Vector3()
+      const seg = (ax: number, az: number, bx: number, bz: number) => {
+        a.set(ax, yAt(ax, az), az)
+        b.set(bx, yAt(bx, bz), bz)
+        dummy.position.copy(a).add(b).multiplyScalar(0.5)
+        dummy.position.y -= 0.012 // ropes sag a touch between floats
+        dummy.scale.set(1, a.distanceTo(b), 1)
+        dummy.quaternion.setFromUnitVectors(UP, b.sub(a).normalize())
+        dummy.updateMatrix()
+        ropes.setMatrixAt(k++, dummy.matrix)
+      }
+      for (let i = 0; i <= size; i++) {
+        const o = -h + i * cellSize
+        for (let j = 0; j < size; j++) {
+          const s0 = -h + j * cellSize
+          seg(o, s0, o, s0 + cellSize)
+          seg(s0, o, s0 + cellSize, o)
+        }
+      }
+      ropes.instanceMatrix.needsUpdate = true
+    }
+    if (highlightRef.current) {
+      const g = highlightRef.current
+      const plate = g.children[0] as THREE.Mesh
+      const m = plate.material as THREE.MeshBasicMaterial
+      m.opacity = 0.32 + 0.14 * Math.sin(t * 4)
+      g.position.y = yAt(g.position.x, g.position.z) + 0.03
     }
   })
 
@@ -146,48 +209,31 @@ export function BoardGrid({
   )
 
   const hl = highlight ? cellToWorld(highlight, origin, cellSize) : null
-  const labelSize = cellSize * 0.62
-  const labelOffset = cellSize * 0.7
+  const labelSize = cellSize * 0.72
+  const labelOffset = cellSize * 0.75
+  const brass = useMemo(() => new THREE.Color(highlightColor), [highlightColor])
 
   return (
     <group position={center}>
-      {/* translucent glass plate; also the pointer target */}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        renderOrder={1}
-        onPointerMove={handleMove}
-        onPointerLeave={handleLeave}
-        onClick={handleClick}
-      >
+      {/* invisible pointer target; a faint tint so the board reads as a zone */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={1} onPointerMove={handleMove} onPointerLeave={handleLeave} onClick={handleClick}>
         <planeGeometry args={[extent, extent]} />
-        <meshPhysicalMaterial
-          color={color}
-          transparent
-          opacity={0.14}
-          roughness={0.15}
-          metalness={0}
-          transmission={0}
-          depthWrite={false}
-          side={THREE.DoubleSide}
-        />
+        <meshBasicMaterial color={color} transparent opacity={0.03} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
-      {/* glowing cell borders (toneMapped=false so bloom picks them up) */}
-      <lineSegments geometry={lines} position={[0, 0.012, 0]} renderOrder={2}>
-        <lineBasicMaterial ref={lineMat} color={glowColor} transparent opacity={0.65} toneMapped={false} depthWrite={false} />
-      </lineSegments>
-      <lineSegments geometry={edge} position={[0, 0.02, 0]} renderOrder={3}>
-        <lineBasicMaterial color={lineColor.clone().multiplyScalar(2.2)} toneMapped={false} depthWrite={false} />
-      </lineSegments>
+      <instancedMesh ref={ropesRef} args={[ropeGeo, ropeMat, ropeCount]} frustumCulled={false} renderOrder={2} />
+      <instancedMesh ref={floatsRef} args={[floatGeo, floatMat, floatCount]} frustumCulled={false} renderOrder={2} castShadow />
       {hl && (
-        <mesh
-          ref={highlightRef}
-          position={[hl[0] - center[0], 0.03, hl[2] - center[2]]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          renderOrder={4}
-        >
-          <planeGeometry args={[cellSize * 0.94, cellSize * 0.94]} />
-          <meshBasicMaterial color={highlightColor} transparent opacity={0.6} toneMapped={false} depthWrite={false} />
-        </mesh>
+        <group ref={highlightRef} position={[hl[0] - center[0], 0.04, hl[2] - center[2]]} renderOrder={4}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[cellSize * 0.9, cellSize * 0.9]} />
+            <meshBasicMaterial color={highlightColor} transparent opacity={0.4} toneMapped={false} depthWrite={false} />
+          </mesh>
+          {/* brass frame that bloom picks up */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
+            <ringGeometry args={[cellSize * 0.42, cellSize * 0.47, 4, 1, Math.PI / 4]} />
+            <meshBasicMaterial color={brass.clone().multiplyScalar(2.4)} toneMapped={false} depthWrite={false} transparent opacity={0.95} side={THREE.DoubleSide} />
+          </mesh>
+        </group>
       )}
       {labels &&
         Array.from({ length: size }, (_, i) => {
@@ -195,14 +241,16 @@ export function BoardGrid({
           return (
             <group key={i}>
               {/* column letters along the near (+z) and far (-z) edges */}
-              <Label text={LETTERS[i]} position={[o, 0.02, extent / 2 + labelOffset]} size={labelSize} color="#eaf6ff" />
-              <Label text={LETTERS[i]} position={[o, 0.02, -extent / 2 - labelOffset]} size={labelSize} color="#eaf6ff" />
+              <Label text={LETTERS[i]} position={[o, 0.03, extent / 2 + labelOffset]} size={labelSize} color="#f6e7c6" />
+              <Label text={LETTERS[i]} position={[o, 0.03, -extent / 2 - labelOffset]} size={labelSize} color="#f6e7c6" />
               {/* row numbers along the left and right edges */}
-              <Label text={String(i + 1)} position={[-extent / 2 - labelOffset, 0.02, o]} size={labelSize} color="#eaf6ff" />
-              <Label text={String(i + 1)} position={[extent / 2 + labelOffset, 0.02, o]} size={labelSize} color="#eaf6ff" />
+              <Label text={String(i + 1)} position={[-extent / 2 - labelOffset, 0.03, o]} size={labelSize} color="#f6e7c6" />
+              <Label text={String(i + 1)} position={[extent / 2 + labelOffset, 0.03, o]} size={labelSize} color="#f6e7c6" />
             </group>
           )
         })}
     </group>
   )
 }
+
+const UP = new THREE.Vector3(0, 1, 0)

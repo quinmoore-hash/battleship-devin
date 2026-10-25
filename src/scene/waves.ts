@@ -38,13 +38,28 @@ export const CALM_BOX = { cx: 0, cz: -1, hx: 6.5, hz: 13.5 }
 export const CALM_MIN = 0.22
 export const CALM_FALLOFF = 9
 
-export function calmFactor(x: number, z: number): number {
+/**
+ * Sea state shared by the shader and the JS samplers. `storm` in [0, 1] scales the swell
+ * (`STORM_AMPLITUDE` at 1) and lets more of it into the sheltered play area (`STORM_CALM_MIN`).
+ * `<Water>` sets it from the scene's `weather`; floating props read it through `sampleWaveHeight`.
+ */
+export const STORM_AMPLITUDE = 2.4
+export const STORM_CALM_MIN = 0.5
+const seaState = { storm: 0 }
+export function setSeaState(storm: number): void {
+  seaState.storm = Math.min(1, Math.max(0, storm))
+}
+export const getSeaState = (): number => seaState.storm
+export const amplitudeScale = (storm: number = seaState.storm): number => 1 + (STORM_AMPLITUDE - 1) * storm
+
+export function calmFactor(x: number, z: number, storm: number = seaState.storm): number {
   const dx = Math.max(Math.abs(x - CALM_BOX.cx) - CALM_BOX.hx, 0)
   const dz = Math.max(Math.abs(z - CALM_BOX.cz) - CALM_BOX.hz, 0)
   const d = Math.hypot(dx, dz)
   const t = Math.min(1, Math.max(0, d / CALM_FALLOFF))
   const s = t * t * (3 - 2 * t)
-  return CALM_MIN + (1 - CALM_MIN) * s
+  const min = CALM_MIN + (STORM_CALM_MIN - CALM_MIN) * storm
+  return min + (1 - min) * s
 }
 
 export function waveSpeed(w: GerstnerWave): number {
@@ -54,15 +69,32 @@ export function waveSpeed(w: GerstnerWave): number {
 
 /** Vertical surface displacement at world (x, z) at scene time `t` (seconds). */
 export function sampleWaveHeight(x: number, z: number, t: number, count: number = WAVE_COUNT.high): number {
-  let y = 0
+  const n = Math.min(count, WAVES.length)
   const tt = t * WAVE_TIME_SCALE
-  for (let i = 0; i < Math.min(count, WAVES.length); i++) {
-    const w = WAVES[i]
-    const k = (2 * Math.PI) / w.wavelength
-    const f = k * (w.dir[0] * x + w.dir[1] * z - waveSpeed(w) * tt)
-    y += w.amplitude * Math.sin(f)
+  const cf = calmFactor(x, z) * amplitudeScale()
+  // Gerstner vertices slide horizontally, so the surface above (x, z) comes from a nearby
+  // source point; iterate the inverse a few times (mirrors the vertex shader exactly).
+  let sx = x
+  let sz = z
+  let y = 0
+  for (let iter = 0; iter < 3; iter++) {
+    let dx = 0
+    let dz = 0
+    y = 0
+    for (let i = 0; i < n; i++) {
+      const w = WAVES[i]
+      const k = (2 * Math.PI) / w.wavelength
+      const q = w.steepness / (k * w.amplitude * n)
+      const f = k * (w.dir[0] * sx + w.dir[1] * sz - waveSpeed(w) * tt)
+      const c = Math.cos(f) * cf
+      dx += q * w.amplitude * w.dir[0] * c
+      dz += q * w.amplitude * w.dir[1] * c
+      y += w.amplitude * Math.sin(f) * cf
+    }
+    sx = x - dx
+    sz = z - dz
   }
-  return y * calmFactor(x, z)
+  return y
 }
 
 /** Surface normal (approximate, ignores horizontal Gerstner drift) for tilting floating props. */
@@ -74,7 +106,7 @@ export function sampleWaveNormal(x: number, z: number, t: number, count: number 
     const w = WAVES[i]
     const k = (2 * Math.PI) / w.wavelength
     const f = k * (w.dir[0] * x + w.dir[1] * z - waveSpeed(w) * tt)
-    const d = w.amplitude * k * Math.cos(f) * calmFactor(x, z)
+    const d = w.amplitude * k * Math.cos(f) * calmFactor(x, z) * amplitudeScale()
     nx -= w.dir[0] * d
     nz -= w.dir[1] * d
   }
@@ -99,9 +131,11 @@ export function wavesToGlsl(count: number): string {
     .join(', ')
   return `
   #define WAVE_COUNT ${n}
+  uniform float uStorm;
   float calm(vec2 p) {
     vec2 d = max(abs(p - vec2(${CALM_BOX.cx.toFixed(1)}, ${CALM_BOX.cz.toFixed(1)})) - vec2(${CALM_BOX.hx.toFixed(1)}, ${CALM_BOX.hz.toFixed(1)}), 0.0);
-    return mix(${CALM_MIN.toFixed(2)}, 1.0, smoothstep(0.0, ${CALM_FALLOFF.toFixed(1)}, length(d)));
+    float cmin = mix(${CALM_MIN.toFixed(2)}, ${STORM_CALM_MIN.toFixed(2)}, uStorm);
+    return mix(cmin, 1.0, smoothstep(0.0, ${CALM_FALLOFF.toFixed(1)}, length(d))) * mix(1.0, ${STORM_AMPLITUDE.toFixed(2)}, uStorm);
   }
   const vec4 WAVES[WAVE_COUNT] = vec4[WAVE_COUNT](
     ${items}
