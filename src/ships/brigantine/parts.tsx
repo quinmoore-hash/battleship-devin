@@ -10,7 +10,7 @@ import type { Vec3 } from '../../scene/layout'
 import { seededRandom } from '../../vfx/random'
 import { HullHole } from '../kit'
 import type { Lod, Side } from '../types'
-import { BULWARK_THICKNESS, DECK_Y, PORT_TOP, PORT_WIDTH, TRANSOM_X, hullHalfWidth, keelY, sheerY } from './hull'
+import { BULWARK_THICKNESS, DECK_CAMBER, DECK_Y, PORT_TOP, PORT_WIDTH, TRANSOM_X, deckSurfaceY, hullHalfWidth, keelY, sheerY } from './hull'
 import type { BrigMaterials } from './materials'
 
 /** Height of cannonball breaches on the hull side: between the lower and main wales. */
@@ -599,14 +599,25 @@ export function Channel({ x, width, side, mats, deadeyes, lod }: { x: number; wi
   )
 }
 
-/** Burn mark on the deck. */
-export function ScorchDecal({ position, radius, mats, seed }: { position: Vec3; radius: number; mats: BrigMaterials; seed: number }) {
-  const rot = seededRandom(seed)() * Math.PI * 2
-  return (
-    <mesh material={mats.scorch} position={[position[0], position[1] + 0.004, position[2]]} rotation={[-Math.PI / 2, 0, rot]}>
-      <planeGeometry args={[radius * 2, radius * 2]} />
-    </mesh>
-  )
+/** Burn mark on the deck: a small grid draped over the cambered deck surface so the camber can't hide it. */
+export function ScorchDecal({ position, radius, mats, seed, camber = DECK_CAMBER }: { position: Vec3; radius: number; mats: BrigMaterials; seed: number; camber?: number }) {
+  const geom = useMemo(() => {
+    const n = 8
+    const rot = seededRandom(seed)() * Math.PI * 2
+    const g = new THREE.PlaneGeometry(radius * 2, radius * 2, n, n)
+    g.rotateX(-Math.PI / 2)
+    g.rotateY(rot)
+    const p = g.getAttribute('position') as THREE.BufferAttribute
+    for (let i = 0; i < p.count; i++) {
+      const x = position[0] + p.getX(i)
+      const z = position[2] + p.getZ(i)
+      p.setY(i, deckSurfaceY(x, z, position[1], camber) - position[1] + 0.003)
+    }
+    p.needsUpdate = true
+    g.computeVertexNormals()
+    return g
+  }, [position, radius, seed, camber])
+  return <mesh geometry={geom} material={mats.scorch} position={[position[0], position[1], position[2]]} />
 }
 
 /**

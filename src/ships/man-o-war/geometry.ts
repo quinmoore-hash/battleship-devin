@@ -332,6 +332,28 @@ export function clothGeometry({ corners, dir, belly, set, torn, seed, segs = [10
   return g
 }
 
+/**
+ * The kit lofter closes its ring loop across the rail, which puts a skin over the deck at bulwark height.
+ * Drop every triangle whose three vertices all lie on that top edge (y ≥ topY(x) − tol) so the hull is an open tub.
+ */
+export function dropTopSkin(g: THREE.BufferGeometry, topY: (x: number) => number, tol = 0.012): THREE.BufferGeometry {
+  const idx = g.getIndex()
+  if (!idx) return g
+  const pos = g.getAttribute('position') as THREE.BufferAttribute
+  const onTop = (i: number) => pos.getY(i) >= topY(pos.getX(i)) - tol
+  const kept: number[] = []
+  for (let t = 0; t < idx.count; t += 3) {
+    const a = idx.getX(t)
+    const b = idx.getX(t + 1)
+    const c = idx.getX(t + 2)
+    if (onTop(a) && onTop(b) && onTop(c)) continue
+    kept.push(a, b, c)
+  }
+  g.setIndex(kept)
+  g.computeVertexNormals()
+  return g
+}
+
 /** Count triangles of a geometry (indexed or not). */
 export function triangleCount(g: THREE.BufferGeometry): number {
   const idx = g.getIndex()

@@ -9,6 +9,7 @@ const KitDemo = lazy(() => import('./ships/kit/KitDemo').then((m) => ({ default:
 const SinkingDemo = lazy(() => import('./vfx/sinking/SinkingDemo').then((m) => ({ default: m.SinkingDemo })))
 const CannonDemo = lazy(() => import('./vfx/cannon/CannonDemo').then((m) => ({ default: m.CannonDemo })))
 const VfxDamageDemo = lazy(() => import('./vfx/VfxDamageDemo').then((m) => ({ default: m.VfxDamageDemo })))
+const FrigateDemo = lazy(() => import('./ships/frigate/demo').then((m) => ({ default: m.FrigateDemoApp })))
 
 /**
  * Review routes (one query flag each): `?scene-demo`, `?ship-demo`, `?audio-demo`, `?kit-demo`,
@@ -23,6 +24,7 @@ const DEMOS: Record<string, React.LazyExoticComponent<() => React.JSX.Element>> 
   'vfx-sinking-demo': SinkingDemo,
   'vfx-cannon-demo': CannonDemo,
   'vfx-damage-demo': VfxDamageDemo,
+  'frigate-demo': FrigateDemo,
 }
 
 function demoRoute() {
