@@ -31,7 +31,8 @@
 .audio-demo__storm input { width: 140px; accent-color: #7fb6ff; }
 .audio-demo__check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
 .audio-demo__log { list-style: none; margin: 0.75rem 0 0; padding: 0.5rem 0.75rem; min-height: 4.5rem; background: rgba(0, 0, 0, 0.35); border-radius: 8px; font-family: ui-monospace, monospace; font-size: 0.8rem; display: grid; gap: 0.15rem; }
-.audio-demo__log span { display: inline-block; width: 5ch; opacity: 0.6; }
+.audio-demo__log span { display: inline-block; width: 7ch; opacity: 0.6; white-space: nowrap; }
+.audio-demo__log li { white-space: nowrap; }
 .audio-demo__spatial { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr); gap: 1.25rem; align-items: start; }
 .audio-demo__pad { position: relative; aspect-ratio: 18 / 23; max-height: 320px; border-radius: 12px; background: radial-gradient(ellipse at 50% 90%, #1d5f86 0%, #0b2f4a 60%, #061a2b 100%); cursor: crosshair; touch-action: none; user-select: none; overflow: hidden; }
 .audio-demo__fleet { position: absolute; transform: translate(-50%, -50%); font-size: 0.7rem; padding: 0.3rem 0.6rem; border-radius: 6px; pointer-events: none; white-space: nowrap; }

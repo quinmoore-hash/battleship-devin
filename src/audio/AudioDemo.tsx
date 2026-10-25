@@ -55,8 +55,8 @@ const DESCRIPTIONS: Record<CanonicalSfx, string> = {
   gull: 'passing gull, 2 variants',
 }
 
-// top-down pad: x -8..8 (world x), y maps to world z -16..6 (enemy fleet at the top, player at the bottom)
-const PAD = { xMin: -9, xMax: 9, zMin: -17, zMax: 6 }
+// top-down pad: x maps to world x, y maps to world z (enemy fleet at the top, player fleet at the bottom)
+const PAD = { xMin: -9, xMax: 9, zMin: -17, zMax: 9 }
 const PLAYER = boardCenter(BOARD_LAYOUT.player)
 const ENEMY = boardCenter(BOARD_LAYOUT.enemy)
 const GUNS: Vec3[] = [-4, -2, 0, 2, 4].map((x) => [PLAYER[0] + x, 0.6, PLAYER[2] - 3])
