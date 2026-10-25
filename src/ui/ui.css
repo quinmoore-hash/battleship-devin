@@ -1062,7 +1062,7 @@
 .ui-root[data-no3d='false'] .shot-log ol {
   max-height: 120px;
 }
-@media (max-height: 820px) {
+@media (max-height: 980px) {
   .ui-root[data-no3d='false'] .chart-player {
     display: none;
   }
@@ -1457,10 +1457,21 @@
   }
 }
 @media (max-width: 900px) {
-  .battle-body {
+  .battle-body,
+  .ui-root[data-no3d='false'] .battle-body {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     align-items: start;
     overflow: auto;
+  }
+  .ui-root[data-no3d='false'] .charts,
+  .ui-root[data-no3d='false'] .battle-body .side-right {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .ui-root[data-no3d='false'] .charts .chart-panel {
+    width: max-content;
+    margin: 0 auto;
   }
   .side-panel {
     display: none;
