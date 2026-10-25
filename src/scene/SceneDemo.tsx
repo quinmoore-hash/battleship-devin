@@ -5,11 +5,17 @@ import { coordLabel } from '../engine'
 import { BoardGrid } from './BoardGrid'
 import type { CameraView } from './CameraRig'
 import { OceanScene } from './index'
-import { BOARD_LAYOUT } from './layout'
+import { BOARD_LAYOUT, type BoardKey } from './layout'
 import { GOLDEN_HOUR } from './sun'
 import type { Quality } from './Water'
 
 const VIEWS: CameraView[] = ['menu', 'placement', 'battle', 'gameover']
+
+interface Pick {
+  board: BoardKey
+  coord: Coord
+}
+const pickLabel = (p: Pick | null) => (p ? `${p.board === 'otter' ? 'Devin' : 'you'} ${coordLabel(p.coord)}` : '—')
 
 /** Counts rendered frames and reports frames-per-second once a second. */
 function FpsProbe({ onFps }: { onFps: (fps: number) => void }) {
@@ -43,8 +49,14 @@ export function SceneDemo() {
     const v = param('view') as CameraView | null
     return v && VIEWS.includes(v) ? v : 'battle'
   })
-  const [hover, setHover] = useState<Coord | null>({ x: 5, y: 4 })
-  const [lastClick, setLastClick] = useState<Coord | null>(null)
+  const [hover, setHover] = useState<Pick | null>({ board: 'otter', coord: { x: 5, y: 4 } })
+  const [lastClick, setLastClick] = useState<Pick | null>(null)
+  const gridProps = (board: BoardKey) => ({
+    origin: BOARD_LAYOUT[board].origin,
+    highlight: hover?.board === board ? hover.coord : lastClick?.board === board ? lastClick.coord : null,
+    onCellPointerMove: (coord: Coord | null) => setHover(coord ? { board, coord } : null),
+    onCellClick: (coord: Coord) => setLastClick({ board, coord }),
+  })
   const [dressing, setDressing] = useState(true)
   const [fps, setFps] = useState(0)
 
@@ -60,13 +72,8 @@ export function SceneDemo() {
   return (
     <>
       <OceanScene quality={quality} timeOfDay={timeOfDay} view={view} dressing={dressing}>
-        <BoardGrid
-          origin={BOARD_LAYOUT.otter.origin}
-          highlight={hover}
-          onCellPointerMove={(c) => c && setHover(c)}
-          onCellClick={setLastClick}
-        />
-        <BoardGrid origin={BOARD_LAYOUT.player.origin} color="#9cffb0" highlight={lastClick} />
+        <BoardGrid {...gridProps('otter')} />
+        <BoardGrid {...gridProps('player')} color="#9cffb0" />
         <FpsProbe onFps={setFps} />
       </OceanScene>
       <div
@@ -127,7 +134,7 @@ export function SceneDemo() {
           </button>
         </div>
         <span>
-          hover: {hover ? coordLabel(hover) : '—'} · click: {lastClick ? coordLabel(lastClick) : '—'}
+          hover: {pickLabel(hover)} · click: {pickLabel(lastClick)}
         </span>
       </div>
     </>
