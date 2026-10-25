@@ -109,7 +109,7 @@ export function ReplayPlayer({ snapshot, onClose, autoPlay = true, initialSpeed 
   return (
     <div className="xt-overlay" data-testid="replay-player" data-step={step} data-total={total} data-playing={playing}>
       <OceanScene view="battle" interactive weather={snapshot.modes?.storm ? 'stormy' : 'calm'} timeOfDay={GOLDEN_HOUR} quality={quality}>
-        <Battlefield boards={boards} lod={1} quality={quality} />
+        <Battlefield boards={boards} lod={quality === 'low' ? 2 : 1} quality={quality} />
       </OceanScene>
 
       <header className="xt-topbar">
@@ -136,7 +136,7 @@ export function ReplayPlayer({ snapshot, onClose, autoPlay = true, initialSpeed 
         </p>
         <div className="xt-transport">
           <button type="button" className="xt-btn icon" aria-label="Restart" data-testid="replay-start" onClick={() => (setPlaying(false), setStep(0))}>
-            ⏮
+            |◀
           </button>
           <button type="button" className="xt-btn icon" aria-label="Previous shot" data-testid="replay-prev" onClick={() => (setPlaying(false), setStep(step - 1))}>
             ◀
@@ -148,7 +148,7 @@ export function ReplayPlayer({ snapshot, onClose, autoPlay = true, initialSpeed 
             ▶
           </button>
           <button type="button" className="xt-btn icon" aria-label="Jump to end" data-testid="replay-end" onClick={() => (setPlaying(false), setStep(total))}>
-            ⏭
+            ▶|
           </button>
           <input
             className="xt-range xt-scrub"

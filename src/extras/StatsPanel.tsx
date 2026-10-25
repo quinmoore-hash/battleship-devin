@@ -63,7 +63,7 @@ export function StatsPanel({ difficulty, compact = false, title = 'Captain’s l
                   </td>
                   <td>{formatPercent(winRate(s))}</td>
                   <td data-testid={`stats-${d}-streak`}>
-                    {s.streak > 0 ? `🔥 ${s.streak}` : '0'} <small>({s.bestStreak})</small>
+                    {s.streak > 0 ? String(s.streak) : '0'} <small>({s.bestStreak})</small>
                   </td>
                   <td data-testid={`stats-${d}-best`}>{s.bestShots ?? '—'}</td>
                   {!compact && <td>{formatPercent(s.bestAccuracy)}</td>}

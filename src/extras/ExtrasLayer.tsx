@@ -37,10 +37,10 @@ export function ExtrasLayer() {
         <aside className="xt-dock xt-dock-gameover" data-testid="extras-gameover">
           <div className="xt-row">
             <button type="button" className="xt-btn primary" data-testid="open-replay" onClick={() => requestReplay()}>
-              ▶ Watch replay
+              Watch replay
             </button>
             <button type="button" className="xt-btn" data-testid="open-photo" onClick={() => requestPhotoMode()}>
-              📷 Photo mode
+              Photo mode
             </button>
           </div>
           <StatsPanel difficulty={difficulty} />
@@ -95,7 +95,7 @@ function BattleStrip() {
       )}
       {modes.storm && (
         <span className="xt-pill storm" data-testid="fog-status" data-fogged={fogged.length}>
-          🌫 Stormy seas · {fogged.length} {fogged.length === 1 ? 'miss' : 'misses'} lost in fog
+          Stormy seas · {fogged.length} {fogged.length === 1 ? 'miss' : 'misses'} lost in fog
         </span>
       )}
     </div>

@@ -109,7 +109,7 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
   return (
     <div className="xt-sandbox" data-testid="sandbox" data-phase={phase} data-turn={turn}>
       <OceanScene view="battle" interactive weather={modes.storm ? 'stormy' : 'calm'} quality={quality}>
-        <Battlefield boards={boards} revealEnemy={false} lod={1} quality={quality} />
+        <Battlefield boards={boards} revealEnemy={false} lod={quality === 'low' ? 2 : 1} quality={quality} />
       </OceanScene>
 
       <header className="xt-topbar">
@@ -147,7 +147,7 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
           )}
           {modes.storm && (
             <span className="xt-pill storm" data-testid="fog-status" data-fogged={fogged.length}>
-              🌫 {fogged.length} misses in fog
+              {fogged.length} misses in fog
             </span>
           )}
           <span className="xt-pill" data-testid="event-count">

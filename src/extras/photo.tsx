@@ -129,7 +129,7 @@ export function PhotoMode({ boards, onClose, timeOfDay = GOLDEN_HOUR, weather: i
   return (
     <div className={`xt-overlay xt-photo${hud ? '' : ' hud-hidden'}`} data-testid="photo-mode" data-hud={hud} data-tod={tod.toFixed(2)}>
       <OceanScene view="gameover" interactive={false} timeOfDay={tod} weather={weather} quality={quality}>
-        <Battlefield boards={boards} lod={0} quality={quality} />
+        <Battlefield boards={boards} lod={quality === 'low' ? 2 : 0} quality={quality} />
         <FreeCamera initial={camera} />
         {capturing && <CaptureFrame onCapture={captured} />}
       </OceanScene>
@@ -177,7 +177,7 @@ export function PhotoMode({ boards, onClose, timeOfDay = GOLDEN_HOUR, weather: i
                 ))}
               </div>
               <button type="button" className="xt-btn primary" data-testid="photo-capture" disabled={capturing} onClick={() => setCapturing(true)} title="Capture (C)">
-                {capturing ? 'Capturing…' : '📷 Capture PNG'}
+                {capturing ? 'Capturing…' : 'Capture PNG'}
               </button>
             </div>
             {lastShot && (
