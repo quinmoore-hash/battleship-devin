@@ -6,8 +6,7 @@
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { StrictMode, useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import { useState } from 'react'
 import * as THREE from 'three'
 import type { CannonRef, CellDamage, Livery, Lod } from '../types'
 import { FRIGATE } from './index'
@@ -78,7 +77,7 @@ function Scene({ onStats }: { onStats: (s: string) => void }) {
   )
 }
 
-function App() {
+export function FrigateDemoApp() {
   const [stats, setStats] = useState('')
   return (
     <>
@@ -92,8 +91,3 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
