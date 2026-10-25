@@ -1,0 +1,33 @@
+.perf-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(92vw, 560px);
+  padding: 0.55rem 0.5rem 0.55rem 1rem;
+  border-radius: 14px;
+  background: rgba(15, 24, 32, 0.94);
+  color: #fff8ec;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.perf-toast button {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  cursor: pointer;
+}
+.perf-toast button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}

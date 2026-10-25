@@ -61,7 +61,24 @@ createOpponent(difficulty, rng?) => AiOpponent;  describeStrategy(difficulty);  
 WebGL fallback (`?no3d` forces the fallback). `<BoardGrid origin size cellSize highlight? onCellPointerMove? onCellClick? color?>`,
 `<CameraRig view interactive? override?>` with `CameraView = 'menu' | 'placement' | 'battle' | 'gameover'` (`override` = a cinematic owns the
 camera: the rig stops writing position/target/fov and disables orbit, then damps back when it flips off), `computeAtmosphere`,
-`sampleWaveHeight/Normal`, layout helpers above, `<SceneDemo>` (`?scene-demo`).
+`sampleWaveHeight/Normal`, layout helpers above, `<SceneDemo>` (`?scene-demo`). Perf knobs (set by `OceanScene` from
+`usePerf()`): `<Lighting shadowSize?>` (0 = no shadow pass), `<Water waves?>`, `<Effects enabled?>` (lazy chunk).
+
+### perf (`src/perf`)
+`usePerf()` → `{ tier, dpr, shadows, particlesScale, postprocessing, lod, quality, waves }` resolved from GPU
+detection (`WEBGL_debug_renderer_info`, dpr × screen, cores, 2 s startup FPS probe via `<PerfBootstrap>`) and the
+persisted override `settings.quality: 'auto' | 'low' | 'medium' | 'high'` (`?quality=` wins). `medium` is the default
+and the tuned target (MacBook Air M4 / Iris Xe at native res, dpr ≤ 1.5, 1k shadows, no post, lod ≥ 1); Apple GPUs
+always start there; `high` (2k shadows, bloom/SMAA, lod 0, full particles) is manual or needs a discrete-class GPU
+*and* a ≥ 90 fps probe. `<FpsWatchdog>` drops one tier once when battle FPS stays < 45 for 4 s (`auto` only) and
+`<QualityToast>` shows the one-time notice; `window.__perf.autoLower()` triggers it for tests; `?gpu=` pins the detected tier (skips the probe). `useDistanceLod(position,
+hullLength)` / `<LodGroup>` pick a ship `lod` from camera distance with hysteresis + 1 s dwell; `<Fleet lod="auto">`
+uses it. `useParticlesScale()` / `scaleCount(n, scale)` for VFX counts. `?perf` adds `<PerfStats>` (gl.info) +
+`<PerfOverlay>`; `window.__perf.summary()` feeds `npm run perf`. `?perf-demo` = full-game load. Accessibility:
+`<A11yBootstrap>` (prefers-reduced-motion → `reducedMotion` + `cinematics:'fast'`, `<html data-colorblind|
+data-reduced-motion|data-quality>`, Space → `SKIP_CINEMATIC_EVENT`), `announce()`/`<Announcer>` live regions,
+`a11y.css` (focus rings, HUD text halo, colour-blind marker shapes behind `settings.colorblind`, ≥ 44 px cells on touch).
+
 
 ### ships (`src/ships`)
 ```tsx

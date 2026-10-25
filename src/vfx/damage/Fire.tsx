@@ -7,6 +7,7 @@ import { emberAt, emberSeeds, type EmberOptions } from './embers'
 import { defaultFireBudget, FireLightBudget, MAX_FIRE_LIGHTS } from './fireBudget'
 import { attachParams, makeSpriteMaterial, spriteQuad } from './sprites'
 import { useReducedMotion } from './useReducedMotion'
+import { scaleCount, useParticlesScale } from '../../perf/store'
 import { WIND } from './wind'
 
 export interface FireProps {
@@ -56,8 +57,9 @@ function makeTongues(seed: number, count: number, scale: number): Tongue[] {
 export function Fire({ position, scale = 1, seed = 1, intensity = 1, budget = defaultFireBudget }: FireProps) {
   const id = useId()
   const reduced = useReducedMotion()
-  const tongueCount = reduced ? 4 : 7
-  const emberCount = reduced ? 6 : 14
+  const particles = useParticlesScale()
+  const tongueCount = scaleCount(reduced ? 4 : 7, particles)
+  const emberCount = scaleCount(reduced ? 6 : 14, particles)
   const flames = useRef<THREE.InstancedMesh>(null)
   const embers = useRef<THREE.InstancedMesh>(null)
   const glow = useRef<THREE.InstancedMesh>(null)

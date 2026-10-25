@@ -2,6 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/gameStore'
+import { useParticlesScale } from '../perf/store'
 import { seededRandom } from '../vfx/random'
 import { sampleWaveHeight } from './waves'
 
@@ -58,7 +59,8 @@ export function useLightning(storm: number, onLightning?: (strike: LightningStri
 /** Rain streaks falling around the camera, with a bias in the wind direction. */
 export function Rain({ storm, quality }: { storm: number; quality: 'low' | 'high' }) {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
-  const count = (quality === 'high' ? 2600 : 900) * (reducedMotion ? 0.4 : 1)
+  const particlesScale = useParticlesScale()
+  const count = Math.round((quality === 'high' ? 2600 : 900) * (reducedMotion ? 0.4 : 1) * particlesScale)
   const camera = useThree((s) => s.camera)
   const geometry = useMemo(() => {
     const g = new THREE.BufferGeometry()

@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../../store/gameStore'
+import { scaleCount, useParticlesScale } from '../../perf/store'
 import { bubbleIntensity, bubbleState, type BubbleOptions } from './bubbles'
 
 const tmp = new THREE.Object3D()
@@ -25,7 +26,8 @@ export function Bubbles({ progress, length, beam, seed = 1, count = 64, timeScal
   const reduced = useGameStore((s) => s.settings.reducedMotion)
   const bubbles = useRef<THREE.InstancedMesh>(null)
   const rings = useRef<THREE.InstancedMesh>(null)
-  const n = reduced ? Math.ceil(count / 2) : count
+  const particles = useParticlesScale()
+  const n = scaleCount(reduced ? Math.ceil(count / 2) : count, particles)
   const opts = useMemo<BubbleOptions>(() => ({ count: n, seed, length, beam, period: 2.4, depth: 0.7 }), [n, seed, length, beam])
   const t = useRef(0)
   const ringGeom = useMemo(() => new THREE.RingGeometry(0.55, 1, 20), [])

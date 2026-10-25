@@ -35,11 +35,18 @@ export interface GameEvent {
 /** How much of each shot is played out as a cinematic. `off` = instant results (used by e2e). */
 export type CinematicsLevel = 'full' | 'fast' | 'off'
 
+/** Render quality override; `auto` = the tier detected by `src/perf`. */
+export type QualitySetting = 'auto' | 'low' | 'medium' | 'high'
+
 export interface Settings {
   sfxVolume: number
   musicVolume: number
   reducedMotion: boolean
   cinematics: CinematicsLevel
+  /** Render quality (see `src/perf`). Persisted by the perf store. */
+  quality: QualitySetting
+  /** Colour-blind safe markers: distinct shapes/patterns for hit / miss / sunk, not just colour. */
+  colorblind: boolean
 }
 
 /**
@@ -112,7 +119,7 @@ export interface GameState {
 
 let eventId = 0
 
-const initialSettings: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full' }
+const initialSettings: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false }
 
 /** Shots per volley for the side that owns `board`: one per surviving ship, never less than one. */
 export const salvoSize = (board: Board): number => Math.max(1, board.ships.filter((s) => !isSunk(s)).length)

@@ -8,11 +8,13 @@ export interface EffectsProps {
   storm?: number
   /** `low` renders no post-processing at all. */
   quality?: Quality
+  /** Perf-tier switch (default on); `false` renders no post-processing. */
+  enabled?: boolean
 }
 
 /** Bloom tuned for lantern/fire highlights, a soft vignette and a warm tropical colour grade. */
-export function Effects({ night, storm = 0, quality = 'high' }: EffectsProps) {
-  if (quality === 'low') return null
+export function Effects({ night, storm = 0, quality = 'high', enabled = true }: EffectsProps) {
+  if (quality === 'low' || !enabled) return null
   return (
     <EffectComposer multisampling={0}>
       <SMAA />
