@@ -1144,6 +1144,21 @@ export function Damage({ m, lod, damage, seed }: PartProps & { damage: readonly 
 // ---------------------------------------------------------------------------------------------------------
 // flags
 
+/**
+ * The kit `Flag` casts shadows through a custom cloth depth material; on the navy Man-o’-War that shadow pass
+ * whites out the whole frame under bloom (bugs.md BUG-107 / BUG-113). Until the kit fixes it, flags on this
+ * ship do not cast shadows.
+ */
+export function NoShadowCasting({ children }: { children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null)
+  useLayoutEffect(() => {
+    ref.current?.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.castShadow = false
+    })
+  })
+  return <group ref={ref}>{children}</group>
+}
+
 export function Flags({ livery, sinkProgress, phase }: { livery: Livery; sinkProgress: number; phase: number }) {
   const drop = Math.min(1, Math.max(0, (sinkProgress - 0.4) / 0.15))
   if (drop >= 1) return null
@@ -1154,7 +1169,9 @@ export function Flags({ livery, sinkProgress, phase }: { livery: Livery; sinkPro
         <cylinderGeometry args={[0.01, 0.013, 0.64, 6]} />
         <meshStandardMaterial color="#6b5234" roughness={0.8} />
       </mesh>
-      <Flag position={[staffTop[0], staffTop[1] - 0.12 - drop * 0.4, 0]} livery={livery} width={0.46} height={0.26} phase={phase + 2} />
+      <NoShadowCasting>
+        <Flag position={[staffTop[0], staffTop[1] - 0.12 - drop * 0.4, 0]} livery={livery} width={0.46} height={0.26} phase={phase + 2} />
+      </NoShadowCasting>
     </group>
   )
 }
