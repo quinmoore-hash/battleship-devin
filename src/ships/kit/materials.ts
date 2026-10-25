@@ -54,7 +54,7 @@ export interface ShipMaterials {
   /** Bundled furled canvas on a yard. */
   canvasFurled: THREE.Material
   /** Emissive lantern flame. */
-  flame: THREE.MeshBasicMaterial
+  flame: THREE.MeshStandardMaterial
   /** Window glass (greenish, semi-transparent). */
   windowGlass: THREE.Material
   /** Blackened charred wood for holes and scorch. */
@@ -156,7 +156,7 @@ function build(livery: Livery): ShipMaterials {
     paint: new THREE.MeshStandardMaterial({ color: accent, roughness: 0.55, metalness: 0 }),
     gold: new THREE.MeshStandardMaterial({ color: pirate ? '#9c7a2e' : '#d9b24a', roughness: 0.35, metalness: 0.9, map: brassMaps.map ?? undefined }),
     canvasFurled: std(pirate ? '#2a2624' : '#d9cfb6', sailMaps, { roughness: 0.95 }, [1, 0.25]),
-    flame: new THREE.MeshBasicMaterial({ color: '#ffb347', toneMapped: false }),
+    flame: new THREE.MeshStandardMaterial({ color: "#ffe9b0", emissive: "#ffb347", emissiveIntensity: 3, roughness: 1, toneMapped: false }),
     windowGlass: new THREE.MeshPhysicalMaterial({
       map: windowGlass() ?? undefined,
       color: '#ffffff',
