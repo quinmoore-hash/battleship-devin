@@ -16,9 +16,11 @@ import { useGameStore } from '../store/gameStore'
 import { DevinBubble } from './DevinBubble'
 import { FleetStatus } from './FleetStatus'
 import { Grid, type GridCellInfo } from './Grid'
+import { Modal } from './Modal'
 import { ShotLog } from './ShotLog'
 import { moodFor, pickLine, type DialogueEvent, type Mood } from './dialogue'
 import { PACING } from './pacing'
+import { withSfx } from './sfx'
 
 const between = ([a, b]: [number, number]) => a + Math.random() * (b - a)
 
@@ -36,9 +38,11 @@ export function BattleScreen() {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const fireAt = useGameStore((s) => s.fireAt)
   const otterTurn = useGameStore((s) => s.otterTurn)
+  const reset = useGameStore((s) => s.reset)
 
   const [busy, setBusy] = useState(false)
   const [thinking, setThinking] = useState(false)
+  const [confirmQuit, setConfirmQuit] = useState(false)
   const [flash, setFlash] = useState<{ by: 'human' | 'otter'; result: ShotResult } | null>(null)
   const [dialogue, setDialogue] = useState<Dialogue>(() => ({
     text: pickLine('battle-start', { difficulty }),
@@ -166,8 +170,29 @@ export function BattleScreen() {
           <span className="pill">{DIFF_LABEL[difficulty]}</span>
           <span className="pill">Turn {shots.length + 1}</span>
           <span className="pill">{accuracy}% accuracy</span>
+          <button
+            type="button"
+            className="btn ghost small quit"
+            data-testid="quit"
+            onClick={withSfx(() => setConfirmQuit(true), 'ui-click')}
+          >
+            Quit
+          </button>
         </div>
       </header>
+      {confirmQuit && (
+        <Modal title="Abandon the battle?" testId="quit-modal" onClose={() => setConfirmQuit(false)}>
+          <p>Devin will count this as a win. Your fleet stays where it is if you rematch.</p>
+          <div className="modal-actions">
+            <button type="button" className="btn ghost" onClick={withSfx(() => setConfirmQuit(false), 'ui-click')}>
+              Keep playing
+            </button>
+            <button type="button" className="btn primary" data-testid="quit-confirm" onClick={withSfx(reset, 'ui-click')}>
+              Quit to menu
+            </button>
+          </div>
+        </Modal>
+      )}
 
       <div className="battle-grid">
         <div className="panel board-panel enemy-panel">

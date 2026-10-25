@@ -149,6 +149,29 @@ describe('battle', () => {
     expect(screen.getByTestId('shot-log').querySelectorAll('li')).toHaveLength(2)
   })
 
+  it('shows A–J / 1–10 coordinate labels on both grids', () => {
+    ui()
+    const wraps = document.querySelectorAll('.battle .grid-wrap.with-labels')
+    expect(wraps).toHaveLength(2)
+    for (const wrap of wraps) {
+      expect(wrap.querySelector('.grid-cols')?.textContent).toBe('ABCDEFGHIJ')
+      expect(wrap.querySelector('.grid-rows')?.textContent).toBe('12345678910')
+    }
+  })
+
+  it('can quit to the menu mid-battle after confirming', () => {
+    ui()
+    fireEvent.click(screen.getByTestId('quit'))
+    expect(screen.getByTestId('quit-modal')).toBeTruthy()
+    fireEvent.click(screen.getByText('Keep playing'))
+    expect(screen.queryByTestId('quit-modal')).toBeNull()
+    expect(store().phase).toBe('battle')
+    fireEvent.click(screen.getByTestId('quit'))
+    fireEvent.click(screen.getByTestId('quit-confirm'))
+    expect(store().phase).toBe('menu')
+    expect(screen.getByTestId('main-menu')).toBeTruthy()
+  })
+
   it('shows fleet status that greys out sunk ships', () => {
     const target = store().otterBoard.ships.find((s) => s.spec.id === 'pebble-patrol')!
     ui()
