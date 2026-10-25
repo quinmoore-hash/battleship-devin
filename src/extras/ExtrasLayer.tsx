@@ -5,7 +5,7 @@
  *  - Replay / Photo buttons on game over, the `battleship:replay` / `battleship:photo` listeners and the overlays,
  *  - a DOM shim that paints fog on hidden misses in the UI's enemy grid until `src/ui` adopts `foggedEnemyView`.
  */
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { coordKey, coordLabel } from '../engine'
 import { useGameStore, type GameModes } from '../store/gameStore'
 import { PhotoMode, requestPhotoMode, usePhotoEvent, usePhotoMode } from './photo'
@@ -79,15 +79,39 @@ export function ModesPicker({ className = '', onChange }: { className?: string; 
   )
 }
 
+const STRIP_FALLBACK_TOP = 46
+
+/** The strip lives outside `src/ui`, so it measures the battle top bar and docks just under it at any viewport width. */
+function useBelowBattleTop(): number {
+  const [top, setTop] = useState(STRIP_FALLBACK_TOP)
+  useLayoutEffect(() => {
+    const measure = () => {
+      const bar = document.querySelector<HTMLElement>('[data-testid="battle"] .battle-top')
+      setTop(bar ? Math.round(bar.getBoundingClientRect().bottom + 8) : STRIP_FALLBACK_TOP)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
+    const bar = document.querySelector('[data-testid="battle"] .battle-top')
+    if (bar && observer) observer.observe(bar)
+    return () => {
+      window.removeEventListener('resize', measure)
+      observer?.disconnect()
+    }
+  }, [])
+  return top
+}
+
 function BattleStrip() {
   const modes = useGameStore((s) => s.modes)
   const salvo = useGameStore((s) => s.salvo)
   const fogged = useGameStore((s) => s.fogged)
   const turn = useGameStore((s) => s.turn)
+  const top = useBelowBattleTop()
   if (!modes.salvo && !modes.storm) return null
   const left = salvo.size - salvo.pending.length
   return (
-    <div className="xt-strip" data-testid="extras-battle-strip">
+    <div className="xt-strip" style={{ top }} data-testid="extras-battle-strip">
       {modes.salvo && (
         <span className="xt-pill" data-testid="salvo-status" data-pending={salvo.pending.length} data-size={salvo.size}>
           Salvo {salvo.pending.length}/{salvo.size}
