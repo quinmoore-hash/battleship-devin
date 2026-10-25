@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
+import { useDirector } from '../cinematics'
 import { coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, viewGrid, type Coord, type ShotResult } from '../engine'
 import { useGameStore } from '../store/gameStore'
 import { SKIP_CINEMATIC_EVENT } from '../perf/a11y/A11yBootstrap'
@@ -73,6 +74,8 @@ export function BattleScreen() {
   }, [busy, skip, setPendingTarget])
 
   const yourTurn = turn === 'human' && !busy
+  // while the director plays, the side panels step back so the cannonball / sinking is not hidden behind parchment
+  const cinematic = useDirector((s) => s.busy)
   const enemyCells = useMemo(() => viewGrid(enemyView(enemyBoard)), [enemyBoard])
   const playerView = useMemo(() => viewGrid(enemyView(playerBoard), playerBoard), [playerBoard])
   const ownCells = useMemo(() => new Set(playerBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [playerBoard])
@@ -110,7 +113,7 @@ export function BattleScreen() {
   }
 
   return (
-    <div className="battle hud" data-testid="battle">
+    <div className="battle hud" data-testid="battle" data-cinematic={cinematic ? 'true' : 'false'}>
       <header className="battle-top">
         <div className={`panel parchment status-panel ${yourTurn ? 'is-yours' : 'is-theirs'}`}>
           <CompassRose size={64} heading={turn === 'human' && !busy ? 0 : beat.phase === 'enemy-aiming' ? 170 : 180} />

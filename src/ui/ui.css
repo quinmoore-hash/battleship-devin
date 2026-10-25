@@ -1730,3 +1730,17 @@
   pointer-events: none;
   transform: translateY(12px);
 }
+
+/* cinematics: parchment steps back while the director plays (filter, not opacity: `.ink-in` animates opacity; never reflow the grids, BUG-228) */
+.battle .side-panel,
+.battle .charts {
+  transition: filter 0.4s ease;
+}
+.battle[data-cinematic='true'] .side-panel,
+.battle[data-cinematic='true'] .charts {
+  filter: opacity(0.28);
+}
+.battle[data-cinematic='true'] .side-panel:hover,
+.battle[data-cinematic='true'] .charts:hover {
+  filter: none;
+}
