@@ -54,11 +54,9 @@ function ManOWarModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'hi
           snap={snaps[i]}
           phase={phase + i}
           flag={
-            i === 1 ? (
+            snaps[i] > 0.4 ? null : i === 1 ? (
               <Flag position={[0.1, spec.height - 0.02, 0]} livery={livery} width={0.5} height={0.3} phase={phase} />
-            ) : effectiveLod < 2 ? (
-              <Flag position={[0.1, spec.height - 0.01, 0]} livery={livery} width={0.36} height={0.07} phase={phase + i} />
-            ) : null
+            ) : null // no truck pennants: a second kit Flag next to the main flag whites out the bloom pass (bugs.md BUG-107 / BUG-113)
           }
         />
       ))}
