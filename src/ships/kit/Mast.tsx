@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import type { Livery, Lod } from '../types'
 import { shipMaterials } from './materials'
+import { Flag } from './Flag'
 import { Block, Rope } from './Rope'
 import { Sail } from './Sail'
 
@@ -22,6 +23,8 @@ export interface MastProps {
   crowsNest?: boolean
   /** Aft rake in radians (positive leans the mast toward the stern). */
   rake?: number
+  /** Masthead colours rendered inside the hinged section so they fall with a `snapped` mast. Default none. */
+  flag?: 'ensign' | 'pennant' | 'both' | 'none'
   lod?: Lod
 }
 
@@ -40,7 +43,7 @@ function Spar({ r0, r1, y0, y1, material, radial }: { r0: number; r1: number; y0
  * Mast with lower / top / topgallant sections, a round top at the doubling, crosstrees, yards with footropes,
  * blocks and sails. `snapped` hinges everything above the lower cap over to leeward and lets it hang by a stay.
  */
-export function Mast({ position, height, livery, yards = [], sails = 1, snapped = 0, torn = 0, phase = 0, crowsNest = false, rake = 0, lod = 0 }: MastProps) {
+export function Mast({ position, height, livery, yards = [], sails = 1, snapped = 0, torn = 0, phase = 0, crowsNest = false, rake = 0, flag = 'none', lod = 0 }: MastProps) {
   const m = shipMaterials(livery)
   const radial = lod === 0 ? 12 : lod === 1 ? 8 : 5
   const r0 = 0.03 + height * 0.011
@@ -142,6 +145,8 @@ export function Mast({ position, height, livery, yards = [], sails = 1, snapped 
             <cylinderGeometry args={[r0 * 0.7, r0 * 0.35, 0.03, 8]} />
           </mesh>
           {upperYards.map((s) => renderYard(s, s.y - lowerTop))}
+          {(flag === 'ensign' || flag === 'both') && <Flag position={[0, height - lowerTop - 0.2, 0]} livery={livery} phase={phase} lod={lod} />}
+          {(flag === 'pennant' || flag === 'both') && <Flag position={[0, height - lowerTop + 0.08, 0]} livery={livery} kind="pennant" phase={phase + 2} lod={lod} />}
         </group>
       </group>
       {snapped > 0.05 && lod < 2 && (
