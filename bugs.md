@@ -10,6 +10,10 @@ Status: `open` → `in-progress` → `fixed` (link the PR) · `wontfix` with a r
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BUG-001 | P3 | scene | open | Placeholder flat ocean has no waves, sky, or lighting detail | Open the app; the background is a flat blue plane. Replaced by the scene module work. | scaffold | |
 | BUG-002 | P3 | ui | open | Placement is auto-only; no drag/rotate placement of individual ships | Start any game; the only placement option is "Auto-place". Replaced by the UI module work. | scaffold | |
+| BUG-003 | P1 | e2e | fixed | Smoke e2e test fails whenever Devin wins (race between phase check and status assertion) | `npm run e2e` with a Medium or Hard opponent that can actually win (~45–60 shots). The loop reads `data-phase=battle`, then Devin's turn ends the game, the `status` element unmounts and `toContainText('Your turn')` times out. Only passed before because the placeholder random opponent never won. | ai session | https://github.com/quinmoore-hash/battleship-devin/pull/1 |
+| BUG-004 | P3 | ui | open | Grids have no visible A–J / 1–10 coordinate labels | Start a battle; the status line says e.g. "Devin fired at G8: hit" but neither grid shows row/column labels, so the cell cannot be located by eye (labels only exist as `aria-label`). | ai session | |
+| BUG-005 | P3 | ui | open | No way to quit or restart a game during battle | Start a battle; there is no menu/reset button until the game-over screen, so abandoning a game needs a page reload. | ai session | |
+| BUG-006 | P3 | scene | open | `THREE.Clock` deprecation warning in the console | Open the app with the 3D scene enabled and look at the devtools console. Harmless today but will break on a future three upgrade. | ai session | |
 
 ## Adding a bug
 1. Take the next free `BUG-xxx` id.

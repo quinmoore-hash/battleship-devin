@@ -16,10 +16,12 @@ for (const difficulty of ['easy', 'medium', 'hard'] as const) {
 
     await expect(page.getByTestId('battle')).toBeVisible()
     const grid = page.getByTestId('enemy-grid')
+    const gameover = page.getByTestId('gameover')
+    const yourTurn = page.getByTestId('status').filter({ hasText: 'Your turn' })
     for (let i = 0; i < 100; i++) {
-      const phase = await page.getByTestId('ui-root').getAttribute('data-phase')
-      if (phase === 'gameover') break
-      await expect(page.getByTestId('status')).toContainText('Your turn')
+      // Devin's turn can end the game, so wait for either our turn or the game-over screen.
+      await expect(yourTurn.or(gameover)).toBeVisible()
+      if (await gameover.isVisible()) break
       const cell = grid.locator('button[data-state="unknown"]').first()
       await cell.click()
     }
