@@ -6,7 +6,7 @@ import { CAMERA_SHOTS } from '../scene/CameraRig'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { ownBoardOrigin } from './battery'
 import { director as defaultDirector, type ActiveCinematic, type Director } from './director'
-import { beatAt, type Beat } from './sequence'
+import { beatAt, type Beat, type BeatState } from './sequence'
 import { follow, smoothstep } from './shared'
 
 export interface CinematicCameraProps {
@@ -36,6 +36,7 @@ const tmp = {
 }
 
 const set = (v: THREE.Vector3, p: Vec3) => v.set(p[0], p[1], p[2])
+const beatScratch: BeatState = { beat: null, k: 1, index: -1 }
 
 function horizontal(out: THREE.Vector3, from: Vec3, to: Vec3): THREE.Vector3 {
   out.set(to[0] - from[0], 0, to[2] - from[2])
@@ -200,7 +201,7 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       return
     }
     const dt = Math.min(delta, 0.1)
-    const { beat, k } = beatAt(active.seq, active.clock.t)
+    const { beat, k } = beatAt(active.seq, active.clock.t, beatScratch)
     const key = `${active.id}:${beat?.name ?? ''}`
     if (key !== lastKey.current) {
       lastKey.current = key

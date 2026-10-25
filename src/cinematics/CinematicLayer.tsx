@@ -1,5 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
 import { useStore } from 'zustand'
 import type { PlacedShip, Player } from '../engine'
 import { BOARD_LAYOUT, type Vec3 } from '../scene/layout'
@@ -34,11 +35,17 @@ type NewResidual = DistributiveOmit<Residual, 'id'>
 
 const DEFAULT_LIVERY: Record<Player, Livery> = { human: 'pirate', enemy: 'navy' }
 const BURN_SECONDS = 4.5
+/** Fireworks budget: bursts × particles. */
+const FIREWORKS = { high: { bursts: 14, count: 90 }, low: { bursts: 6, count: 50 } }
 
 /**
  * Everything the director shows in the 3D scene: muzzle flashes, smoke, cannonballs in flight, splashes,
  * hull impacts and short-lived fires for shots; the water effects of a sinking ship (the ship itself is
  * posed by `<Fleet sinkProgress>`); fireworks or burning wrecks for a victory. Mount once inside `<OceanScene>`.
+ *
+ * Budget per shot: one `<Broadside>` (≤ 3 balls at `full`/high, 1 at `fast` or low), exactly one `<Splash>` or one
+ * `<ImpactFlash>` + `<SplinterBurst>` (lead ball), and at `full`/high one `<Fire>` + `<Smoke>` ignition for 4.5 s.
+ * Every effect unmounts when done.
  */
 export function CinematicLayer({ director = defaultDirector, livery = DEFAULT_LIVERY }: CinematicLayerProps) {
   const active = useStore(director.store, (s) => s.active)
@@ -109,17 +116,19 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
     [],
   )
 
+  const ignite = active.seq.level === 'full' && active.seq.budget === 'high'
   const onImpact = useCallback(
     (point: Vec3, index: number) => {
       const s = director.store.getState()
       if (!s.impacted && s.active?.id === active.id) director.store.setState({ impacted: true })
-      if (plan.result.outcome === 'miss') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed: seed + index, scale: index === 0 ? 1 : 0.8 })
+      if (index !== 0) return // one splash / one impact per shot: the lead ball
+      if (plan.result.outcome === 'miss') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed, scale: 1 })
       else {
-        add({ kind: 'hit', position: point, normal: plan.normal, seed: seed + index, scale: index === 0 ? 1 : 0.6 })
-        if (index === 0) add({ kind: 'burn', position: point, seed, born: performance.now() })
+        add({ kind: 'hit', position: point, normal: plan.normal, seed, scale: 1 })
+        if (ignite) add({ kind: 'burn', position: point, seed, born: performance.now() })
       }
     },
-    [plan, seed, add, director, active.id],
+    [plan, seed, add, director, active.id, ignite],
   )
 
   if (!fired || shots.length === 0) return null
@@ -146,23 +155,28 @@ function HitFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'hit' }>; onDone:
   )
 }
 
-/** A hit ignites: a short blaze that fades while the persistent damage (Fleet / ShotMarkers) takes over. */
+/** A hit ignites: a short blaze that fades (group scale, no React state per frame) while the persistent damage takes over. */
 function BurnFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'burn' }>; onDone: () => void }) {
-  const [intensity, setIntensity] = useState(0)
+  const group = useRef<THREE.Group>(null)
   const t = useRef(0)
+  const finished = useRef(false)
   useFrame((_, delta) => {
+    if (finished.current) return
     t.current += Math.min(delta, 0.1)
     const u = t.current / BURN_SECONDS
-    const i = u < 0.15 ? u / 0.15 : Math.max(0, 1 - (u - 0.15) / 0.85)
-    if (Math.abs(i - intensity) > 0.03) setIntensity(i)
-    if (u >= 1) onDone()
+    const k = u < 0.15 ? u / 0.15 : Math.max(0.001, 1 - (u - 0.15) / 0.85)
+    group.current?.scale.setScalar(k)
+    if (u >= 1) {
+      finished.current = true
+      onDone()
+    }
   })
   const pos: Vec3 = [fx.position[0], fx.position[1] + 0.15, fx.position[2]]
   return (
-    <>
-      <Fire position={pos} seed={fx.seed} scale={0.8} intensity={intensity} />
-      <Smoke position={pos} seed={fx.seed} scale={0.9} intensity={intensity} />
-    </>
+    <group ref={group} position={pos} scale={0.001}>
+      <Fire position={[0, 0, 0]} seed={fx.seed} scale={0.8} intensity={1} />
+      <Smoke position={[0, 0, 0]} seed={fx.seed} scale={0.9} intensity={1} />
+    </group>
   )
 }
 
@@ -229,10 +243,11 @@ function VictoryFx({ active }: { active: ActiveCinematic }) {
   const fleet = active.fleets.human
   const origin = ownBoardOrigin('human')
   const center = useMemo<Vec3>(() => [origin[0] + 5, origin[1], origin[2] + 5], [origin])
+  const budget = active.seq.level === 'full' && active.seq.budget === 'high' ? FIREWORKS.high : FIREWORKS.low
   useFrame(() => {
     if (!won) return
     const t = active.clock.t
-    if (t >= next.current && count.current < 14) {
+    if (t >= next.current && count.current < budget.bursts) {
       next.current = t + 0.45 + rnd() * 0.3
       const id = count.current++
       setBursts((b) => [
@@ -249,12 +264,12 @@ function VictoryFx({ active }: { active: ActiveCinematic }) {
             key={b.id}
             position={b.position}
             colors={b.colors}
-            count={90}
+            count={budget.count}
             seed={b.seed}
             speed={[2.5, 5]}
             up={[-1, 3.5]}
-            size={[0.08, 0.16]}
-            life={[1.1, 1.9]}
+            size={[0.12, 0.22]}
+            life={[1.6, 2.6]}
             gravity={2.2}
             drag={1.2}
             emissive

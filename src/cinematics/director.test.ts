@@ -112,3 +112,27 @@ describe('director', () => {
     expect(d.active?.event.type).toBe('victory')
   })
 })
+
+describe('budgets', () => {
+  it('fast fires a single ball; full fires a broadside', () => {
+    const d = make()
+    void d.play(hit, 'fast')
+    expect(d.active?.plan?.muzzles).toHaveLength(1)
+    d.skip()
+    void d.play(hit, 'full')
+    expect(d.active?.plan?.muzzles.length).toBeGreaterThan(1)
+    expect(d.active?.plan?.muzzles.length).toBeLessThanOrEqual(3)
+  })
+  it('low tier: one ball, no shake, no slow motion', () => {
+    const d = createDirector({ autoTick: false, audio: false, fleets: () => fleets, reducedMotion: () => false, budget: () => 'low' })
+    void d.play(hit, 'full')
+    expect(d.active?.plan?.muzzles).toHaveLength(1)
+    while (d.active) d.tick(0.05)
+    expect(d.store.getState().shake).toBe(0)
+    void d.play({ type: 'sink', owner: 'enemy', shipId: 'galleon' }, 'full')
+    while (d.active) {
+      d.tick(0.05)
+      expect(d.store.getState().timeScale).toBe(1)
+    }
+  })
+})

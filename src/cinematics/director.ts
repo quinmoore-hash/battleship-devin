@@ -1,11 +1,12 @@
 import { createStore, useStore, type StoreApi } from 'zustand'
 import { duckMusic, playSfx } from '../audio'
 import type { PlacedShip, Player, ShipId } from '../engine'
+import { defaultQuality } from '../scene'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
 import type { CannonRef } from '../ships/types'
 import { sinkProgressAt } from '../vfx/sinking/timeline'
 import { planShot, type ShotPlan } from './battery'
-import { beatAt, buildSequence, createSequenceClock, timeScaleAt, type BeatName, type Sequence, type SequenceClock } from './sequence'
+import { allowShake, beatAt, buildSequence, createSequenceClock, maxBalls, timeScaleAt, type BeatName, type BeatState, type Budget, type Sequence, type SequenceClock } from './sequence'
 import type { CinematicDirector, CinematicEvent } from './types'
 
 export interface Fleets {
@@ -50,6 +51,8 @@ export interface DirectorOptions {
   fleets?: () => Fleets
   /** Reduced-motion flag; defaults to the game store's setting. */
   reducedMotion?: () => boolean
+  /** VFX budget tier; defaults to the scene's quality (`?quality=low` → `low`): one ball per shot, no shake / slow-mo. */
+  budget?: () => Budget
   /** Drive the clock from requestAnimationFrame (default). Tests set false and call `tick()`. */
   autoTick?: boolean
   /** Fire SFX / duck music on beats (default true when a DOM exists). */
@@ -77,6 +80,8 @@ export function createDirector(opts: DirectorOptions = {}): Director {
   const defaultFleets = opts.fleets ?? gameFleets
   let fleetsOf = defaultFleets
   const reducedMotionOf = opts.reducedMotion ?? (() => useGameStore.getState().settings.reducedMotion)
+  const budgetOf = opts.budget ?? (() => (defaultQuality() === 'low' ? 'low' : 'high'))
+  const beatScratch: BeatState = { beat: null, k: 1, index: -1 }
   const autoTick = opts.autoTick ?? true
   const audio = opts.audio ?? typeof document !== 'undefined'
   const store = createStore<DirectorState>(() => ({
@@ -137,7 +142,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
           patch.impacted = true
           // a killing blow reveals the ship afloat; its `sink` sequence then takes the progress 0 → 1
           if (plan.result.outcome === 'sunk' && plan.result.shipId) patch.sinkProgress = { ...store.getState().sinkProgress, [plan.result.shipId]: 0 }
-          if (!a.seq.reducedMotion) patch.shake = SHAKE[plan.result.outcome] ?? 0.1
+          if (allowShake(a.seq)) patch.shake = SHAKE[plan.result.outcome] ?? 0.1
           if (audio) playSfx(plan.result.outcome === 'miss' ? 'miss' : plan.result.outcome === 'sunk' ? 'sunk' : 'hit')
         }
         if (beat === 'return') patch.firing = {}
@@ -169,8 +174,11 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         finish()
       }
       const fleets = fleetsOf()
-      const seq = buildSequence(event, level, reducedMotionOf())
-      const plan = event.type === 'shot' ? planShot(event.by, event.result, event.by === 'human' ? fleets.human : fleets.enemy, event.by === 'human' ? fleets.enemy : fleets.human, event.battery) : null
+      const seq = buildSequence(event, level, reducedMotionOf(), budgetOf())
+      const plan =
+        event.type === 'shot'
+          ? planShot(event.by, event.result, event.by === 'human' ? fleets.human : fleets.enemy, event.by === 'human' ? fleets.enemy : fleets.human, event.battery, maxBalls(seq))
+          : null
       const active: ActiveCinematic = {
         id: nextId++,
         event,
@@ -190,7 +198,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         return Promise.resolve()
       }
       store.setState({ active, busy: true, impacted: false, firing: {}, letterbox: true, timeScale: 1, sinkProgress: event.type === 'sink' ? { ...store.getState().sinkProgress, [event.shipId]: 0 } : store.getState().sinkProgress })
-      enterBeat(active, beatAt(seq, 0).beat?.name ?? null)
+      enterBeat(active, beatAt(seq, 0, beatScratch).beat?.name ?? null)
       startTicker()
       return new Promise<void>((resolve) => {
         pending = { resolve }
@@ -207,14 +215,15 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       if (!active) return
       const { clock, seq } = active
       const finished = clock.advance(dt)
-      const { beat } = beatAt(seq, clock.t)
+      const { beat } = beatAt(seq, clock.t, beatScratch)
       const name = beat?.name ?? null
       if (name !== active.beat) enterBeat(active, name)
       if (seq.sink && active.shipId) {
         const p = sinkProgressAt(clock.t, seq.sink)
         const ts = timeScaleAt(seq, clock.t)
         const s = store.getState()
-        if (Math.abs((s.sinkProgress[active.shipId] ?? -1) - p) > 0.002 || s.timeScale !== ts) store.setState({ sinkProgress: { ...s.sinkProgress, [active.shipId]: p }, timeScale: ts })
+        // ≤ 100 updates per sink so <Fleet> is not re-rendered every frame
+        if (Math.abs((s.sinkProgress[active.shipId] ?? -1) - p) > 0.01 || p === 1 || s.timeScale !== ts) store.setState({ sinkProgress: { ...s.sinkProgress, [active.shipId]: p }, timeScale: ts })
       }
       if (finished) finish()
     },

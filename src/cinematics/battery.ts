@@ -83,19 +83,19 @@ export const unit = (v: Vec3): Vec3 => {
  * `targets` the fleet on the board being fired at (the hidden enemy fleet is still known to the engine, so a
  * hit on it lands on the real hull; the model itself stays hidden unless the ship is sunk).
  */
-export function planShot(by: Player, result: ShotResult, shooters: readonly PlacedShip[], targets: readonly PlacedShip[], battery?: Battery): ShotPlan {
+export function planShot(by: Player, result: ShotResult, shooters: readonly PlacedShip[], targets: readonly PlacedShip[], battery?: Battery, maxGuns = MAX_GUNS): ShotPlan {
   const ownOrigin = ownBoardOrigin(by)
   const tgtOrigin = targetBoardOrigin(by)
   const cellCenter = cellToWorld(result.coord, tgtOrigin)
-  const chosen = battery ?? pickBattery(shooters, result.coord, ownOrigin, tgtOrigin)
+  const chosen = battery ?? pickBattery(shooters, result.coord, ownOrigin, tgtOrigin, maxGuns)
   let shooter: ShipPose | null = null
   let muzzles: WorldMuzzle[] = []
   const firing = chosen ? shooters.find((s) => s.spec.id === chosen.shipId) : undefined
   if (chosen && firing) {
     shooter = shipWorldTransform(firing, ownOrigin)
-    muzzles = batteryMuzzles(SHIPS[firing.spec.id].anchors, shooter, chosen.side, chosen.cells)
+    muzzles = batteryMuzzles(SHIPS[firing.spec.id].anchors, shooter, chosen.side, chosen.cells).slice(0, maxGuns)
   }
-  if (muzzles.length === 0 && by === 'enemy') muzzles = navyLineMuzzles(result.coord)
+  if (muzzles.length === 0 && by === 'enemy') muzzles = navyLineMuzzles(result.coord, maxGuns)
   const from: Vec3 = muzzles.length ? muzzles[Math.floor(muzzles.length / 2)].position : shooter?.position ?? [cellCenter[0], 2, cellCenter[2] + (by === 'human' ? 14 : -14)]
 
   let impact: Vec3 = cellCenter

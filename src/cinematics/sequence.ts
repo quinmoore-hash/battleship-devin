@@ -23,9 +23,13 @@ export interface Beat {
   duration: number
 }
 
+/** VFX budget tier: `low` (e.g. `?quality=low`, weak GPUs) = one ball per shot, no shake, no slow-mo. */
+export type Budget = 'low' | 'high'
+
 export interface Sequence {
   type: CinematicEvent['type']
   level: CinematicsLevel
+  budget: Budget
   duration: number
   beats: Beat[]
   /** Clock multiplier applied to the ball flight so the arc lands when the beat ends. */
@@ -57,11 +61,11 @@ function beatsFrom(parts: [BeatName, number][], total: number): Beat[] {
   })
 }
 
-export function buildSequence(event: CinematicEvent, level: CinematicsLevel, reducedMotion = false): Sequence {
+export function buildSequence(event: CinematicEvent, level: CinematicsLevel, reducedMotion = false, budget: Budget = 'high'): Sequence {
   const timing = CINEMATIC_TIMING[event.type]
   const duration = level === 'off' ? 0 : timing[level]
   const speedScale = level === 'off' ? Infinity : timing.full / duration
-  const base = { type: event.type, level, duration, speedScale, reducedMotion }
+  const base = { type: event.type, level, budget, duration, speedScale, reducedMotion }
   if (level === 'off') return { ...base, beats: [] }
   switch (event.type) {
     case 'shot':
@@ -74,7 +78,7 @@ export function buildSequence(event: CinematicEvent, level: CinematicsLevel, red
       }
     case 'sink': {
       const sink = sinkTimeline(level)
-      const slow = !reducedMotion && sink.slowMo ? sink.slowMo : undefined
+      const slow = !reducedMotion && budget === 'high' && sink.slowMo ? sink.slowMo : undefined
       return {
         ...base,
         beats: [{ name: 'sink', start: 0, duration: sink.duration * 0.85 }, { name: 'return', start: sink.duration * 0.85, duration: sink.duration * 0.15 }],
@@ -97,13 +101,33 @@ export interface BeatState {
   index: number
 }
 
-export function beatAt(seq: Sequence, t: number): BeatState {
-  if (seq.beats.length === 0) return { beat: null, k: 1, index: -1 }
+/** Per-shot VFX budget: cannonballs in the broadside (one Splash / ImpactFlash is spawned for the lead ball only). */
+export function maxBalls(seq: Pick<Sequence, 'level' | 'budget'>): number {
+  return seq.level === 'fast' || seq.budget === 'low' ? 1 : 3
+}
+
+/** Camera shake allowed? Never under reduced motion or on the low tier. */
+export const allowShake = (seq: Pick<Sequence, 'budget' | 'reducedMotion'>): boolean => !seq.reducedMotion && seq.budget === 'high'
+
+/** Writes into `out` when given (per-frame callers pass a scratch object to avoid allocating). */
+export function beatAt(seq: Sequence, t: number, out: BeatState = { beat: null, k: 1, index: -1 }): BeatState {
+  out.beat = null
+  out.k = 1
+  out.index = -1
+  if (seq.beats.length === 0) return out
   for (let i = seq.beats.length - 1; i >= 0; i--) {
     const b = seq.beats[i]
-    if (t >= b.start) return { beat: b, k: b.duration > 0 ? Math.min(1, (t - b.start) / b.duration) : 1, index: i }
+    if (t >= b.start) {
+      out.beat = b
+      out.k = b.duration > 0 ? Math.min(1, (t - b.start) / b.duration) : 1
+      out.index = i
+      return out
+    }
   }
-  return { beat: seq.beats[0], k: 0, index: 0 }
+  out.beat = seq.beats[0]
+  out.k = 0
+  out.index = 0
+  return out
 }
 
 export function beatStart(seq: Sequence, name: BeatName): number {
