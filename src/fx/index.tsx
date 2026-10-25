@@ -1,29 +1,12 @@
-import type { Coord, PlacedShip, ShotResult } from '../engine'
-
 /**
- * Placeholder for ship models, Devin-the-Otter mascot and visual effects.
- * The fx child session replaces these with real 3D models / sprites and particle VFX.
- * Keep the public API stable so UI and integration can code against it.
+ * fx module: ship models, shot markers / VFX, projectile and the Devin-the-Otter mascot.
+ *
+ * Public API (see ARCHITECTURE.md):
+ *   <Fleet ships revealed />      <ShotMarkers shots offset? />      <OtterMascot mood />
+ * plus the extensions documented in each component: <ShipGhost />, <Projectile />, <OtterPortrait />.
  */
-export interface FleetProps {
-  ships: PlacedShip[]
-  /** true for the human's own fleet (always visible); false renders only sunk enemy ships. */
-  revealed: boolean
-}
-export function Fleet(_props: FleetProps) {
-  return null
-}
-
-export interface ShotMarkersProps {
-  shots: ShotResult[]
-  /** World-space offset of the board this belongs to. */
-  offset?: Coord
-}
-export function ShotMarkers(_props: ShotMarkersProps) {
-  return null
-}
-
-export type OtterMood = 'idle' | 'cheer' | 'grumble' | 'taunt' | 'victory' | 'defeat'
-export function OtterMascot(_props: { mood: OtterMood }) {
-  return null
-}
+export { Fleet, ShipGhost, ShipModel, type FleetProps, type ShipGhostProps, type ShipModelViewProps } from './ships'
+export { ShotMarkers, Projectile, type ShotMarkersProps, type ProjectileProps } from './markers'
+export { OtterMascot, OtterPortrait, type OtterMascotProps, type OtterPortraitProps } from './otter'
+export { OTTER_MOODS, type OtterMood } from './timeline'
+export { BOARD_LAYOUT, cellToWorld, shipCenter, type Vec3 } from './layout'
