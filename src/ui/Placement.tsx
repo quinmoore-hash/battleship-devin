@@ -168,7 +168,7 @@ export function PlacementScreen() {
       </section>
 
       <Hint id="placement" seen={hintsSeen.includes('placement')} onDismiss={dismissHint}>
-        Drag a ship across your waters, press <kbd>R</kbd> or right-click to rotate, click a ship to lift it again.
+        Drag a ship across your waters, press <kbd>R</kbd> or right-click to rotate, click a ship to lift it again. Sea stuttering? Lower <strong>Quality</strong> in Settings (⚙).
       </Hint>
     </div>
   )

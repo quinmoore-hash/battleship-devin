@@ -24,6 +24,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Ship's settings" testId="settings" onClose={onClose}>
       <div className="settings">
+        <fieldset className="settings-quality">
+          <legend>Picture</legend>
+          <label className="row">
+            <span>Quality</span>
+            <Segmented value={quality} options={['auto', 'low', 'medium', 'high']} testId="setting-quality" onChange={(v) => setPrefs({ quality: v as QualitySetting })} />
+          </label>
+          <p className="muted small">If the sea stutters, pick Low or Medium: no bloom, shadows or far waves (Low also simplifies the ships). Auto picks for your machine.</p>
+          <label className="row">
+            <span>Cinematics</span>
+            <Segmented value={settings.cinematics} options={['full', 'fast', 'off']} testId="setting-cinematics" onChange={(v) => updateSettings({ cinematics: v as CinematicsLevel })} />
+          </label>
+        </fieldset>
         <fieldset>
           <legend>Sound</legend>
           <label className="row">
@@ -38,18 +50,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={muted} data-testid="setting-mute" onChange={() => toggleMuted()} />
             <span>Mute all</span>
           </label>
-        </fieldset>
-        <fieldset>
-          <legend>Picture</legend>
-          <label className="row">
-            <span>Cinematics</span>
-            <Segmented value={settings.cinematics} options={['full', 'fast', 'off']} testId="setting-cinematics" onChange={(v) => updateSettings({ cinematics: v as CinematicsLevel })} />
-          </label>
-          <label className="row">
-            <span>Quality</span>
-            <Segmented value={quality} options={['auto', 'low', 'high']} testId="setting-quality" onChange={(v) => setPrefs({ quality: v as QualitySetting })} />
-          </label>
-          <p className="muted small">Quality changes rebuild the ocean; low turns off bloom, shadows and the far wave bank.</p>
         </fieldset>
         <fieldset>
           <legend>Accessibility</legend>

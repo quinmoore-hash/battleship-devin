@@ -28,6 +28,7 @@ const LIFT = 0.45
 export function GameWorld() {
   const phase = useGameStore((s) => s.phase)
   const quality = useUiStore((s) => s.quality)
+  // low = cheap ocean + low ship detail; medium = cheap ocean, full ships; high/auto = everything.
   const shipQuality = quality === 'low' ? 'low' : 'high'
   return (
     <group>
@@ -63,6 +64,8 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
   const setCarrying = useUiStore((s) => s.setCarrying)
   const setDragging = useUiStore((s) => s.setDragging)
   const [grab, setGrab] = useState(0)
+  // Where the ship was grabbed and when: a release on the same cell without moving is a click → keep carrying.
+  const grabRef = useRef<{ cell: Coord; at: number; moved: boolean } | null>(null)
 
   const spec = carrying ? FLEET_BY_ID[carrying] : null
   const cell = hover?.side === 'player' ? hover.coord : null
@@ -79,10 +82,20 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
   // Drag ends anywhere on the page: drop if over a valid spot, otherwise keep carrying (click mode).
   useEffect(() => {
     if (!dragging) return
+    const move = () => {
+      const g = grabRef.current
+      const h = useUiStore.getState().hover
+      if (g && h?.side === 'player' && (h.coord.x !== g.cell.x || h.coord.y !== g.cell.y)) g.moved = true
+    }
     const up = () => {
       setDragging(false)
+      const g = grabRef.current
       const { hover: h, carrying: c, orientation: o } = useUiStore.getState()
       const s = c ? FLEET_BY_ID[c] : null
+      if (g && !g.moved) {
+        g.at = performance.now()
+        return
+      }
       if (s && h?.side === 'player') {
         const f = footprintAt(useGameStore.getState().playerBoard, s, h.coord, o, grab)
         if (f.valid) {
@@ -91,9 +104,11 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
         }
       }
     }
+    window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
     return () => {
+      window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
     }
@@ -104,6 +119,7 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
     e.stopPropagation()
     const idx = Math.max(0, ship.cells.findIndex((c) => c.x === Math.floor(e.point.x - PLAYER.origin[0]) && c.y === Math.floor(e.point.z - PLAYER.origin[2])))
     setGrab(idx)
+    grabRef.current = { cell: ship.cells[idx], at: performance.now(), moved: false }
     removePlayerShip(ship.spec.id)
     setCarrying(ship.spec.id, ship.orientation)
     setDragging(true)
@@ -119,6 +135,9 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
         highlightColor={footprint ? (footprint.valid ? VALID : INVALID) : '#ffd98a'}
         onCellPointerMove={(c) => setHover(c ? { side: 'player', coord: c } : null)}
         onCellClick={() => {
+          // the click that ends a lift lands here too; don't drop the ship straight back
+          const g = grabRef.current
+          if (g && !g.moved && performance.now() - g.at < 300) return
           if (carrying && !dragging) drop()
         }}
       />

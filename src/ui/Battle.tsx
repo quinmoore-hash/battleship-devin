@@ -101,7 +101,7 @@ export function BattleScreen() {
     <div className="battle hud" data-testid="battle">
       <header className="battle-top">
         <div className={`panel parchment status-panel ${yourTurn ? 'is-yours' : 'is-theirs'}`}>
-          <CompassRose size={64} heading={turn === 'human' && !busy ? 0 : beat.phase === 'enemy-aiming' ? 170 : 180} spinning={beat.phase === 'enemy-aiming'} />
+          <CompassRose size={64} heading={turn === 'human' && !busy ? 0 : beat.phase === 'enemy-aiming' ? 170 : 180} />
           <div className="status-text">
             <span className="status-turn">{yourTurn ? 'Your turn' : turn === 'human' ? 'Reloading' : 'Enemy turn'}</span>
             <p className="status" data-testid="status" role="status" aria-live="polite">

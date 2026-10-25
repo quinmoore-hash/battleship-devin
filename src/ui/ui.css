@@ -296,12 +296,10 @@
   from {
     opacity: 0;
     transform: translateY(10px) scale(0.985);
-    filter: blur(3px) sepia(1);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
 @keyframes phase-in {
@@ -1036,7 +1034,39 @@
   color: var(--parchment);
   border-color: var(--brass);
 }
-/* With the 3D boards on screen the HTML charts are compact mirrors; without 3D they are the game. */
+/* With the 3D boards on screen the HTML charts are compact mirrors stacked in the right column (the
+   centre stays clear for the boards on the water); without 3D they are the game. */
+.ui-root[data-no3d='false'] .battle-body {
+  grid-template-columns: minmax(200px, 240px) 1fr minmax(230px, 270px);
+  grid-template-rows: 1fr auto;
+}
+.ui-root[data-no3d='false'] .battle-body .side-left {
+  grid-row: 1 / span 2;
+}
+.ui-root[data-no3d='false'] .charts {
+  grid-column: 3;
+  grid-row: 1;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: end;
+  gap: 8px;
+}
+.ui-root[data-no3d='false'] .charts .chart-panel {
+  width: auto;
+  padding: 0.6rem 0.7rem;
+}
+.ui-root[data-no3d='false'] .battle-body .side-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+.ui-root[data-no3d='false'] .shot-log ol {
+  max-height: 120px;
+}
+@media (max-height: 820px) {
+  .ui-root[data-no3d='false'] .chart-player {
+    display: none;
+  }
+}
 .ui-root[data-no3d='false'] .battle .grid-wrap,
 .ui-root[data-no3d='false'] .placement .grid-wrap {
   --cell: clamp(13px, min(1.55vw, 2.6vh), 22px);
@@ -1286,8 +1316,7 @@
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(5, 12, 18, 0.55);
-  backdrop-filter: blur(4px);
+  background: rgba(5, 12, 18, 0.62);
   animation: fade 0.2s ease both;
 }
 .modal {
@@ -1441,7 +1470,8 @@
   .battle-top {
     padding-right: 96px;
   }
-  .placement {
+  .placement,
+  .ui-root[data-no3d='true'] .placement {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto;
     align-content: start;
@@ -1563,8 +1593,12 @@
     margin: 0 auto;
     font-size: 0.78rem;
   }
-  .placement .hint {
-    margin-top: 40px;
+  .placement .hint,
+  .battle .hint {
+    margin-top: 46px;
+  }
+  .battle:has(.hint) .battle-top {
+    padding-top: 0;
   }
   .report {
     padding: 1.1rem 1rem 1.2rem;
@@ -1594,4 +1628,12 @@
     width: 60px;
     height: 60px;
   }
+}
+
+/* ---------- performance ---------- */
+/* Over the live canvas only transform/opacity animate; the only continuous animations are on the
+   menu/loading screens (compass spins). Battle uses one-shot transitions. */
+.settings-quality {
+  border-color: var(--brass-dark);
+  background: rgba(217, 169, 60, 0.12);
 }

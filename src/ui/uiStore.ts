@@ -5,7 +5,7 @@ import { useGameStore } from '../store/gameStore'
 
 export const UI_PREFS_STORAGE_KEY = 'battleship-devin.ui'
 
-export type QualitySetting = 'auto' | 'low' | 'high'
+export type QualitySetting = 'auto' | 'low' | 'medium' | 'high'
 export type BoardSide = 'player' | 'enemy'
 
 /** Persisted player preferences that don't belong to the game rules store. */
@@ -82,7 +82,7 @@ export const useUiStore = create<UiState>()(
         const p = (persisted ?? {}) as Partial<UiPrefs>
         return {
           ...current,
-          quality: p.quality === 'low' || p.quality === 'high' || p.quality === 'auto' ? p.quality : current.quality,
+          quality: p.quality === 'low' || p.quality === 'medium' || p.quality === 'high' || p.quality === 'auto' ? p.quality : current.quality,
           colorblind: typeof p.colorblind === 'boolean' ? p.colorblind : current.colorblind,
           hintsSeen: Array.isArray(p.hintsSeen) ? p.hintsSeen.filter((h): h is string => typeof h === 'string') : current.hintsSeen,
         }
