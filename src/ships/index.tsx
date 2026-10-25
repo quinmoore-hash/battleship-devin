@@ -15,6 +15,7 @@ import { GALLEON } from './galleon'
 import { MAN_O_WAR } from './man-o-war'
 import { SLOOP } from './sloop'
 import type { CannonRef, CellDamage, Livery, ShipDefinition, ShipModelProps } from './types'
+import { lastHitIndex, placedShipSeed, sinkPose } from '../vfx/sinking/pose'
 
 export * from './types'
 export * as kit from './kit'
@@ -74,9 +75,12 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
         if (!revealed && !sunk) return null
         const { position, rotationY } = shipWorldTransform(ship, boardOrigin, cellSize)
         const sink = sinkProgress?.[ship.spec.id] ?? (sunk ? 1 : 0)
+        const pose = sinkPose(sink, { seed: placedShipSeed(ship), hull: SHIPS[ship.spec.id].anchors.hull, damage: damageOf(ship), lastHit: lastHitIndex(ship) })
         return (
-          <group key={ship.spec.id} position={[position[0], position[1] - sink * 0.9, position[2]]} rotation-y={rotationY} rotation-z={sink * 0.35}>
-            <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />
+          <group key={ship.spec.id} position={[position[0], position[1] - pose.depth, position[2]]} rotation-y={rotationY + pose.yaw}>
+            <group rotation={[pose.roll, 0, pose.pitch]}>
+              <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />
+            </group>
           </group>
         )
       })}

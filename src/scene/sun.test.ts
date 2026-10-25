@@ -25,6 +25,19 @@ describe('computeAtmosphere', () => {
     }
   })
 
+  it('darkens and desaturates everything in a storm, and hides the stars', () => {
+    const calm = computeAtmosphere(0.5)
+    const storm = computeAtmosphere(0.5, 'stormy')
+    expect(storm.storm).toBe(1)
+    expect(calm.storm).toBe(0)
+    expect(storm.sunIntensity).toBeLessThan(calm.sunIntensity * 0.5)
+    expect(computeAtmosphere(0, 'stormy').stars).toBe(0)
+    const lum = (hex: string) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16)
+    expect(lum(storm.skyZenith)).toBeLessThan(lum(calm.skyZenith))
+    expect(lum(storm.waterShallow)).toBeLessThan(lum(calm.waterShallow))
+    expect(storm.sunDir).toEqual(calm.sunDir)
+  })
+
   it('wraps around past 1', () => {
     expect(computeAtmosphere(1.3)).toEqual(computeAtmosphere(0.3))
   })

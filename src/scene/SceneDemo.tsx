@@ -1,12 +1,13 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Coord } from '../engine'
 import { coordLabel } from '../engine'
 import { BoardGrid } from './BoardGrid'
 import type { CameraView } from './CameraRig'
 import { OceanScene } from './index'
 import { BOARD_LAYOUT, type BoardKey } from './layout'
-import { GOLDEN_HOUR } from './sun'
+import { GOLDEN_HOUR, type Weather } from './sun'
+import type { LightningStrike } from './Weather'
 import type { Quality } from './Water'
 
 const VIEWS: CameraView[] = ['menu', 'placement', 'battle', 'gameover']
@@ -58,12 +59,38 @@ export function SceneDemo() {
     onCellClick: (coord: Coord) => setLastClick({ board, coord }),
   })
   const [dressing, setDressing] = useState(true)
+  const [weather, setWeather] = useState<Weather>(() => (param('weather') === 'stormy' ? 'stormy' : 'calm'))
+  const [strikes, setStrikes] = useState(0)
+  const [tour, setTour] = useState(() => param('tour') !== null)
   const [fps, setFps] = useState(0)
+  const onLightning = useCallback((_: LightningStrike) => setStrikes((n) => n + 1), [])
+
+  // guided tour: sweeps the clock, then switches to the storm and cycles the camera shots
+  useEffect(() => {
+    if (!tour) return
+    const start = performance.now()
+    const id = window.setInterval(() => {
+      const s = (performance.now() - start) / 1000
+      if (s < 24) {
+        setWeather('calm')
+        setTimeOfDay((0.3 + (s / 24) * 0.78) % 1)
+        setView(s < 8 ? 'menu' : s < 16 ? 'battle' : 'gameover')
+      } else if (s < 38) {
+        setWeather('stormy')
+        setTimeOfDay(0.62)
+        setView(s < 31 ? 'battle' : 'placement')
+      } else {
+        setTour(false)
+      }
+    }, 100)
+    return () => window.clearInterval(id)
+  }, [tour])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') setTimeOfDay((t) => (t + 0.99) % 1)
       if (e.key === 'ArrowRight') setTimeOfDay((t) => (t + 0.01) % 1)
+      if (e.key === 'w') setWeather((w) => (w === 'calm' ? 'stormy' : 'calm'))
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -71,9 +98,9 @@ export function SceneDemo() {
 
   return (
     <>
-      <OceanScene quality={quality} timeOfDay={timeOfDay} view={view} dressing={dressing}>
+      <OceanScene quality={quality} timeOfDay={timeOfDay} view={view} dressing={dressing} weather={weather} onLightning={onLightning}>
         <BoardGrid {...gridProps('enemy')} />
-        <BoardGrid {...gridProps('player')} color="#9cffb0" />
+        <BoardGrid {...gridProps('player')} color="#e6cfa3" />
         <FpsProbe onFps={setFps} />
       </OceanScene>
       <div
@@ -121,6 +148,29 @@ export function SceneDemo() {
             </button>
           ))}
         </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(['calm', 'stormy'] as const).map((w) => (
+            <button
+              key={w}
+              data-testid={`scene-demo-weather-${w}`}
+              onClick={() => setWeather(w)}
+              style={{ padding: '4px 8px', background: w === weather ? '#b7791f' : '#345', fontSize: 12 }}
+            >
+              {w}
+            </button>
+          ))}
+          {[
+            ['dawn', 0.27],
+            ['noon', 0.5],
+            ['golden', GOLDEN_HOUR],
+            ['dusk', 0.8],
+            ['night', 0.98],
+          ].map(([name, t]) => (
+            <button key={name} data-testid={`scene-demo-tod-${name}`} onClick={() => setTimeOfDay(t as number)} style={{ padding: '4px 8px', fontSize: 12, background: '#345' }}>
+              {name}
+            </button>
+          ))}
+        </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             data-testid="scene-demo-quality"
@@ -132,9 +182,15 @@ export function SceneDemo() {
           <button onClick={() => setDressing(!dressing)} style={{ padding: '4px 8px', fontSize: 12, background: '#345' }}>
             dressing: {dressing ? 'on' : 'off'}
           </button>
+          <button data-testid="scene-demo-tour" onClick={() => setTour(!tour)} style={{ padding: '4px 8px', fontSize: 12, background: tour ? '#1d9bd1' : '#345' }}>
+            tour: {tour ? 'playing' : 'start'}
+          </button>
         </div>
         <span>
           hover: {pickLabel(hover)} · click: {pickLabel(lastClick)}
+        </span>
+        <span data-testid="scene-demo-weather" style={{ opacity: 0.8 }}>
+          weather: {weather} · lightning strikes: {strikes} · keys: ←/→ time, w weather
         </span>
       </div>
     </>
