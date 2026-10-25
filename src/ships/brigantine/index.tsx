@@ -16,6 +16,7 @@ import { BRIGANTINE_ANCHORS, CANNON_SCALE, cannonPosition, cellCenterX, cellOfX 
 import {
   BULWARK_THICKNESS,
   CABIN_FRONT_X,
+  CABIN_CAMBER,
   CABIN_TOP_Y,
   CANNON_X,
   DECK_Y,
@@ -89,7 +90,7 @@ function sharedGeometry(): SharedGeometry {
     hullSolid: buildHullGeometry({ ports: false }).geometry,
     hullTriangles: hull.triangles,
     deck: buildDeckGeometry(CABIN_FRONT_X - 0.02, STEM_X - 0.1),
-    cabinTop: buildDeckGeometry(TRANSOM_X + 0.01, CABIN_FRONT_X, CABIN_TOP_Y, 0.008, 10),
+    cabinTop: buildDeckGeometry(TRANSOM_X + 0.01, CABIN_FRONT_X, CABIN_TOP_Y, CABIN_CAMBER, 10),
     keel: buildKeelGeometry(),
     wales: ([1, -1] as const).map((s) => buildWaleGeometry(0.295, s, 0.04, 0.012)),
     lowerWales: ([1, -1] as const).map((s) => buildWaleGeometry(0.13, s, 0.024, 0.008)),
@@ -415,8 +416,9 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
           <group key={cell}>
             <Breach x={cx - 0.08} side="port" mats={mats} burning={burning} seed={cell * 11 + 1} lod={lod} />
             <Breach x={cx + 0.11} side="starboard" mats={mats} burning={burning} seed={cell * 11 + 2} lod={lod} />
-            {burning && <ScorchDecal position={[cx, cell === 2 && cx < CABIN_FRONT_X ? CABIN_TOP_Y : DECK_Y, 0]} radius={0.34} mats={mats} seed={cell + 3} />}
+            {burning && <ScorchDecal position={[cx, DECK_Y, 0]} radius={0.34} mats={mats} seed={cell + 3} />}
             {burning && lod < 2 && <ScorchDecal position={[cx + 0.2, DECK_Y, 0.18]} radius={0.16} mats={mats} seed={cell + 7} />}
+            {burning && cell === 2 && <ScorchDecal position={[-1.25, CABIN_TOP_Y, 0.12]} radius={0.16} mats={mats} seed={cell + 9} camber={CABIN_CAMBER} />}
           </group>
         )
       })}
