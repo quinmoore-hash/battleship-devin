@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { buildHeightMap, DEPTH_MAP_EXTENT, SHALLOW_DEPTH } from './cove'
 import type { Atmosphere } from './sun'
 import type { LightningState } from './Weather'
-import { setSeaState, WAVE_COUNT, WAVE_TIME_SCALE, wavesToGlsl } from './waves'
+import { setSeaState, WAVE_COUNT, WAVE_TIME_SCALE, wavesToGlsl, waveUniforms } from './waves'
 
 export type Quality = 'low' | 'high'
 
@@ -187,7 +187,7 @@ const fragmentShader = /* glsl */ `
     float shoreFoam = smoothstep(2.6, 0.2, depth) * smoothstep(0.35, 0.8, foamNoise * 0.5 + shoreWave * 0.6);
     shoreFoam += smoothstep(0.45, 0.0, depth) * 0.6;
     float sprayFoam = smoothstep(0.55, 0.75, noise(vec2(rp.x * 0.5 + uTime * 0.6, rp.y * 3.0))) * uStorm * 0.5;
-    float foam = clamp(crestFoam + shoreFoam + sprayFoam, 0.0, 1.0) * uDetail;
+    float foam = clamp(crestFoam * (1.0 - 0.35 * uStorm) + shoreFoam + sprayFoam, 0.0, 1.0) * uDetail;
     vec3 foamColor = mix(vec3(0.6, 0.7, 0.78), vec3(1.0), uDaylight) * mix(0.3, 1.0, uDaylight);
     color = mix(color, foamColor, foam * 0.75);
 
@@ -207,9 +207,9 @@ export interface WaterProps {
 
 function makeUniforms(quality: Quality, heightMap: THREE.DataTexture, amp: number) {
   return {
-    uTime: { value: 0 },
+    uTime: waveUniforms.uTime,
     uAmp: { value: amp },
-    uStorm: { value: 0 },
+    uStorm: waveUniforms.uStorm,
     uFlash: { value: 0 },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSunColor: { value: new THREE.Color('#fff') },
@@ -334,10 +334,16 @@ function WaterSheet({
   geometry?: THREE.BufferGeometry
   children?: ReactNode
 }) {
+  // Built imperatively so the material keeps *our* uniform objects (shared `waveUniforms`);
+  // the JSX `uniforms` prop is re-applied by r3f and loses that identity.
+  const material = useMemo(
+    () => new THREE.ShaderMaterial({ vertexShader: vs, fragmentShader, uniforms, fog: true }),
+    [vs, uniforms],
+  )
+  useEffect(() => () => material.dispose(), [material])
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false} renderOrder={-10} geometry={geometry}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false} renderOrder={-10} geometry={geometry} material={material}>
       {children}
-      <shaderMaterial vertexShader={vs} fragmentShader={fragmentShader} uniforms={uniforms} fog />
     </mesh>
   )
 }
