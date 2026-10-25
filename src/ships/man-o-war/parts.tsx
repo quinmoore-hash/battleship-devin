@@ -991,7 +991,7 @@ const boatGeo = once(() => {
     const w = Math.max(0.012, 0.11 * t)
     return { x, keelY: -0.1 * (0.5 + 0.5 * t), railY: 0.02, halfWidths: [0.01, w * 0.6, w * 0.92, w] }
   })
-  return dropTopSkin(loftHull(sections, 4), () => 0.02)
+  return loftHull(sections, 4) // kept closed: reads as a canvas-covered boat and avoids single-sided insides
 })
 
 function ShipsBoat({ m, lod }: { m: ManOWarMaterials; lod: Lod }) {
