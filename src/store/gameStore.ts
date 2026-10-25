@@ -87,7 +87,10 @@ export interface GameState {
   /** Non-serialisable; decides which misses the storm fog hides. */
   fogRng?: () => number
 
-  /** `modes` defaults to classic rules; `seed` makes the stormy-seas fog deterministic (tests, demos). */
+  /**
+   * `modes` omitted = keep the modes chosen so far (`setModes` in the menu, or the previous game's rules on a rematch);
+   * `reset()` returns to classic. `seed` makes the stormy-seas fog deterministic (tests, demos).
+   */
   startGame: (difficulty: Difficulty, modes?: Partial<GameModes>, seed?: number) => void
   placePlayerShip: (spec: ShipSpec, origin: Coord, orientation: Orientation) => boolean
   removePlayerShip: (shipId: ShipSpec['id']) => void
@@ -101,6 +104,8 @@ export interface GameState {
   fireAt: (coord: Coord) => ShotResult | null | undefined
   /** The enemy takes a turn (a whole volley in salvo mode). Returns the last result. Call after `fireAt` (UI controls the pacing). */
   enemyTurn: () => ShotResult | undefined
+  /** Change the rules of the game being set up. Allowed in `menu` / `placement` only (ignored once the battle starts). */
+  setModes: (modes: Partial<GameModes>) => void
   updateSettings: (patch: Partial<Settings>) => void
   reset: () => void
 }
@@ -136,10 +141,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   settings: initialSettings,
 
   startGame: (difficulty, modes, seed) =>
-    set({
+    set((s) => ({
       phase: 'placement',
       difficulty,
-      modes: { ...DEFAULT_MODES, ...modes },
+      modes: modes ? { ...DEFAULT_MODES, ...modes } : s.modes,
       playerBoard: createBoard(),
       enemyBoard: randomPlacement(),
       opponent: createOpponent(difficulty),
@@ -150,7 +155,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastVolley: [],
       salvo: emptySalvo(),
       fogged: [],
-    }),
+    })),
 
   placePlayerShip: (spec, origin, orientation) => {
     const { playerBoard, phase } = get()
@@ -249,6 +254,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     return last
   },
 
+  setModes: (modes) => set((s) => (s.phase === 'menu' || s.phase === 'placement' ? { modes: { ...s.modes, ...modes } } : {})),
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 
   reset: () =>

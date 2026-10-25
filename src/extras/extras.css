@@ -1,0 +1,529 @@
+/* extras: self-contained (demo routes do not load ui.css). Tokens come from index.css. */
+.xt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  color: var(--foam);
+  font-family: var(--font-body);
+}
+.xt-overlay > canvas,
+.xt-overlay [data-testid='ocean-canvas'] {
+  z-index: 0 !important;
+}
+.xt-overlay > *:not(canvas) {
+  position: relative;
+  z-index: 1;
+}
+.xt-panel {
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), inset 0 1px 0 var(--glass-highlight);
+  padding: 0.9rem 1.1rem;
+  pointer-events: auto;
+}
+.xt-topbar {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+.xt-topbar > * {
+  pointer-events: auto;
+}
+.xt-title {
+  display: grid;
+  gap: 2px;
+  padding: 0.6rem 1rem;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(10px);
+}
+.xt-title strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+.xt-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--orange-light);
+}
+.xt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.xt-row.wrap {
+  flex-wrap: wrap;
+}
+.xt-muted {
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+.xt-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  text-align: center;
+}
+
+.xt-btn {
+  font: 600 0.9rem var(--font-body);
+  color: var(--foam);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background 0.15s,
+    transform 0.1s;
+}
+.xt-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+.xt-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.xt-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.xt-btn.primary {
+  background: var(--orange);
+  border-color: transparent;
+  color: #2b1300;
+}
+.xt-btn.primary:hover:not(:disabled) {
+  background: var(--orange-light);
+}
+.xt-btn.ghost {
+  background: rgba(8, 34, 52, 0.55);
+}
+.xt-btn.small {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+}
+.xt-btn.tiny {
+  padding: 0.15rem 0.6rem;
+  font-size: 0.72rem;
+}
+.xt-btn.icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.95rem;
+}
+.xt-btn.active {
+  background: var(--orange);
+  color: #2b1300;
+  border-color: transparent;
+}
+
+.xt-range {
+  width: 100%;
+  accent-color: var(--orange);
+}
+.xt-input {
+  width: 5rem;
+  font: inherit;
+  color: var(--foam);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 0.3rem 0.5rem;
+}
+.xt-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.xt-field.inline {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 6px;
+}
+.xt-field em {
+  font-style: normal;
+  color: var(--orange-light);
+  font-variant-numeric: tabular-nums;
+}
+.xt-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  opacity: 0.6;
+  font-style: normal;
+}
+.xt-ticks i {
+  font-style: normal;
+}
+
+/* replay */
+.xt-replay-controls {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(880px, calc(100vw - 28px));
+}
+.xt-caption {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+.xt-transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.xt-scrub {
+  flex: 1;
+  min-width: 80px;
+}
+.xt-counter {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  min-width: 4.5ch;
+  text-align: right;
+}
+.xt-speeds {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* photo */
+.xt-photo-controls {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 28px));
+  display: grid;
+  gap: 0.6rem;
+}
+.xt-photo-controls .xt-row {
+  justify-content: space-between;
+}
+.xt-thumb {
+  position: absolute;
+  right: -1px;
+  bottom: calc(100% + 10px);
+  width: 160px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid var(--orange);
+  box-shadow: var(--shadow);
+  background: #000;
+}
+.xt-thumb img {
+  display: block;
+  width: 100%;
+}
+.xt-show-hud {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  opacity: 0.35;
+}
+.xt-show-hud:hover {
+  opacity: 1;
+}
+.xt-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  animation: xt-flash 0.35s ease-out forwards;
+  pointer-events: none;
+  z-index: 3;
+}
+@keyframes xt-flash {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* docks in the main game (sit beside the UI's own screens) */
+.xt-dock {
+  position: fixed;
+  z-index: 3;
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+.xt-dock > * {
+  pointer-events: auto;
+}
+.xt-dock-menu {
+  right: 18px;
+  bottom: 18px;
+  width: min(360px, calc(100vw - 36px));
+}
+.xt-dock-gameover {
+  right: 18px;
+  bottom: 18px;
+  width: min(420px, calc(100vw - 36px));
+}
+.xt-dock-left {
+  left: 14px;
+  top: 76px;
+  width: 320px;
+  max-height: calc(100vh - 90px);
+  overflow: auto;
+}
+.xt-dock-right {
+  right: 14px;
+  top: 76px;
+  width: 340px;
+  max-height: calc(100vh - 90px);
+  overflow: auto;
+}
+@media (max-width: 900px) {
+  .xt-dock-menu,
+  .xt-dock-gameover {
+    position: static;
+    width: auto;
+    margin: 12px;
+  }
+}
+
+.xt-modes {
+  display: grid;
+  gap: 8px;
+}
+.xt-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.xt-toggle input {
+  margin-top: 0.3rem;
+  accent-color: var(--orange);
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.xt-toggle span {
+  display: grid;
+}
+.xt-toggle small {
+  opacity: 0.7;
+}
+.xt-toggle.inline {
+  align-items: center;
+}
+
+.xt-strip {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+.xt-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.xt-pill small {
+  font-weight: 500;
+  opacity: 0.8;
+}
+.xt-pill.storm {
+  background: rgba(70, 90, 110, 0.85);
+}
+
+/* stats */
+.xt-stats {
+  display: grid;
+  gap: 8px;
+}
+.xt-stats-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.xt-stats-head strong {
+  font-family: var(--font-display);
+}
+.xt-stats-empty {
+  margin: 0;
+}
+.xt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.xt-table th,
+.xt-table td {
+  text-align: right;
+  padding: 0.25rem 0.3rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.xt-table th:first-child,
+.xt-table td:first-child {
+  text-align: left;
+}
+.xt-table thead th {
+  font-weight: 600;
+  opacity: 0.65;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.xt-table tr.current {
+  background: rgba(242, 140, 40, 0.14);
+}
+.xt-table small {
+  opacity: 0.6;
+}
+.xt-stats-clear {
+  justify-self: end;
+}
+
+/* storm fog + salvo queue painted onto the UI's enemy grid (attribute shim, see ExtrasLayer) */
+.cell-miss[data-fog] {
+  background: rgba(95, 211, 255, 0.16);
+}
+.cell-miss[data-fog]::after {
+  inset: 14%;
+  background: radial-gradient(circle at 35% 40%, rgba(230, 236, 240, 0.9), rgba(160, 175, 190, 0.55) 55%, transparent 72%);
+  filter: blur(0.6px);
+  animation: xt-fog-drift 4s ease-in-out infinite alternate;
+}
+.cell[data-queued] {
+  outline: 2px solid var(--orange);
+  outline-offset: -2px;
+  box-shadow: 0 0 10px rgba(242, 140, 40, 0.8);
+}
+@keyframes xt-fog-drift {
+  from {
+    transform: translateX(-6%) scale(1);
+  }
+  to {
+    transform: translateX(6%) scale(1.08);
+  }
+}
+
+/* sandbox grids */
+.xt-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  margin-top: 6px;
+}
+.xt-cell {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(95, 211, 255, 0.16);
+  color: #fff;
+  font-size: 0.7rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  position: relative;
+  cursor: pointer;
+}
+.xt-cell:disabled {
+  cursor: default;
+}
+.xt-cell:not(:disabled):hover {
+  background: var(--orange-light);
+}
+.xt-cell.ship {
+  background: var(--ship);
+}
+.xt-cell.miss {
+  background: var(--miss);
+}
+.xt-cell.hit {
+  background: var(--hit);
+}
+.xt-cell.sunk {
+  background: var(--sunk);
+}
+.xt-cell.fog::after {
+  content: '';
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 40%, rgba(230, 236, 240, 0.9), rgba(160, 175, 190, 0.55) 55%, transparent 72%);
+  animation: xt-fog-drift 4s ease-in-out infinite alternate;
+}
+.xt-cell.fog.revealed {
+  background: rgba(74, 163, 207, 0.5);
+}
+.xt-cell.fog.revealed::after {
+  opacity: 0.45;
+}
+.xt-cell.queued {
+  outline: 2px solid var(--orange);
+  outline-offset: -2px;
+}
+.xt-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.xt-log {
+  margin: 0;
+  padding-left: 1.4rem;
+  font-size: 0.82rem;
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+}
+.xt-log li[data-outcome='hit'] {
+  color: var(--orange-light);
+}
+.xt-log li[data-outcome='sunk'] {
+  color: #ff8a9a;
+}
+.xt-tabs {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 30;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+}
+.xt-sandbox .xt-topbar {
+  top: 14px;
+}
