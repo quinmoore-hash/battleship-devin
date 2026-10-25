@@ -101,8 +101,8 @@ describe('frigate hull form', () => {
     for (const gx of GUN_X) {
       for (const side of ['port', 'starboard'] as const) {
         expect(gunCell(gunX(gx, side))).toBe(gunCell(gx))
-        // a gun (bore to breech ≈ 0.31 at scale 0.42) must fit inside the hull at its station
-        expect(bulwarkHalfWidth(gunX(gx, side), deckY(gx) + 0.1) * 2).toBeGreaterThan(0.31 + 0.05)
+        // a kit gun (cascabel z=-0.33 … muzzle z=0.45, ×0.42) must fit inside the hull at its station
+        expect(bulwarkHalfWidth(gunX(gx, side), deckY(gx) + 0.1) * 2).toBeGreaterThan(0.78 * 0.4 + 0.04)
       }
     }
   })

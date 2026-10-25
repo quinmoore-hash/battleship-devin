@@ -1,7 +1,7 @@
 /**
- * Dev-only close-up review page for the frigate (not part of the app bundle):
- *   http://localhost:5173/src/ships/frigate/demo.html?livery=navy&damage=0,2&sink=0.4&sails=0.5&lod=0
- *     &cam=3,1.5,3&target=0,0.6,0&firing=1:starboard,0:port&both=1&quality=high&tod=0.6
+ * Close-up review page for the frigate (`?frigate-demo`, lazy-loaded like the other demo routes):
+ *   ?frigate-demo&livery=navy&damage=0,2&hit=1&sink=0.4&sails=0.5&lod=0
+ *     &cam=3,1.5,3&target=0,0.6,0&firing=1:starboard,0:port&both=1&quality=low&tod=0.6
  * Shows triangle / draw-call counts from `gl.info` so LOD budgets can be measured.
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber'

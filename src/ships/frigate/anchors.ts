@@ -3,7 +3,7 @@ import type { ShipAnchors } from '../types'
 import { BOWSPRIT, FRIGATE, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, sectionHalfWidth } from './form'
 
 /** Scale of the kit cannon and the resulting height of its bore above the deck. */
-export const CANNON_SCALE = 0.42
+export const CANNON_SCALE = 0.4
 export const GUN_AXIS_Y = 0.22 * CANNON_SCALE
 /** How far the muzzle pokes out past the bulwark planking. */
 export const MUZZLE_OUT = 0.05

@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
-import { basicHullSections, loftHull } from '../kit/hull'
+import { basicHullSections, loftHullParts } from '../kit/hull'
 import type { Lod } from '../types'
 import { FRIGATE, MASTS, bulwarkHalfWidth, deckY, halfBeamAtDeck } from './form'
 import { box, cyl, mergeGeometries } from './geometry'
@@ -100,11 +100,11 @@ export function buildFurniture(lod: Lod): HullParts {
     }
     for (const b of BOAT_SPOTS) {
       const sections = basicHullSections(b.length, b.length * 0.34, 0.07, 0.07)
-      const g = loftHull(sections, 5)
+      const boatLoft = { deck: false, keel: false as const, sheer: 0.01, rings: 4, segments: fine ? 12 : 8 }
+      const g = loftHullParts(sections, boatLoft).sides
       g.translate(b.x, beamY + 0.08, b.z)
       add('oak', g)
-      const inner = loftHull(basicHullSections(b.length * 0.92, b.length * 0.3, 0.05, 0.065), 4)
-      inner.scale(1, 1, 1)
+      const inner = loftHullParts(basicHullSections(b.length * 0.92, b.length * 0.3, 0.05, 0.065), { ...boatLoft, rings: 3 }).sides
       inner.translate(b.x, beamY + 0.082, b.z)
       add('black', inner)
       if (fine) {

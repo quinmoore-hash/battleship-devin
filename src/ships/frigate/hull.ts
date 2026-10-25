@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
-import { loftHull } from '../kit/hull'
+import { loftHullParts } from '../kit/hull'
 import type { Lod } from '../types'
 import { FRIGATE, GUN_PORT_W, GUN_X, MASTS, bulwarkHalfWidth, deckOutline, deckY, gunX, halfBeamAtDeck, hullSections, hullStations, keelY, railY, sectionHalfWidth } from './form'
 import { box, cyl, deckPlate, mergeGeometries, remapHullUvs, ridge, triangleCount, tube, wallStrip, wallStripPair } from './geometry'
@@ -41,13 +41,15 @@ export function buildHullParts(lod: Lod): HullParts {
   const detail = lod <= 1
 
   // ---- lofted hull: copper below the waterline, planks above
-  const stations = hullStations(lod === 2 ? 16 : 34)
+  // the kit lofter is a Catmull-Rom loft; we only want its planked sides (keel, wales, decks are authored below)
+  const loft = { deck: false, keel: false as const, sheer: 0 }
+  const stations = hullStations(lod === 2 ? 10 : 18)
   const lowerRings = lod === 2 ? 5 : 9
-  const lower = loftHull(hullSections(stations, keelY, () => copperTop, lowerRings), lowerRings)
+  const lower = loftHullParts(hullSections(stations, keelY, () => copperTop, lowerRings), { ...loft, rings: lowerRings, segments: lod === 2 ? 18 : 44 }).sides
   add('copper', remapHullUvs(lower, 1, 1, () => 0))
-  const upperStations = hullStations(lod === 2 ? 16 : 34, [qdBreakX - 0.004, qdBreakX + 0.004, fcBreakX - 0.004, fcBreakX + 0.004])
+  const upperStations = hullStations(lod === 2 ? 10 : 18, [qdBreakX - 0.004, qdBreakX + 0.004, fcBreakX - 0.004, fcBreakX + 0.004])
   const upperRings = lod === 2 ? 4 : 7
-  const upper = loftHull(hullSections(upperStations, () => copperTop, railY, upperRings), upperRings)
+  const upper = loftHullParts(hullSections(upperStations, () => copperTop, railY, upperRings), { ...loft, rings: upperRings, segments: lod === 2 ? 18 : 48 }).sides
   add('hull', remapHullUvs(upper, 1, 1, () => 0))
 
   // ---- waterline weed/barnacle band, wales, painted stripe, sheer moulding

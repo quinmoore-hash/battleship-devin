@@ -148,7 +148,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
               const sign = side === 'starboard' ? 1 : -1
               return (
                 <group key={`${x}${side}`}>
-                  <Cannon position={[x, deckY(x), sign * cannonZ(x, fire)]} rotationY={side === 'starboard' ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} scale={CANNON_SCALE} />
+                  <Cannon position={[x, deckY(x), sign * cannonZ(x, fire)]} rotationY={side === 'starboard' ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} scale={CANNON_SCALE} lod={lod} />
                   <PortLid x={x} side={sign} open={fire} mats={mats} />
                 </group>
               )

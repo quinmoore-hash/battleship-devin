@@ -17,13 +17,14 @@ describe('ship anchor transforms', () => {
   it('batteryMuzzles returns the chosen side bow-to-stern in world space', () => {
     const pose = { position: [0, 0.2, 5] as [number, number, number], rotationY: 0 }
     const port = batteryMuzzles(SHIPS.frigate.anchors, pose, 'port')
-    expect(port).toHaveLength(3)
-    expect(port.map((m) => m.cell)).toEqual([0, 1, 2])
+    // the frigate carries two guns per cell per side
+    expect(port).toHaveLength(6)
+    expect(port.map((m) => m.cell)).toEqual([0, 0, 1, 1, 2, 2])
     for (const m of port) {
       expect(m.position[2]).toBeLessThan(5)
       expect(m.direction[2]).toBeLessThan(0)
     }
-    expect(batteryMuzzles(SHIPS.frigate.anchors, pose, 'starboard', [1])).toHaveLength(1)
+    expect(batteryMuzzles(SHIPS.frigate.anchors, pose, 'starboard', [1])).toHaveLength(2)
   })
   it('impact points mirror z for starboard and facingSide agrees', () => {
     const pose = { position: [0, 0.2, 0] as [number, number, number], rotationY: 0 }
