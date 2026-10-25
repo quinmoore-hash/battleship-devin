@@ -191,7 +191,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
 
         {lod < 2 && (
           <>
-            <Wheel position={[-1.2, F.qdY, 0]} livery={livery} />
+            <Wheel position={[-1.2, F.qdY, 0]} livery={livery} radius={0.09} />
             {([1, -1] as const).map((side) => (
               <Anchor key={side} position={[1.2, F.fcY - 0.02, side * (bulwarkHalfWidth(1.2, F.fcY) + 0.12)]} livery={livery} scale={0.7} />
             ))}
@@ -202,7 +202,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
                 ) : p.kind === 'crate' ? (
                   <Crate key={i} position={p.at} livery={livery} size={0.16 * (p.scale ?? 1)} />
                 ) : (
-                  <RopeCoil key={i} position={p.at} livery={livery} />
+                  <RopeCoil key={i} position={p.at} livery={livery} radius={0.05} />
                 ),
               )}
           </>
