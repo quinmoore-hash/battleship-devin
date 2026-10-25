@@ -139,7 +139,7 @@ export function FxDemo() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0b2a3a' }}>
-      <Canvas camera={{ position: [4, 11, 17], fov: 45 }} shadows>
+      <Canvas camera={{ position: [4, 11, 17], fov: 45 }} shadows={{ type: THREE.PCFShadowMap }}>
         <color attach="background" args={['#0b2a3a']} />
         <fog attach="fog" args={['#0b2a3a', 30, 60]} />
         <ambientLight intensity={0.55} />
