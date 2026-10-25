@@ -10,37 +10,33 @@ const SinkingDemo = lazy(() => import('./vfx/sinking/SinkingDemo').then((m) => (
 const CannonDemo = lazy(() => import('./vfx/cannon/CannonDemo').then((m) => ({ default: m.CannonDemo })))
 const VfxDamageDemo = lazy(() => import('./vfx/VfxDamageDemo').then((m) => ({ default: m.VfxDamageDemo })))
 
-/** Review routes: `?scene-demo`, `?ship-demo`, `?audio-demo`, `?kit-demo`. `?no3d` disables WebGL (used by e2e). */
-function demoRoute(): 'scene' | 'ship' | 'audio' | 'kit' | null {
-/** Review routes: `?scene-demo`, `?ship-demo`, `?audio-demo`, `?vfx-sinking-demo`. `?no3d` disables WebGL (used by e2e). */
-function demoRoute(): 'scene' | 'ship' | 'audio' | 'vfx-sinking' | null {
-/** Review routes: `?scene-demo`, `?ship-demo`, `?audio-demo`, `?vfx-cannon-demo`. `?no3d` disables WebGL (used by e2e). */
-function demoRoute(): 'scene' | 'ship' | 'audio' | 'cannon' | null {
-/** Review routes: `?scene-demo`, `?ship-demo`, `?audio-demo`, `?vfx-damage-demo`. `?no3d` disables WebGL (used by e2e). */
-function demoRoute(): 'scene' | 'ship' | 'audio' | 'vfx-damage' | null {
+/**
+ * Review routes (one query flag each): `?scene-demo`, `?ship-demo`, `?audio-demo`, `?kit-demo`,
+ * `?vfx-sinking-demo`, `?vfx-cannon-demo`, `?vfx-damage-demo`. `?no3d` disables WebGL (used by e2e).
+ * Add new demos here as one entry; keep the list alphabetical-ish to avoid merge conflicts.
+ */
+const DEMOS: Record<string, React.LazyExoticComponent<() => React.JSX.Element>> = {
+  'scene-demo': SceneDemo,
+  'ship-demo': ShipDemo,
+  'audio-demo': AudioDemo,
+  'kit-demo': KitDemo,
+  'vfx-sinking-demo': SinkingDemo,
+  'vfx-cannon-demo': CannonDemo,
+  'vfx-damage-demo': VfxDamageDemo,
+}
+
+function demoRoute() {
   const q = new URLSearchParams(window.location.search)
-  if (q.has('scene-demo')) return 'scene'
-  if (q.has('ship-demo')) return 'ship'
-  if (q.has('audio-demo')) return 'audio'
-  if (q.has('kit-demo')) return 'kit'
-  if (q.has('vfx-sinking-demo')) return 'vfx-sinking'
-  if (q.has('vfx-cannon-demo')) return 'cannon'
-  if (q.has('vfx-damage-demo')) return 'vfx-damage'
+  for (const key of Object.keys(DEMOS)) if (q.has(key)) return DEMOS[key]
   return null
 }
 
 export default function App() {
-  const demo = demoRoute()
-  if (demo) {
+  const Demo = demoRoute()
+  if (Demo) {
     return (
       <Suspense fallback={null}>
-        {demo === 'scene' && <SceneDemo />}
-        {demo === 'ship' && <ShipDemo />}
-        {demo === 'audio' && <AudioDemo />}
-        {demo === 'kit' && <KitDemo />}
-        {demo === 'vfx-sinking' && <SinkingDemo />}
-        {demo === 'cannon' && <CannonDemo />}
-        {demo === 'vfx-damage' && <VfxDamageDemo />}
+        <Demo />
       </Suspense>
     )
   }
