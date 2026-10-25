@@ -10,7 +10,7 @@ import { FlotsamPieces } from './Debris'
 import { flotsamLayout, footprintCenters } from './debris'
 import { SINK_PHASES, sinkPose } from './pose'
 import { SinkingShip, SURFACE_Y } from './SinkingShip'
-import { DEFAULT_SLOW_MO, sinkProgressAt, sinkRateAt, sinkTimeline, type SinkTimeline } from './timeline'
+import { DEFAULT_SLOW_MO, sinkProgressAt, sinkRateAt, sinkTimeAt, sinkTimeline, type SinkTimeline } from './timeline'
 
 type Pattern = 'bow' | 'stern' | 'midships' | 'raked' | 'all'
 const PATTERNS: Pattern[] = ['bow', 'stern', 'midships', 'raked', 'all']
@@ -108,19 +108,34 @@ function DemoCamera({ orbit, target, drag }: { orbit: Orbit; target: THREE.Vecto
   return null
 }
 
-function Playhead({ playing, timeline, speed, onProgress, onEnd }: { playing: boolean; timeline: SinkTimeline; speed: number; onProgress: (p: number) => void; onEnd: () => void }) {
+function Playhead({
+  playing,
+  progress,
+  timeline,
+  speed,
+  onProgress,
+  onEnd,
+}: {
+  playing: boolean
+  progress: number
+  timeline: SinkTimeline
+  speed: number
+  onProgress: (p: number) => void
+  onEnd: () => void
+}) {
+  // elapsed is re-seeded from `progress` whenever playback (re)starts or the scrubber/reset moved it under us
   const elapsed = useRef<number | null>(null)
-  const progressRef = useRef(0)
+  const emitted = useRef(progress)
   useFrame((_, delta) => {
     if (!playing) {
       elapsed.current = null
       return
     }
-    if (elapsed.current === null) elapsed.current = 0
+    if (elapsed.current === null || progress !== emitted.current) elapsed.current = sinkTimeAt(progress, timeline)
     elapsed.current += Math.min(delta, 0.1) * speed
     const p = sinkProgressAt(elapsed.current, timeline)
-    if (p !== progressRef.current) {
-      progressRef.current = p
+    if (p !== emitted.current) {
+      emitted.current = p
       onProgress(p)
     }
     if (p >= 1) onEnd()
@@ -203,7 +218,7 @@ export function SinkingDemo() {
     <>
       <OceanScene view="placement" interactive={false} dressing={false}>
         <DemoCamera orbit={SHOTS[shotName]} target={target} drag={drag} />
-        <Playhead playing={playing} timeline={timeline} speed={speed} onProgress={setProgress} onEnd={() => setPlaying(false)} />
+        <Playhead playing={playing} progress={progress} timeline={timeline} speed={speed} onProgress={setProgress} onEnd={() => setPlaying(false)} />
         <FpsProbe onFps={setFps} />
         {!showFlotsam && (
           <SinkingShip ship={ship} livery={livery} damage={damage} progress={progress} seed={seed} lastHit={lastHit} timeScale={timeScale} effects={effects} />
