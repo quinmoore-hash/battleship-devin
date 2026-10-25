@@ -1,0 +1,233 @@
+import { createStore, useStore, type StoreApi } from 'zustand'
+import { duckMusic, playSfx } from '../audio'
+import type { PlacedShip, Player, ShipId } from '../engine'
+import { useGameStore, type CinematicsLevel } from '../store/gameStore'
+import type { CannonRef } from '../ships/types'
+import { sinkProgressAt } from '../vfx/sinking/timeline'
+import { planShot, type ShotPlan } from './battery'
+import { beatAt, buildSequence, createSequenceClock, timeScaleAt, type BeatName, type Sequence, type SequenceClock } from './sequence'
+import type { CinematicDirector, CinematicEvent } from './types'
+
+export interface Fleets {
+  human: readonly PlacedShip[]
+  enemy: readonly PlacedShip[]
+}
+
+export interface ActiveCinematic {
+  id: number
+  event: CinematicEvent
+  seq: Sequence
+  clock: SequenceClock
+  plan: ShotPlan | null
+  /** Ship being sunk (sink) or the fleet to fly over (victory). */
+  owner?: Player
+  shipId?: ShipId
+  fleets: Fleets
+  beat: BeatName | null
+}
+
+export interface DirectorState {
+  active: ActiveCinematic | null
+  busy: boolean
+  /** Guns recoiling right now — pass straight to `<Fleet firing>` of the firing fleet. */
+  firing: Partial<Record<ShipId, CannonRef[]>>
+  /** Sink progress of the ship currently going down — pass to `<Fleet sinkProgress>` of its fleet. */
+  sinkProgress: Partial<Record<ShipId, number>>
+  /** True once the current shot's ball has (or would have) landed; UI reveals markers/damage then. */
+  impacted: boolean
+  /** Playback rate for VFX (0.4 inside the sink's slow-mo). */
+  timeScale: number
+  /** Impulse in metres for the camera shake; CinematicCamera decays it. */
+  shake: number
+  /** Letterbox bars visible. */
+  letterbox: boolean
+  /** Monotonic counter of finished sequences (for UI and tests). */
+  completed: number
+}
+
+export interface DirectorOptions {
+  /** Where the fleets live; defaults to the game store's boards. */
+  fleets?: () => Fleets
+  /** Reduced-motion flag; defaults to the game store's setting. */
+  reducedMotion?: () => boolean
+  /** Drive the clock from requestAnimationFrame (default). Tests set false and call `tick()`. */
+  autoTick?: boolean
+  /** Fire SFX / duck music on beats (default true when a DOM exists). */
+  audio?: boolean
+}
+
+export interface Director extends CinematicDirector {
+  store: StoreApi<DirectorState>
+  /** Advance the clock by `dt` seconds (called by the ticker; tests call it directly). */
+  tick(dt: number): void
+  /** The sequence currently playing, if any. */
+  readonly active: ActiveCinematic | null
+  /** Point the director at other fleets than the game store's (demos, tests); `null` restores the default. */
+  setFleets(source: (() => Fleets) | null): void
+}
+
+const gameFleets = (): Fleets => {
+  const s = useGameStore.getState()
+  return { human: s.playerBoard.ships, enemy: s.enemyBoard.ships }
+}
+
+const SHAKE: Record<string, number> = { miss: 0.05, hit: 0.16, sunk: 0.22 }
+
+export function createDirector(opts: DirectorOptions = {}): Director {
+  const defaultFleets = opts.fleets ?? gameFleets
+  let fleetsOf = defaultFleets
+  const reducedMotionOf = opts.reducedMotion ?? (() => useGameStore.getState().settings.reducedMotion)
+  const autoTick = opts.autoTick ?? true
+  const audio = opts.audio ?? typeof document !== 'undefined'
+  const store = createStore<DirectorState>(() => ({
+    active: null,
+    busy: false,
+    firing: {},
+    sinkProgress: {},
+    impacted: false,
+    timeScale: 1,
+    shake: 0,
+    letterbox: false,
+    completed: 0,
+  }))
+  let nextId = 1
+  let pending: { resolve: () => void } | null = null
+  let raf = 0
+  let last = 0
+
+  const stopTicker = () => {
+    if (raf && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf)
+    raf = 0
+  }
+  const startTicker = () => {
+    if (!autoTick || raf || typeof requestAnimationFrame === 'undefined') return
+    last = performance.now()
+    const loop = (now: number) => {
+      const dt = (now - last) / 1000
+      last = now
+      director.tick(dt)
+      raf = store.getState().active ? requestAnimationFrame(loop) : 0
+    }
+    raf = requestAnimationFrame(loop)
+  }
+
+  const finish = () => {
+    const { active } = store.getState()
+    if (!active) return
+    const settled: Partial<DirectorState> = { active: null, busy: false, firing: {}, impacted: false, timeScale: 1, letterbox: false, completed: store.getState().completed + 1 }
+    if (active.event.type === 'sink') settled.sinkProgress = { ...store.getState().sinkProgress, [active.event.shipId]: 1 }
+    store.setState(settled)
+    stopTicker()
+    const p = pending
+    pending = null
+    p?.resolve()
+  }
+
+  const enterBeat = (a: ActiveCinematic, beat: BeatName | null) => {
+    a.beat = beat
+    const patch: Partial<DirectorState> = {}
+    if (a.event.type === 'shot' && a.plan) {
+      const { plan } = a
+      if (beat === 'fire') {
+        if (plan.battery) patch.firing = { [plan.battery.shipId]: plan.battery.cells.map((cell) => ({ cell, side: plan.battery!.side })) }
+        if (audio) playSfx('fire')
+      }
+      if (beat === 'impact' || beat === 'return') {
+        if (!store.getState().impacted) {
+          patch.impacted = true
+          // a killing blow reveals the ship afloat; its `sink` sequence then takes the progress 0 → 1
+          if (plan.result.outcome === 'sunk' && plan.result.shipId) patch.sinkProgress = { ...store.getState().sinkProgress, [plan.result.shipId]: 0 }
+          if (!a.seq.reducedMotion) patch.shake = SHAKE[plan.result.outcome] ?? 0.1
+          if (audio) playSfx(plan.result.outcome === 'miss' ? 'miss' : plan.result.outcome === 'sunk' ? 'sunk' : 'hit')
+        }
+        if (beat === 'return') patch.firing = {}
+      }
+    }
+    if (a.event.type === 'sink' && beat === 'sink' && audio) {
+      playSfx('sunk')
+      duckMusic(a.seq.duration * 1000)
+    }
+    if (a.event.type === 'victory' && beat === 'flyover' && audio) playSfx(a.event.winner === 'human' ? 'victory' : 'defeat')
+    if (Object.keys(patch).length) store.setState(patch)
+  }
+
+  const director: Director = {
+    store,
+    get busy() {
+      return store.getState().busy
+    },
+    get active() {
+      return store.getState().active
+    },
+    setFleets(source) {
+      fleetsOf = source ?? defaultFleets
+    },
+    play(event, level) {
+      // one sequence at a time: a new play() skips whatever is still running
+      if (store.getState().active) {
+        director.skip()
+        finish()
+      }
+      const fleets = fleetsOf()
+      const seq = buildSequence(event, level, reducedMotionOf())
+      const plan = event.type === 'shot' ? planShot(event.by, event.result, event.by === 'human' ? fleets.human : fleets.enemy, event.by === 'human' ? fleets.enemy : fleets.human, event.battery) : null
+      const active: ActiveCinematic = {
+        id: nextId++,
+        event,
+        seq,
+        clock: createSequenceClock(seq),
+        plan,
+        fleets,
+        beat: null,
+        owner: event.type === 'sink' ? event.owner : event.type === 'victory' ? event.winner : undefined,
+        shipId: event.type === 'sink' ? event.shipId : undefined,
+      }
+      if (seq.duration === 0) {
+        // `off`: apply the end state synchronously and resolve
+        store.setState({ active, busy: true })
+        if (event.type === 'shot') enterBeat(active, 'return')
+        store.setState({ active: null, busy: false, firing: {}, impacted: false, shake: 0, letterbox: false, completed: store.getState().completed + 1, ...(event.type === 'sink' ? { sinkProgress: { ...store.getState().sinkProgress, [event.shipId]: 1 } } : {}) })
+        return Promise.resolve()
+      }
+      store.setState({ active, busy: true, impacted: false, firing: {}, letterbox: true, timeScale: 1, sinkProgress: event.type === 'sink' ? { ...store.getState().sinkProgress, [event.shipId]: 0 } : store.getState().sinkProgress })
+      enterBeat(active, beatAt(seq, 0).beat?.name ?? null)
+      startTicker()
+      return new Promise<void>((resolve) => {
+        pending = { resolve }
+      })
+    },
+    skip() {
+      const { active } = store.getState()
+      if (!active) return
+      active.clock.skip()
+      if (!autoTick || typeof requestAnimationFrame === 'undefined') director.tick(0)
+    },
+    tick(dt) {
+      const { active } = store.getState()
+      if (!active) return
+      const { clock, seq } = active
+      const finished = clock.advance(dt)
+      const { beat } = beatAt(seq, clock.t)
+      const name = beat?.name ?? null
+      if (name !== active.beat) enterBeat(active, name)
+      if (seq.sink && active.shipId) {
+        const p = sinkProgressAt(clock.t, seq.sink)
+        const ts = timeScaleAt(seq, clock.t)
+        const s = store.getState()
+        if (Math.abs((s.sinkProgress[active.shipId] ?? -1) - p) > 0.002 || s.timeScale !== ts) store.setState({ sinkProgress: { ...s.sinkProgress, [active.shipId]: p }, timeScale: ts })
+      }
+      if (finished) finish()
+    },
+  }
+  return director
+}
+
+/** The app-wide director. `CinematicLayer`, `CinematicCamera` and `useBattleCinematics` all use it by default. */
+export const director: Director = createDirector()
+
+/** React hook over the shared director's state: `useDirector((s) => s.busy)`. */
+export function useDirector<T>(selector: (s: DirectorState) => T): T {
+  return useStore(director.store, selector)
+}
+
+export type { CinematicsLevel }
