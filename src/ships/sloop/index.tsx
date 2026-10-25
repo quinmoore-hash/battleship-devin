@@ -38,7 +38,6 @@ const BOWSPRIT_TIP: Vec3 = [SLOOP_DIMS.bowspritTip, 0.53, 0]
 const STEMHEAD: Vec3 = [1.0, 0.44, 0]
 
 const world = (local: Vec3): Vec3 => [local[0] + MAST_BASE[0], local[1] + MAST_BASE[1], local[2] + MAST_BASE[2]]
-const local = (w: Vec3): Vec3 => [w[0] - MAST_BASE[0], w[1] - MAST_BASE[1], w[2] - MAST_BASE[2]]
 
 /** Spar end points (mast-local) for the current sail setting. */
 function spars(set: number) {
@@ -113,12 +112,12 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
     const top = new THREE.CylinderGeometry(0.012, 0.02, MH - 1.1, lod >= 2 ? 6 : 10)
     top.translate(0.035, 1.1 + (MH - 1.1) / 2, 0)
     const parts: THREE.BufferGeometry[] = [lower, top]
+    parts.push(placed(new THREE.CylinderGeometry(0.004, 0.004, 0.32, 5), [0.035, MH + 0.16, 0]))
     if (lod < 2) {
       parts.push(placed(new THREE.BoxGeometry(0.11, 0.035, 0.07), [0.015, 1.3, 0]))
       parts.push(placed(new THREE.BoxGeometry(0.03, 0.09, 0.09), [-0.03, 1.21, 0]))
       parts.push(placed(new THREE.BoxGeometry(0.1, 0.012, 0.11), [0.0, 1.235, 0]))
       parts.push(placed(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 10), [0.035, MH + 0.006, 0]))
-      parts.push(placed(new THREE.CylinderGeometry(0.004, 0.004, 0.32, 5), [0.035, MH + 0.16, 0]))
       // boom & gaff jaws
       parts.push(placed(new THREE.BoxGeometry(0.1, 0.03, 0.03), [-0.02, BOOM_Y, 0.03]))
       parts.push(placed(new THREE.BoxGeometry(0.1, 0.03, 0.03), [-0.02, BOOM_Y, -0.03]))
@@ -197,6 +196,10 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
   // sheets for the headsails (ship frame, hidden with the mast)
   const jibClew: Vec3 = [0.32, 0.36, 0.1]
   const stayClew: Vec3 = [0.42, 0.27, 0.1]
+  const jibTack: Vec3 = [BOWSPRIT_TIP[0] - 0.03, BOWSPRIT_TIP[1] + 0.02, 0]
+  const jibHead = world([0.04, MH - 0.1, 0])
+  const stayTack: Vec3 = [STEMHEAD[0] - 0.01, STEMHEAD[1] + 0.01, 0]
+  const stayHead = world([0.02, 1.2, 0])
   const sheets = useMemo(() => {
     if (lod >= 2) return null
     return ropesGeometry([
@@ -249,32 +252,34 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
               castShadow={false}
             />
           )}
-          {/* jib on the bowsprit, staysail on the forestay */}
-          <QuadSail
-            m={m}
-            corners={[local([BOWSPRIT_TIP[0] - 0.03, BOWSPRIT_TIP[1] + 0.02, 0]), jibClew, [0.04, MH - 0.1, 0.0], [0.04, MH - 0.1, 0.0]]}
-            set={set}
-            torn={torn}
-            scorch={scorch}
-            phase={phase + 2.1}
-            belly={0.12}
-            segments={lod >= 2 ? [6, 5] : [9, 8]}
-          />
-          {lod < 2 && (
-            <QuadSail
-              m={m}
-              corners={[local([STEMHEAD[0] - 0.01, STEMHEAD[1] + 0.01, 0]), stayClew, [0.02, 1.2, 0.0], [0.02, 1.2, 0.0]]}
-              set={set}
-              torn={torn}
-              scorch={scorch}
-              phase={phase + 0.7}
-              belly={0.1}
-              segments={[8, 7]}
-            />
-          )}
           <Ensign position={[0.035, MH + 0.31, 0]} m={m} width={0.4} height={0.22} phase={phase} drop={flagDrop} />
         </group>
       </group>
+      {/* headsails hang on their stays in the ship frame: when the mast goes the stays part and they slide down onto the bowsprit */}
+      {snapped < 0.85 && (
+        <QuadSail
+          m={m}
+          corners={[jibTack, world(jibClew), along(jibHead, jibTack, snapped), along(jibHead, jibTack, snapped)]}
+          set={set * (1 - snapped * 0.5)}
+          torn={Math.max(torn, snapped)}
+          scorch={scorch}
+          phase={phase + 2.1}
+          belly={0.12}
+          segments={lod >= 2 ? [6, 5] : [9, 8]}
+        />
+      )}
+      {lod < 2 && snapped < 0.85 && (
+        <QuadSail
+          m={m}
+          corners={[stayTack, world(stayClew), along(stayHead, stayTack, snapped), along(stayHead, stayTack, snapped)]}
+          set={set * (1 - snapped * 0.5)}
+          torn={Math.max(torn, snapped)}
+          scorch={scorch}
+          phase={phase + 0.7}
+          belly={0.1}
+          segments={[8, 7]}
+        />
+      )}
       {standing && <mesh geometry={standingGeom} material={m.kit.rope} />}
       {standing && sheets && <mesh geometry={sheets} material={m.kit.rope} />}
     </group>
