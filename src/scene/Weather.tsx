@@ -46,9 +46,11 @@ export function useLightning(storm: number, onLightning?: (strike: LightningStri
       state.dir.set(Math.cos(a) * 0.8, 0.45 + rnd() * 0.3, Math.sin(a) * 0.8).normalize()
       next.current = t + 3 + rnd() * 7
       cb.current?.({ time: t, direction: state.dir.clone(), intensity })
+      return // render the full flash this frame
     }
-    // sharp attack, exponential decay with a small secondary flicker
-    state.flash = Math.max(0, state.flash - dt * 3.2) * (1 - 0.3 * Math.max(0, Math.sin(t * 60)) * (state.flash > 0.3 ? 1 : 0))
+    // sharp attack, exponential decay with a small secondary flicker; dt is clamped so the
+    // flash still spans a few frames when the frame rate is low
+    state.flash = Math.max(0, state.flash - Math.min(dt, 1 / 30) * 3.2) * (1 - 0.3 * Math.max(0, Math.sin(t * 60)) * (state.flash > 0.3 ? 1 : 0))
   })
   return state
 }
