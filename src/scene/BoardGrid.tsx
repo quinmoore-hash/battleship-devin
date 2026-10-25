@@ -122,7 +122,7 @@ export function BoardGrid({
   useFrame((state) => {
     const t = state.clock.elapsedTime
     const h = extent / 2
-    const yAt = (lx: number, lz: number) => sampleWaveHeight(center[0] + lx, center[2] + lz, t) - center[1] + 0.08 + getSeaState() * 0.45
+    const yAt = (lx: number, lz: number) => sampleWaveHeight(center[0] + lx, center[2] + lz, t) - center[1] + 0.08 + getSeaState() * 0.25
     const floats = floatsRef.current
     const ropes = ropesRef.current
     if (floats) {

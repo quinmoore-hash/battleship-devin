@@ -402,7 +402,10 @@ export function Fort({ night }: { night: number }) {
   const flag = useMemo(() => jollyRogerTexture(), [])
   return (
     <group position={[x, y, z]} rotation={[0, rotationY, 0]}>
-      {/* raised stone platform & curtain walls */}
+      {/* sea-wall foundation sunk into the headland, then the platform & curtain walls */}
+      <mesh material={stone} position={[0, -3.4, 0]} receiveShadow castShadow>
+        <boxGeometry args={[17, 7, 14]} />
+      </mesh>
       <mesh material={stone} position={[0, 0.4, 0]} receiveShadow castShadow>
         <boxGeometry args={[16, 1.6, 13]} />
       </mesh>

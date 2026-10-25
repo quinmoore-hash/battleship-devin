@@ -69,15 +69,32 @@ export function waveSpeed(w: GerstnerWave): number {
 
 /** Vertical surface displacement at world (x, z) at scene time `t` (seconds). */
 export function sampleWaveHeight(x: number, z: number, t: number, count: number = WAVE_COUNT.high): number {
-  let y = 0
+  const n = Math.min(count, WAVES.length)
   const tt = t * WAVE_TIME_SCALE
-  for (let i = 0; i < Math.min(count, WAVES.length); i++) {
-    const w = WAVES[i]
-    const k = (2 * Math.PI) / w.wavelength
-    const f = k * (w.dir[0] * x + w.dir[1] * z - waveSpeed(w) * tt)
-    y += w.amplitude * Math.sin(f)
+  const cf = calmFactor(x, z) * amplitudeScale()
+  // Gerstner vertices slide horizontally, so the surface above (x, z) comes from a nearby
+  // source point; iterate the inverse a few times (mirrors the vertex shader exactly).
+  let sx = x
+  let sz = z
+  let y = 0
+  for (let iter = 0; iter < 3; iter++) {
+    let dx = 0
+    let dz = 0
+    y = 0
+    for (let i = 0; i < n; i++) {
+      const w = WAVES[i]
+      const k = (2 * Math.PI) / w.wavelength
+      const q = w.steepness / (k * w.amplitude * n)
+      const f = k * (w.dir[0] * sx + w.dir[1] * sz - waveSpeed(w) * tt)
+      const c = Math.cos(f) * cf
+      dx += q * w.amplitude * w.dir[0] * c
+      dz += q * w.amplitude * w.dir[1] * c
+      y += w.amplitude * Math.sin(f) * cf
+    }
+    sx = x - dx
+    sz = z - dz
   }
-  return y * calmFactor(x, z) * amplitudeScale()
+  return y
 }
 
 /** Surface normal (approximate, ignores horizontal Gerstner drift) for tilting floating props. */
