@@ -1,203 +1,175 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, type DragEvent } from 'react'
 import { playSfx } from '../audio'
-import {
-  canPlace,
-  coordKey,
-  FLEET,
-  FLEET_BY_ID,
-  isFleetPlaced,
-  shipCells,
-  type Coord,
-  type Orientation,
-  type ShipId,
-} from '../engine'
+import { FLEET, FLEET_BY_ID, isFleetPlaced, type Coord, type ShipId } from '../engine'
 import { useGameStore } from '../store/gameStore'
 import { Grid, type GridCellInfo } from './Grid'
-import { clampOrigin } from './placementUtils'
-import { withSfx } from './sfx'
+import { Hint, WaxSeal } from './Ornaments'
+import { footprintAt } from './placementUtils'
+import { useUiStore } from './uiStore'
 
-
+/**
+ * Placement HUD. The ship being carried, its orientation and the hovered cell live in `uiStore`
+ * so the HTML chart and the 3D ghost always agree: hover a cell on either and both preview.
+ */
 export function PlacementScreen() {
   const playerBoard = useGameStore((s) => s.playerBoard)
   const placePlayerShip = useGameStore((s) => s.placePlayerShip)
   const removePlayerShip = useGameStore((s) => s.removePlayerShip)
   const autoPlace = useGameStore((s) => s.autoPlacePlayerFleet)
-  const confirm = useGameStore((s) => s.confirmPlacement)
+  const confirmPlacement = useGameStore((s) => s.confirmPlacement)
+  const reset = useGameStore((s) => s.reset)
+  const difficulty = useGameStore((s) => s.difficulty)
+
+  const carrying = useUiStore((s) => s.carrying)
+  const orientation = useUiStore((s) => s.orientation)
+  const hover = useUiStore((s) => s.hover)
+  const setCarrying = useUiStore((s) => s.setCarrying)
+  const setHover = useUiStore((s) => s.setHover)
+  const rotate = useUiStore((s) => s.rotate)
+  const hintsSeen = useUiStore((s) => s.hintsSeen)
+  const dismissHint = useUiStore((s) => s.dismissHint)
 
   const placedIds = useMemo(() => new Set(playerBoard.ships.map((s) => s.spec.id)), [playerBoard])
-  const firstUnplaced = FLEET.find((s) => !placedIds.has(s.id))?.id ?? null
+  const allPlaced = isFleetPlaced(playerBoard)
 
-  const [picked, setSelected] = useState<ShipId | null>(null)
-  const selected = picked && !placedIds.has(picked) ? picked : firstUnplaced
-  const [orientation, setOrientation] = useState<Orientation>('horizontal')
-  const [hover, setHover] = useState<Coord | null>(null)
-
-  const rotate = useCallback(() => {
-    playSfx('ui-click')
-    setOrientation((o) => (o === 'horizontal' ? 'vertical' : 'horizontal'))
-  }, [])
+  // Always carry something while ships remain: the first unplaced one.
+  useEffect(() => {
+    if (carrying && !placedIds.has(carrying)) return
+    const next = FLEET.find((s) => !placedIds.has(s.id))
+    setCarrying(next?.id ?? null)
+  }, [carrying, placedIds, setCarrying])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'r' && !(e.target instanceof HTMLInputElement)) rotate()
+      if (e.key === 'r' || e.key === 'R') rotate()
+    }
+    const onContext = (e: MouseEvent) => {
+      if (useUiStore.getState().carrying && (e.target as HTMLElement | null)?.closest('canvas, .grid')) {
+        e.preventDefault()
+        rotate()
+      }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('contextmenu', onContext)
+    return () => (window.removeEventListener('keydown', onKey), window.removeEventListener('contextmenu', onContext))
   }, [rotate])
 
-  const spec = selected ? FLEET_BY_ID[selected] : undefined
-  const preview = useMemo(() => {
-    if (!spec || !hover) return null
-    const origin = clampOrigin(hover, spec.length, orientation)
-    const valid = canPlace(playerBoard, spec, origin, orientation)
-    return { origin, valid, cells: new Set(shipCells(spec, origin, orientation).map(coordKey)) }
-  }, [spec, hover, orientation, playerBoard])
+  const spec = carrying ? FLEET_BY_ID[carrying] : null
+  const hoverCell = hover?.side === 'player' ? hover.coord : null
+  const footprint = spec && hoverCell ? footprintAt(playerBoard, spec, hoverCell, orientation) : null
+  const previewKeys = useMemo(() => new Set(footprint?.cells.map((c) => `${c.x},${c.y}`)), [footprint])
 
-  const shipAtCell = useMemo(() => {
-    const m = new Map<string, ShipId>()
-    for (const s of playerBoard.ships) for (const c of s.cells) m.set(coordKey(c), s.spec.id)
-    return m
-  }, [playerBoard])
-
-  const pickUp = (id: ShipId) => {
-    const ship = playerBoard.ships.find((s) => s.spec.id === id)
-    if (ship) setOrientation(ship.orientation)
-    removePlayerShip(id)
-    setSelected(id)
-    playSfx('ui-click')
-  }
-
-  const dropAt = (c: Coord) => {
-    if (!spec) return
-    const origin = clampOrigin(c, spec.length, orientation)
-    if (placePlayerShip(spec, origin, orientation)) {
-      playSfx('place')
-      setHover(null)
-    }
-  }
+  const dropAt = useCallback(
+    (c: Coord, id: ShipId | null = useUiStore.getState().carrying) => {
+      const s = id ? FLEET_BY_ID[id] : null
+      if (!s) return
+      const f = footprintAt(useGameStore.getState().playerBoard, s, c, useUiStore.getState().orientation)
+      if (f.valid && placePlayerShip(s, f.origin, useUiStore.getState().orientation)) {
+        playSfx('place')
+        setHover(null)
+      } else playSfx('miss')
+    },
+    [placePlayerShip, setHover],
+  )
 
   const onCell = (c: Coord) => {
-    const existing = shipAtCell.get(coordKey(c))
-    if (existing) return pickUp(existing)
+    const occupied = playerBoard.ships.find((s) => s.cells.some((k) => k.x === c.x && k.y === c.y))
+    if (occupied) {
+      removePlayerShip(occupied.spec.id)
+      setCarrying(occupied.spec.id, occupied.orientation)
+      playSfx('ui-click')
+      return
+    }
     dropAt(c)
   }
 
-  const cell = (c: Coord): GridCellInfo => {
-    const key = coordKey(c)
-    const id = shipAtCell.get(key)
+  const cellInfo = (c: Coord): GridCellInfo => {
+    const key = `${c.x},${c.y}`
+    const ship = playerBoard.ships.find((s) => s.cells.some((k) => k.x === c.x && k.y === c.y))
     return {
-      state: id ? 'ship' : 'unknown',
-      preview: preview?.cells.has(key) ? (preview.valid ? 'valid' : 'invalid') : undefined,
-      title: id ? `${FLEET_BY_ID[id].name} — click to pick up` : undefined,
+      state: ship ? 'ship' : 'unknown',
+      preview: previewKeys.has(key) ? (footprint!.valid ? 'valid' : 'invalid') : undefined,
+      title: ship ? `${ship.spec.name} — click to pick up` : undefined,
     }
   }
 
-  const ready = isFleetPlaced(playerBoard)
+  const onDragStart = (e: DragEvent, id: ShipId) => {
+    e.dataTransfer.setData('text/plain', id)
+    e.dataTransfer.effectAllowed = 'move'
+    setCarrying(id)
+  }
 
   return (
-    <section className="placement" data-testid="placement">
-      <header className="screen-head">
-        <div>
-          <h2>Place your fleet</h2>
-          <p className="muted">
-            {spec
-              ? `Placing ${spec.name} (${spec.length}) · ${orientation} · press R to rotate`
-              : ready
-                ? 'All ships placed. Ready when you are.'
-                : 'Pick a ship from the tray.'}
-          </p>
+    <div className="placement hud" data-testid="placement">
+      <aside className="panel parchment tray-panel ink-in">
+        <h2 className="panel-title">
+          Muster the fleet <WaxSeal tone="teal" />
+        </h2>
+        <p className="muted small">Pick a ship, hover your waters and click to anchor it. Drag ships on the water to move them.</p>
+        <ul className="tray" aria-label="Ships to place">
+          {FLEET.map((s) => {
+            const placed = placedIds.has(s.id)
+            const active = carrying === s.id
+            return (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  className={`tray-ship ${placed ? 'is-placed' : ''} ${active ? 'is-active' : ''}`}
+                  data-testid={`ship-tray-${s.id}`}
+                  data-placed={placed}
+                  aria-pressed={active}
+                  draggable={!placed}
+                  onDragStart={(e) => onDragStart(e, s.id)}
+                  onClick={() => {
+                    if (placed) removePlayerShip(s.id)
+                    setCarrying(s.id)
+                    playSfx('ui-click')
+                  }}
+                >
+                  <span className="tray-name">{s.name}</span>
+                  <span className="silhouette" aria-hidden>
+                    {Array.from({ length: s.length }, (_, i) => (
+                      <i key={i} />
+                    ))}
+                  </span>
+                  <span className="tray-meta">{placed ? 'anchored' : `${s.length} guns`}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        <div className="tray-actions">
+          <button type="button" className="btn btn-rope" data-testid="rotate" onClick={() => (playSfx('ui-click'), rotate())} aria-label={`Rotate (currently ${orientation})`}>
+            Rotate <kbd>R</kbd> <span className="muted small">{orientation === 'horizontal' ? '↔' : '↕'}</span>
+          </button>
+          <button type="button" className="btn btn-rope" data-testid="auto-place" onClick={() => (playSfx('place'), autoPlace())}>
+            Auto-place
+          </button>
+          <button type="button" className="btn btn-ghost" data-testid="clear-placement" disabled={playerBoard.ships.length === 0} onClick={() => (playSfx('ui-click'), FLEET.forEach((s) => removePlayerShip(s.id)))}>
+            Clear
+          </button>
         </div>
-        <span className="pill" data-testid="placed-count">
-          {playerBoard.ships.length}/{FLEET.length} placed
-        </span>
-      </header>
-
-      <div className="placement-body">
-        <aside className="panel ship-tray" data-testid="ship-tray" aria-label="Ship tray">
-          <h3>Your fleet</h3>
-          <ul>
-            {FLEET.map((s) => {
-              const placed = placedIds.has(s.id)
-              const isSel = selected === s.id
-              return (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    className={`tray-ship${placed ? ' placed' : ''}${isSel ? ' selected' : ''}`}
-                    data-testid={`ship-tray-${s.id}`}
-                    data-placed={placed}
-                    aria-pressed={isSel}
-                    draggable={!placed}
-                    onDragStart={(e) => {
-                      setSelected(s.id)
-                      e.dataTransfer.setData('text/plain', s.id)
-                      e.dataTransfer.effectAllowed = 'move'
-                    }}
-                    onClick={() => (placed ? pickUp(s.id) : (playSfx('ui-click'), setSelected(s.id)))}
-                  >
-                    <span className="silhouette" aria-hidden>
-                      {Array.from({ length: s.length }, (_, i) => (
-                        <i key={i} />
-                      ))}
-                    </span>
-                    <span className="meta">
-                      <strong>{s.name}</strong>
-                      <small>{s.description}</small>
-                    </span>
-                    <span className="state">{placed ? 'Placed' : isSel ? 'Selected' : `${s.length} cells`}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="tray-actions">
-            <button type="button" className="btn ghost" data-testid="rotate" onClick={rotate}>
-              Rotate <kbd>R</kbd>
-            </button>
-            <button type="button" className="btn ghost" data-testid="auto-place" onClick={withSfx(autoPlace, 'place')}>
-              Auto-place
-            </button>
-            <button
-              type="button"
-              className="btn ghost"
-              data-testid="clear-placement"
-              disabled={playerBoard.ships.length === 0}
-              onClick={withSfx(() => playerBoard.ships.forEach((s) => removePlayerShip(s.spec.id)))}
-            >
-              Clear
-            </button>
-          </div>
-        </aside>
-
-        <div className="panel board-panel">
-          <Grid
-            testId="player-grid"
-            label="Your waters"
-            cell={cell}
-            onCell={onCell}
-            onHover={setHover}
-            onDrop={dropAt}
-            lockResolved={false}
-          />
-          <div className="legend" aria-hidden>
-            <span><i className="sw sw-valid" /> valid</span>
-            <span><i className="sw sw-invalid" /> blocked</span>
-            <span><i className="sw sw-ship" /> placed (click to pick up)</span>
-          </div>
+        <div className="tray-foot">
+          <span className="placed-count" data-testid="placed-count">
+            {playerBoard.ships.length}/{FLEET.length} placed
+          </span>
+          <button type="button" className="btn btn-crimson btn-big" data-testid="confirm-placement" disabled={!allPlaced} onClick={() => (playSfx('ui-click'), confirmPlacement())}>
+            Start battle
+          </button>
         </div>
-      </div>
-
-      <footer className="screen-foot">
-        <button
-          type="button"
-          className="btn primary big"
-          data-testid="confirm-placement"
-          disabled={!ready}
-          onClick={withSfx(confirm)}
-        >
-          Start battle
+        <button type="button" className="link-btn" data-testid="back-to-menu" onClick={() => (playSfx('ui-click'), reset())}>
+          ← Back to port
         </button>
-      </footer>
-    </section>
+      </aside>
+
+      <section className="panel parchment chart-panel ink-in placement-chart" aria-label="Your waters">
+        <h2 className="panel-title small-title">Your waters · {difficulty}</h2>
+        <Grid testId="player-grid" label="Your waters — place your fleet" cell={cellInfo} onCell={onCell} onHover={(c) => setHover(c ? { side: 'player', coord: c } : null)} onDrop={(c) => dropAt(c)} />
+      </section>
+
+      <Hint id="placement" seen={hintsSeen.includes('placement')} onDismiss={dismissHint}>
+        Drag a ship across your waters, press <kbd>R</kbd> or right-click to rotate, click a ship to lift it again.
+      </Hint>
+    </div>
   )
 }

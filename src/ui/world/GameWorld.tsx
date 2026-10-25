@@ -1,0 +1,227 @@
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
+import { FLEET_BY_ID, hasBeenShot, isSunk, type Coord, type PlacedShip, type ShotResult } from '../../engine'
+import { BoardGrid } from '../../scene/BoardGrid'
+import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
+import { Fleet, Ship } from '../../ships'
+import { useGameStore } from '../../store/gameStore'
+import { DamageLayer } from '../../vfx/damage'
+import { ShotMarkers } from '../../vfx/markers'
+import { useBattleController } from '../battleController'
+import { footprintAt } from '../placementUtils'
+import { useUiStore } from '../uiStore'
+
+const PLAYER = BOARD_LAYOUT.player
+const ENEMY = BOARD_LAYOUT.enemy
+const PLAYER_ROPE = '#d9b25f'
+const ENEMY_ROPE = '#9fd3d0'
+const VALID = '#4cc98a'
+const INVALID = '#e2473b'
+const LIFT = 0.45
+
+/**
+ * Everything the game adds to the shared ocean: both board grids, the fleets, shot markers and
+ * damage, plus the placement ghost. Mounted as a child of `<OceanScene>` so it shares lights,
+ * water and camera. All pointer logic goes through the `uiStore` so the HTML HUD stays in sync.
+ */
+export function GameWorld() {
+  const phase = useGameStore((s) => s.phase)
+  const quality = useUiStore((s) => s.quality)
+  const shipQuality = quality === 'low' ? 'low' : 'high'
+  return (
+    <group>
+      <ReadyProbe />
+      {phase === 'placement' && <PlacementWorld quality={shipQuality} />}
+      {(phase === 'battle' || phase === 'gameover') && <BattleWorld quality={shipQuality} over={phase === 'gameover'} />}
+    </group>
+  )
+}
+
+/** Flags the first rendered frame so the loading screen can lift. */
+function ReadyProbe() {
+  const setWorldReady = useUiStore((s) => s.setWorldReady)
+  const done = useRef(false)
+  useFrame(() => {
+    if (!done.current) {
+      done.current = true
+      setWorldReady(true)
+    }
+  })
+  return null
+}
+
+function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
+  const playerBoard = useGameStore((s) => s.playerBoard)
+  const removePlayerShip = useGameStore((s) => s.removePlayerShip)
+  const placePlayerShip = useGameStore((s) => s.placePlayerShip)
+  const hover = useUiStore((s) => s.hover)
+  const carrying = useUiStore((s) => s.carrying)
+  const orientation = useUiStore((s) => s.orientation)
+  const dragging = useUiStore((s) => s.dragging)
+  const setHover = useUiStore((s) => s.setHover)
+  const setCarrying = useUiStore((s) => s.setCarrying)
+  const setDragging = useUiStore((s) => s.setDragging)
+  const [grab, setGrab] = useState(0)
+
+  const spec = carrying ? FLEET_BY_ID[carrying] : null
+  const cell = hover?.side === 'player' ? hover.coord : null
+  const footprint = useMemo(() => (spec && cell ? footprintAt(playerBoard, spec, cell, orientation, grab) : null), [spec, cell, playerBoard, orientation, grab])
+
+  const drop = () => {
+    const f = footprint
+    if (spec && f?.valid) {
+      placePlayerShip(spec, f.origin, orientation)
+      setCarrying(null)
+    }
+  }
+
+  // Drag ends anywhere on the page: drop if over a valid spot, otherwise keep carrying (click mode).
+  useEffect(() => {
+    if (!dragging) return
+    const up = () => {
+      setDragging(false)
+      const { hover: h, carrying: c, orientation: o } = useUiStore.getState()
+      const s = c ? FLEET_BY_ID[c] : null
+      if (s && h?.side === 'player') {
+        const f = footprintAt(useGameStore.getState().playerBoard, s, h.coord, o, grab)
+        if (f.valid) {
+          placePlayerShip(s, f.origin, o)
+          setCarrying(null)
+        }
+      }
+    }
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [dragging, grab, placePlayerShip, setCarrying, setDragging])
+
+  const pickUp = (ship: PlacedShip, e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    const idx = Math.max(0, ship.cells.findIndex((c) => c.x === Math.floor(e.point.x - PLAYER.origin[0]) && c.y === Math.floor(e.point.z - PLAYER.origin[2])))
+    setGrab(idx)
+    removePlayerShip(ship.spec.id)
+    setCarrying(ship.spec.id, ship.orientation)
+    setDragging(true)
+    setHover({ side: 'player', coord: ship.cells[idx] })
+  }
+
+  return (
+    <group>
+      <BoardGrid
+        origin={PLAYER.origin}
+        highlight={cell}
+        color={PLAYER_ROPE}
+        highlightColor={footprint ? (footprint.valid ? VALID : INVALID) : '#ffd98a'}
+        onCellPointerMove={(c) => setHover(c ? { side: 'player', coord: c } : null)}
+        onCellClick={() => {
+          if (carrying && !dragging) drop()
+        }}
+      />
+      {playerBoard.ships.map((ship) => (
+        <group key={ship.spec.id} onPointerDown={(e) => pickUp(ship, e)} onPointerOver={() => (document.body.style.cursor = 'grab')} onPointerOut={() => (document.body.style.cursor = '')}>
+          <Fleet ships={[ship]} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={quality === 'low' ? 1 : 0} />
+        </group>
+      ))}
+      {spec && footprint && <Ghost id={spec.id} footprint={footprint} orientation={orientation} quality={quality} />}
+    </group>
+  )
+}
+
+interface GhostProps {
+  id: PlacedShip['spec']['id']
+  footprint: ReturnType<typeof footprintAt>
+  orientation: 'horizontal' | 'vertical'
+  quality: 'low' | 'high'
+}
+
+/** The carried ship, floating above the water with a tinted footprint showing whether it can be dropped. */
+function Ghost({ id, footprint, orientation, quality }: GhostProps) {
+  const ref = useRef<THREE.Group>(null)
+  const cells = footprint.cells
+  const a = cellToWorld(cells[0], PLAYER.origin, PLAYER.cellSize)
+  const b = cellToWorld(cells[cells.length - 1], PLAYER.origin, PLAYER.cellSize)
+  const x = (a[0] + b[0]) / 2
+  const z = (a[2] + b[2]) / 2
+  const rotationY = orientation === 'horizontal' ? 0 : -Math.PI / 2
+  const tint = footprint.valid ? VALID : INVALID
+  const spec = FLEET_BY_ID[id]
+  const cellGeo = useMemo(() => new THREE.PlaneGeometry(0.92, 0.92), [])
+  const cellMat = useMemo(() => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }), [])
+  useEffect(() => () => void (cellGeo.dispose(), cellMat.dispose()), [cellGeo, cellMat])
+  cellMat.color.set(tint)
+
+  useFrame((state) => {
+    const g = ref.current
+    if (!g) return
+    g.position.y = PLAYER.origin[1] + LIFT + Math.sin(state.clock.elapsedTime * 2.2) * 0.05
+  })
+
+  return (
+    <group>
+      <group ref={ref} position={[x, PLAYER.origin[1] + LIFT, z]} rotation-y={rotationY}>
+        <Ship id={id} livery="pirate" damage={Array.from({ length: spec.length }, () => 'intact' as const)} quality={quality} lod={quality === 'low' ? 1 : 0} sails={0.4} />
+      </group>
+      {cells.map((c) => {
+        const p = cellToWorld(c, PLAYER.origin, PLAYER.cellSize)
+        return <mesh key={`${c.x},${c.y}`} geometry={cellGeo} material={cellMat} position={[p[0], PLAYER.origin[1] + 0.06, p[2]]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2} />
+      })}
+    </group>
+  )
+}
+
+function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean }) {
+  const playerBoard = useGameStore((s) => s.playerBoard)
+  const enemyBoard = useGameStore((s) => s.enemyBoard)
+  const events = useGameStore((s) => s.events)
+  const turn = useGameStore((s) => s.turn)
+  const hover = useUiStore((s) => s.hover)
+  const pending = useUiStore((s) => s.pendingTarget)
+  const setHover = useUiStore((s) => s.setHover)
+  const requestFire = useBattleController((s) => s.requestFire)
+  const busy = useBattleController((s) => s.busy)
+
+  const myShots = useMemo(() => events.filter((e) => e.by === 'human').map((e) => e.result), [events]) as ShotResult[]
+  const theirShots = useMemo(() => events.filter((e) => e.by === 'enemy').map((e) => e.result), [events]) as ShotResult[]
+  const sunkEnemy = useMemo(() => enemyBoard.ships.filter(isSunk), [enemyBoard])
+  const canAim = !over && turn === 'human' && !busy
+  const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
+  const targetShot = target ? hasBeenShot(enemyBoard, target) : false
+
+  useEffect(() => () => void (document.body.style.cursor = ''), [])
+
+  return (
+    <group>
+      <BoardGrid origin={PLAYER.origin} color={PLAYER_ROPE} labels />
+      <BoardGrid
+        origin={ENEMY.origin}
+        color={ENEMY_ROPE}
+        highlight={canAim ? target : null}
+        highlightColor={targetShot ? '#8a8a8a' : pending ? '#ffcc33' : '#e2473b'}
+        onCellPointerMove={(c) => {
+          setHover(c ? { side: 'enemy', coord: c } : null)
+          document.body.style.cursor = c && canAim ? 'crosshair' : ''
+        }}
+        onCellClick={(c: Coord) => {
+          if (canAim && !hasBeenShot(enemyBoard, c)) requestFire(c, lastPointerType)
+        }}
+      />
+      <Fleet ships={playerBoard.ships} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={quality === 'low' ? 1 : 0} />
+      <Fleet ships={enemyBoard.ships} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={quality === 'low' ? 1 : 0} />
+      <ShotMarkers shots={theirShots} boardOrigin={PLAYER.origin} fires={false} />
+      <ShotMarkers shots={myShots} boardOrigin={ENEMY.origin} fires={!over} />
+      <DamageLayer ships={playerBoard.ships} boardOrigin={PLAYER.origin} fires smoke breachSide="both" />
+      <DamageLayer ships={over ? enemyBoard.ships : sunkEnemy} boardOrigin={ENEMY.origin} fires={false} smoke breachSide={null} />
+    </group>
+  )
+}
+
+// R3F's click handler doesn't expose the pointer type reliably for synthetic taps, so remember the last one.
+let lastPointerType: string | undefined
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', (e) => void (lastPointerType = e.pointerType), { capture: true, passive: true })
+}
