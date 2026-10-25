@@ -10,7 +10,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { useGameStore } from '../../store/gameStore'
-import { Anchor, Barrel, Cannon, Crate, Flag, HullHole, Lantern, Railing, Ratlines, Rope, RopeCoil, Wheel } from '../kit'
+import { Anchor, Barrel, Cannon, Crate, Flag, HullHole, Lantern, Railing, Ratlines, Rope, RopeCoil, SternLantern, Wheel } from '../kit'
 import type { CannonRef, CellDamage, Livery, Lod, ShipDefinition, ShipModelProps } from '../types'
 import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, cannonPlacements, cellCenterX, cellOfX, mastBase, sideSign, type CannonPlacement, type MastSpec } from './anchors'
 import { GALLEON as G, crossPlane, deckStrip, deckY, halfWidth, keelLine, loftProfile, railY, stations, stemCurve, triangleCount, wale } from './hull'
@@ -167,12 +167,15 @@ function HullShell({ lod, m }: { lod: Lod; m: GalleonMaterials }) {
 /* -------------------------------------------------------------------------------------------- castles & decks */
 
 function Castles({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; livery: Livery }) {
+  // kit `Railing`: `position` is the start of the rail, which runs along local +x after `rotationY`
   const railSeg = (x0: number, x1: number, y: number, side: 1 | -1) => {
     const z0 = side * (halfWidth(x0, y) - G.plank - 0.03)
     const z1 = side * (halfWidth(x1, y) - G.plank - 0.03)
     const len = Math.hypot(x1 - x0, z1 - z0)
-    return { position: [(x0 + x1) / 2, y, (z0 + z1) / 2] as Vec3, length: len, rotationY: -Math.atan2(z1 - z0, x1 - x0) }
+    return { position: [x0, y, z0] as Vec3, length: len, rotationY: -Math.atan2(z1 - z0, x1 - x0), height: 0.2, lod }
   }
+  /** Rail across the ship at `x` from `zA` to `zB` (runs toward −z from the +z end). */
+  const railAcross = (x: number, y: number, zA: number, zB: number) => ({ position: [x, y, Math.max(zA, zB)] as Vec3, length: Math.abs(zA - zB), rotationY: Math.PI / 2, height: 0.2, lod })
   const sides: (1 | -1)[] = [1, -1]
   const fcY = G.forecastleDeckY + G.toeRail + 0.03
   const qdY = G.quarterDeckY + G.toeRail + 0.03
@@ -210,13 +213,13 @@ function Castles({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; livery: Li
         const pw = halfWidth(G.poopX, G.poopDeckY) - G.plank - 0.03
         return (
           <group key={`b${s}`}>
-            <Railing position={[G.forecastleX + 0.02, fcY, (s * (fw + 0.15)) / 2]} length={fw - 0.15} livery={livery} rotationY={Math.PI / 2} />
-            <Railing position={[G.quarterX - 0.02, qdY, (s * (qw + 0.15)) / 2]} length={qw - 0.15} livery={livery} rotationY={Math.PI / 2} />
-            <Railing position={[G.poopX - 0.02, ppY, s * (pw - 0.08)]} length={0.16} livery={livery} rotationY={Math.PI / 2} />
+            <Railing {...railAcross(G.forecastleX + 0.02, fcY, s * 0.15, s * fw)} livery={livery} />
+            <Railing {...railAcross(G.quarterX - 0.02, qdY, s * 0.15, s * qw)} livery={livery} />
+            <Railing {...railAcross(G.poopX - 0.02, ppY, s * (pw - 0.16), s * pw)} livery={livery} />
           </group>
         )
       })}
-      <Railing position={[G.poopX - 0.02, ppY, 0]} length={0.26} livery={livery} rotationY={Math.PI / 2} />
+      <Railing {...railAcross(G.poopX - 0.02, ppY, -0.13, 0.13)} livery={livery} />
     </group>
   )
 }
@@ -262,7 +265,7 @@ function SternWorks({ lod, m, livery, sink }: { lod: Lod; m: GalleonMaterials; l
         <boxGeometry args={[0.02, 0.06, 0.34]} />
       </mesh>
       {/* taffrail across the top of the transom, with the three stern lanterns */}
-      <Railing position={[x + 0.02, G.poopDeckY + G.toeRail + 0.03, 0]} length={2 * halfWidth(x, G.poopDeckY) - 0.1} livery={livery} rotationY={Math.PI / 2} />
+      <Railing position={[x + 0.02, G.poopDeckY + G.toeRail + 0.03, halfWidth(x, G.poopDeckY) - 0.05]} length={2 * halfWidth(x, G.poopDeckY) - 0.1} livery={livery} rotationY={Math.PI / 2} height={0.2} lod={lod} />
       {([
         [x + 0.02, G.poopDeckY + 0.42, 0],
         [x + 0.04, G.poopDeckY + 0.3, 0.23],
@@ -270,7 +273,7 @@ function SternWorks({ lod, m, livery, sink }: { lod: Lod; m: GalleonMaterials; l
       ] as Vec3[]).map((p, i) => (
         <group key={i}>
           <Beam from={[p[0], G.poopDeckY + 0.05, p[2]]} to={[p[0], p[1] - 0.06, p[2]]} radius={0.012} material={m.wale} />
-          <Lantern position={p} livery={livery} lit={sink < 0.6} />
+          {i === 0 ? <SternLantern position={p} livery={livery} lit={sink < 0.6} scale={0.45} lod={lod} /> : <Lantern position={p} livery={livery} lit={sink < 0.6} scale={0.5} lod={lod} />}
         </group>
       ))}
       {/* quarter galleries (small windowed turrets on each quarter) */}
@@ -386,14 +389,14 @@ function BowWorks({ lod, m, livery, sails, sink, torn, phase, reducedMotion }: {
             <FurledBundle length={0.62} set={sails} material={m.sail} />
           </group>
         </group>
-        <Flag position={[tip[0] - root[0], tip[1] - root[1] + 0.1, 0]} livery={livery} width={0.22} height={0.09} phase={phase + 1} />
+        <Flag position={[tip[0] - root[0], tip[1] - root[1] + 0.1, 0]} livery={livery} width={0.3} height={0.07} phase={phase + 1} kind="pennant" lod={lod} />
       </group>
       {/* catheads with the anchors */}
       {lod < 2 &&
         [1, -1].map((s) => (
           <group key={`c${s}`}>
             <Beam from={[1.42, G.forecastleDeckY + 0.08, s * 0.1]} to={[1.42, G.forecastleDeckY + 0.12, s * (halfWidth(1.42, 1.0) + 0.09)]} radius={0.022} material={m.wale} />
-            <Anchor position={[1.42, 0.86, s * (halfWidth(1.42, 0.86) + 0.08)]} livery={livery} scale={0.9} />
+            <Anchor position={[1.42, G.forecastleDeckY + 0.06, s * (halfWidth(1.42, 0.86) + 0.1)]} livery={livery} scale={0.32} rotationY={Math.PI / 2} />
           </group>
         ))}
     </group>
@@ -418,9 +421,13 @@ function Guns({ lod, m, livery, firing, damage }: { lod: Lod; m: GalleonMaterial
         const fire = isFiring(g)
         const hit = damage[g.cell] !== 'intact'
         const open = fire ? 1 : hit ? 0.8 : 0
+        // guns under the castles are only visible through an open port, so they are mounted only while it is open
+        const enclosed = g.x <= G.quarterX || g.x >= G.forecastleX
         return (
           <group key={`${g.cell}-${g.side}-${g.x}`}>
-            <Cannon position={[g.x, G.mainDeckY, s * (g.hw - 0.012 - 0.45 * CANNON_SCALE)]} rotationY={s > 0 ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} scale={CANNON_SCALE} />
+            {(!enclosed || open > 0) && (
+              <Cannon position={[g.x, G.mainDeckY, s * (g.hw - 0.012 - 0.45 * CANNON_SCALE)]} rotationY={s > 0 ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} scale={CANNON_SCALE} lod={enclosed ? (Math.max(1, lod) as Lod) : lod} />
+            )}
             <group position={[g.x, GUN_PORT_Y + GUN_PORT_SIZE[1] / 2 + 0.01, s * (g.hw + 0.03)]} rotation-x={-s * open * 1.95}>
               <mesh material={m.portLid} position={[0, -GUN_PORT_SIZE[1] / 2 - 0.005, 0]} castShadow>
                 <boxGeometry args={[GUN_PORT_SIZE[0] + 0.02, GUN_PORT_SIZE[1] + 0.02, 0.014]} />
@@ -519,7 +526,7 @@ function GalleonMast({ spec, lod, m, livery, sails, torn, scorched, snapped, pha
             </group>
             {lod < 2 &&
               [1, -1].map((s) => (
-                <Rope key={s} from={[0, 0, (s * yd.width) / 2]} to={[0, h - breakY - 0.02, 0]} livery={livery} radius={0.006} />
+                <Rope key={s} from={[0, 0, (s * yd.width) / 2]} to={[0, h - breakY - 0.02, 0]} livery={livery} radius={0.006} lod={lod} />
               ))}
           </group>
         ))}
@@ -532,7 +539,7 @@ function GalleonMast({ spec, lod, m, livery, sails, torn, scorched, snapped, pha
         {flag ? (
           <Ensign position={[0, h - breakY - 0.02, 0]} material={m.flag} width={0.6} height={0.36} phase={phase} reducedMotion={reducedMotion} drop={snapped * 0.4} />
         ) : (
-          <Flag position={[0, h - breakY - 0.04, 0]} livery={livery} width={0.3} height={0.1} phase={phase + 3} />
+          <Flag position={[0, h - breakY - 0.04, 0]} livery={livery} width={0.4} height={0.08} phase={phase + 3} kind="pennant" lod={lod} />
         )}
       </group>
     </group>
@@ -574,7 +581,7 @@ function Rig({ lod, m, livery, sails, sink, damage, phase, reducedMotion }: { lo
 function StandingRigging({ lod, livery, sink }: { lod: Lod; livery: Livery; sink: number }) {
   const [fore, main, mizzen] = MASTS
   const top = (s: MastSpec, k = 1): Vec3 => [s.x, deckY(s.x) + s.height * k, 0]
-  const rungs = lod === 0 ? 7 : 3
+  const rungs = lod === 0 ? 9 : 4
   if (sink > 0.35) return null
   return (
     <group>
@@ -583,22 +590,21 @@ function StandingRigging({ lod, livery, sink }: { lod: Lod; livery: Livery; sink
         const hw = halfWidth(s.x, ry) - G.plank - 0.02
         return (
           <group key={s.name}>
-            <Ratlines from={[s.x + 0.1, ry, hw]} to={[s.x + 0.02, deckY(s.x) + s.height * 0.62, 0.02]} livery={livery} rungs={rungs} />
-            <Ratlines from={[s.x - 0.1, ry, hw]} to={[s.x - 0.02, deckY(s.x) + s.height * 0.62, 0.02]} livery={livery} rungs={rungs} />
+            <Ratlines from={[s.x, ry, hw]} to={[s.x, deckY(s.x) + s.height * 0.62, 0.03]} livery={livery} rungs={rungs} spread={0.3} lod={lod} />
           </group>
         )
       })}
       {/* stays and backstays */}
-      <Rope from={top(fore, 0.98)} to={[G.xBow + 0.95, 1.48, 0]} livery={livery} />
-      <Rope from={top(fore, 0.62)} to={[G.xBow + 0.3, 1.18, 0]} livery={livery} />
-      <Rope from={top(main, 0.98)} to={top(fore, 0.62)} livery={livery} />
-      <Rope from={top(main, 0.62)} to={[fore.x - 0.1, G.forecastleDeckY + 0.05, 0]} livery={livery} />
-      <Rope from={top(mizzen, 0.98)} to={top(main, 0.62)} livery={livery} />
-      <Rope from={top(mizzen, 0.6)} to={[main.x - 0.12, G.mainDeckY + 0.05, 0]} livery={livery} />
+      <Rope from={top(fore, 0.98)} to={[G.xBow + 0.95, 1.48, 0]} livery={livery} sag={0.03} lod={lod} />
+      <Rope from={top(fore, 0.62)} to={[G.xBow + 0.3, 1.18, 0]} livery={livery} sag={0.03} lod={lod} />
+      <Rope from={top(main, 0.98)} to={top(fore, 0.62)} livery={livery} sag={0.03} lod={lod} />
+      <Rope from={top(main, 0.62)} to={[fore.x - 0.1, G.forecastleDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />
+      <Rope from={top(mizzen, 0.98)} to={top(main, 0.62)} livery={livery} sag={0.03} lod={lod} />
+      <Rope from={top(mizzen, 0.6)} to={[main.x - 0.12, G.mainDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />
       {[1, -1].map((s) => (
         <group key={s}>
-          <Rope from={top(main, 0.97)} to={[G.poopX + 0.05, G.quarterDeckY + 0.08, s * (halfWidth(G.poopX + 0.05, 1.05) - 0.08)]} livery={livery} />
-          <Rope from={top(mizzen, 0.97)} to={[G.xStern + 0.1, G.poopDeckY + 0.08, s * (halfWidth(G.xStern + 0.1, 1.45) - 0.08)]} livery={livery} />
+          <Rope from={top(main, 0.97)} to={[G.poopX + 0.05, G.quarterDeckY + 0.08, s * (halfWidth(G.poopX + 0.05, 1.05) - 0.08)]} livery={livery} lod={lod} />
+          <Rope from={top(mizzen, 0.97)} to={[G.xStern + 0.1, G.poopDeckY + 0.08, s * (halfWidth(G.xStern + 0.1, 1.45) - 0.08)]} livery={livery} lod={lod} />
         </group>
       ))}
     </group>
@@ -625,7 +631,7 @@ function DeckFittings({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; liver
       {/* treasure hatch with grating and its coaming */}
       <Grating position={[0.3, G.mainDeckY, 0]} width={0.5} depth={0.36} m={m} bars={7} lod={lod} />
       {/* ship's wheel, binnacle, bell */}
-      <Wheel position={[-0.75, G.quarterDeckY, 0]} livery={livery} />
+      <Wheel position={[-0.75, G.quarterDeckY, 0]} livery={livery} radius={0.14} />
       <mesh material={m.deckInner} position={[-0.6, G.quarterDeckY + 0.11, 0]} castShadow>
         <boxGeometry args={[0.1, 0.22, 0.12]} />
       </mesh>
@@ -650,14 +656,14 @@ function DeckFittings({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; liver
           {/* cargo lashed in the waist */}
           {[1, -1].map((s) => (
             <group key={s}>
-              <Barrel position={[0.45, G.mainDeckY, s * 0.3]} livery={livery} scale={0.8} />
-              <Barrel position={[0.58, G.mainDeckY, s * 0.42]} livery={livery} scale={0.72} />
+              <Barrel position={[0.45, G.mainDeckY, s * 0.3]} livery={livery} scale={0.8} lod={lod} />
+              <Barrel position={[0.58, G.mainDeckY, s * 0.42]} livery={livery} scale={0.72} lod={lod} />
               <Crate position={[0.05, G.mainDeckY, s * 0.42]} livery={livery} size={0.16} />
               <Rope from={[-0.04, G.mainDeckY + 0.165, s * 0.35]} to={[0.14, G.mainDeckY + 0.165, s * 0.49]} livery={livery} radius={0.007} />
-              <RopeCoil position={[-0.35, G.mainDeckY, s * 0.44]} livery={livery} />
+              <RopeCoil position={[-0.35, G.mainDeckY, s * 0.44]} livery={livery} radius={0.07} />
               <Crate position={[-0.62, G.quarterDeckY, s * 0.3]} livery={livery} size={0.13} />
-              <RopeCoil position={[1.5, G.forecastleDeckY, s * 0.14]} livery={livery} />
-              <Lantern position={[G.forecastleX - 0.08, G.mainDeckY + 0.33, s * 0.42]} livery={livery} />
+              <RopeCoil position={[1.5, G.forecastleDeckY, s * 0.14]} livery={livery} radius={0.06} />
+              <Lantern position={[G.forecastleX - 0.08, G.mainDeckY + 0.33, s * 0.42]} livery={livery} scale={0.45} lod={lod} />
             </group>
           ))}
           <Instanced geometry={pinGeom} material={m.wale} transforms={pins} />
@@ -692,7 +698,7 @@ function DamageLayer({ damage, lod, m }: { damage: readonly CellDamage[]; lod: L
           <group key={cell}>
             {([1, -1] as const).map((s) => (
               <group key={s}>
-                <HullHole position={[x + (s > 0 ? 0.08 : -0.06), IMPACT_Y, s * (hw + 0.004)]} rotationY={s > 0 ? 0 : Math.PI} radius={0.15} />
+                <HullHole position={[x + (s > 0 ? 0.08 : -0.06), IMPACT_Y, s * (hw + 0.004)]} rotationY={s > 0 ? 0 : Math.PI} radius={0.15} seed={cell * 7 + (s > 0 ? 1 : 2)} />
                 {lod < 2 && <Splinters position={[x + (s > 0 ? 0.08 : -0.06), IMPACT_Y, s * hw]} sign={s} seed={cell * 31 + (s > 0 ? 7 : 3)} m={m} count={lod === 0 ? 9 : 5} />}
               </group>
             ))}
