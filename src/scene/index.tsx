@@ -3,13 +3,19 @@ import { Component, useMemo, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/gameStore'
 import { CameraRig, type CameraView } from './CameraRig'
-import { Effects } from './Effects'
+import { lazy, Suspense } from 'react'
+
+// post-processing is only used on the high tier, so its 80 kB gzip chunk loads on demand
+const Effects = lazy(() => import('./Effects').then((m) => ({ default: m.Effects })))
 import { BayDressing } from './Environment'
 import { is3dDisabled } from './flags'
 import { Lighting, SkyDome } from './SkyDome'
 import { computeAtmosphere, GOLDEN_HOUR, type Weather } from './sun'
 import { Water, type Quality } from './Water'
 import { Rain, useLightning, type LightningStrike } from './Weather'
+import { usePerf, usePerfStore } from '../perf/store'
+import { PerfStats } from '../perf/PerfStats'
+import { perfOverlayRequested } from '../perf/PerfBootstrap'
 
 // BUG-006: @react-three/fiber still constructs `THREE.Clock` for its root store, which three
 // r183+ flags as deprecated the moment it is instantiated. The scene cannot swap that clock out
@@ -33,7 +39,6 @@ export {
   type BoardPlacement,
   type Vec3,
 } from './layout'
-export { SceneDemo } from './SceneDemo'
 export { computeAtmosphere, GOLDEN_HOUR, type Atmosphere, type Weather } from './sun'
 export { ISLANDS, LANDMARKS, isLand, terrainHeight, waterDepth } from './cove'
 export type { LightningStrike } from './Weather'
@@ -73,8 +78,7 @@ function readUrlParam(name: string): string | null {
 export function defaultQuality(): Quality {
   const q = readUrlParam('quality')
   if (q === 'low' || q === 'high') return q
-  if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) return 'low'
-  return 'high'
+  return usePerfStore.getState().profile.quality
 }
 
 function defaultWeather(): Weather {
@@ -93,6 +97,7 @@ function defaultTimeOfDay(): number {
  * gradient when WebGL is unavailable or the URL has `?no3d`.
  */
 export function OceanScene({ children, quality, timeOfDay, view, interactive, dressing = true, weather, onLightning }: OceanSceneProps) {
+  const perf = usePerf()
   if (is3dDisabled()) return <OceanFallback />
   const q = quality ?? defaultQuality()
   const tod = timeOfDay ?? defaultTimeOfDay()
@@ -100,8 +105,8 @@ export function OceanScene({ children, quality, timeOfDay, view, interactive, dr
   return (
     <WebGLBoundary>
       <Canvas
-        shadows={{ type: THREE.PCFShadowMap }}
-        dpr={q === 'high' ? [1, 1.75] : [1, 1]}
+        shadows={perf.shadows > 0 ? { type: THREE.PCFShadowMap } : false}
+        dpr={perf.dpr}
         gl={{ antialias: q === 'low', powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         camera={{ position: [0, 9, 30], fov: 42, near: 0.5, far: 1500 }}
         style={{ position: 'fixed', inset: 0, zIndex: 0 }}
@@ -110,6 +115,7 @@ export function OceanScene({ children, quality, timeOfDay, view, interactive, dr
         <SceneContents quality={q} timeOfDay={tod} view={view} interactive={interactive} dressing={dressing} weather={w} onLightning={onLightning}>
           {children}
         </SceneContents>
+        {perfOverlayRequested() && <PerfStats />}
       </Canvas>
     </WebGLBoundary>
   )
@@ -125,6 +131,7 @@ function SceneContents({
   weather,
   onLightning,
 }: Required<Pick<OceanSceneProps, 'quality' | 'timeOfDay' | 'dressing' | 'weather'>> & Pick<OceanSceneProps, 'children' | 'view' | 'interactive' | 'onLightning'>) {
+  const perf = usePerf()
   const phase = useGameStore((s) => s.phase)
   const activeView = view ?? PHASE_VIEW[phase] ?? 'menu'
   const atmosphere = useMemo(() => computeAtmosphere(timeOfDay, weather), [timeOfDay, weather])
@@ -132,13 +139,17 @@ function SceneContents({
   return (
     <>
       <SkyDome atmosphere={atmosphere} clouds={quality === 'high' ? 1 : 0.7} lightning={lightning} />
-      <Lighting atmosphere={atmosphere} quality={quality} lightning={lightning} />
-      <Water quality={quality} atmosphere={atmosphere} lightning={lightning} />
+      <Lighting atmosphere={atmosphere} quality={quality} lightning={lightning} shadowSize={perf.shadows} />
+      <Water quality={quality} atmosphere={atmosphere} lightning={lightning} waves={perf.waves} />
       {dressing && <BayDressing atmosphere={atmosphere} quality={quality} />}
       <Rain storm={atmosphere.storm} quality={quality} />
       <CameraRig view={activeView} interactive={interactive ?? activeView === 'battle'} />
       {children}
-      <Effects night={1 - atmosphere.daylight} storm={atmosphere.storm} quality={quality} />
+      {perf.postprocessing && quality !== 'low' && (
+        <Suspense fallback={null}>
+          <Effects night={1 - atmosphere.daylight} storm={atmosphere.storm} quality={quality} />
+        </Suspense>
+      )}
     </>
   )
 }

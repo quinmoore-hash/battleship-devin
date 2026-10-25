@@ -17,6 +17,7 @@ import { Grid, type GridCellInfo } from './Grid'
 import { Modal } from './Modal'
 import { ShotLog } from './ShotLog'
 import { PACING } from './pacing'
+import { SKIP_CINEMATIC_EVENT } from '../perf/a11y/A11yBootstrap'
 import { withSfx } from './sfx'
 
 const between = ([a, b]: [number, number]) => a + Math.random() * (b - a)
@@ -36,17 +37,33 @@ export function BattleScreen() {
   const [thinking, setThinking] = useState(false)
   const [confirmQuit, setConfirmQuit] = useState(false)
   const [flash, setFlash] = useState<{ by: 'human' | 'enemy'; result: ShotResult } | null>(null)
-  const timers = useRef<number[]>([])
+  const timers = useRef<{ id: number; fn: () => void }[]>([])
 
   const later = useCallback((fn: () => void, ms: number) => {
-    const id = window.setTimeout(fn, ms)
-    timers.current.push(id)
-    return id
+    const entry = { id: 0, fn }
+    entry.id = window.setTimeout(() => {
+      timers.current = timers.current.filter((t) => t !== entry)
+      fn()
+    }, ms)
+    timers.current.push(entry)
+    return entry.id
   }, [])
 
   useEffect(() => {
     const pending = timers.current
-    return () => pending.forEach((id) => clearTimeout(id))
+    // Space (see <A11yBootstrap>) skips the shot cinematic: run whatever pacing timers are queued right now
+    const skip = () => {
+      while (timers.current.length) {
+        const next = timers.current.shift()!
+        clearTimeout(next.id)
+        next.fn()
+      }
+    }
+    window.addEventListener(SKIP_CINEMATIC_EVENT, skip)
+    return () => {
+      window.removeEventListener(SKIP_CINEMATIC_EVENT, skip)
+      pending.forEach((t) => clearTimeout(t.id))
+    }
   }, [])
 
   const fire = (c: Coord) => {

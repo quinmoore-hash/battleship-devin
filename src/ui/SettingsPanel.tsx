@@ -1,5 +1,5 @@
 import { setMusicVolume, setSfxVolume } from '../audio'
-import { useGameStore } from '../store/gameStore'
+import { useGameStore, type QualitySetting } from '../store/gameStore'
 import { Modal } from './Modal'
 import { withSfx } from './sfx'
 
@@ -9,6 +9,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Settings" testId="settings" onClose={onClose}>
+      <label className="setting setting-toggle">
+        <span>
+          Graphics quality
+          <small>Auto picks a tier from your GPU; lower it if the sea stutters</small>
+        </span>
+        <select data-testid="setting-quality" value={settings.quality} onChange={withSfx((e) => updateSettings({ quality: e.target.value as QualitySetting }))}>
+          <option value="auto">Auto</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </label>
       <label className="setting">
         <span>Sound effects</span>
         <input
@@ -57,6 +69,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           data-testid="setting-reduced-motion"
           aria-checked={settings.reducedMotion}
           onChange={withSfx((e) => updateSettings({ reducedMotion: e.target.checked }))}
+        />
+      </label>
+      <label className="setting setting-toggle">
+        <span>
+          Colour-blind markers
+          <small>Shapes and patterns for hits, misses and sunk ships</small>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          checked={settings.colorblind}
+          data-testid="setting-colorblind"
+          aria-checked={settings.colorblind}
+          onChange={withSfx((e) => updateSettings({ colorblind: e.target.checked }))}
         />
       </label>
     </Modal>

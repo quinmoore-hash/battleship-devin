@@ -5,6 +5,7 @@ import type { Vec3 } from '../../scene/layout'
 import { smokePuffAt, smokeSeeds, type SmokePlumeOptions } from './smoke'
 import { attachParams, makeSpriteMaterial, spriteQuad } from './sprites'
 import { useReducedMotion } from './useReducedMotion'
+import { scaleCount, useParticlesScale } from '../../perf/store'
 import { WIND } from './wind'
 
 export interface SmokeProps {
@@ -24,7 +25,8 @@ const tmpObj = new THREE.Object3D()
 /** Persistent dark smoke column: puffs rise, swell, lean downwind and thin with height. */
 export function Smoke({ position, scale = 1, seed = 2, intensity = 1, color = '#2f2b28', count, wind = WIND }: SmokeProps) {
   const reduced = useReducedMotion()
-  const n = count ?? (reduced ? 8 : 14)
+  const particles = useParticlesScale()
+  const n = count ?? scaleCount(reduced ? 8 : 14, particles)
   const mesh = useRef<THREE.InstancedMesh>(null)
   const mat = useMemo(() => makeSpriteMaterial('smoke', { color, opacity: 0.75 }), [color])
   useEffect(() => () => mat.dispose(), [mat])

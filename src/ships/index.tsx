@@ -8,6 +8,7 @@
  *   shipWorldTransform(placed, boardOrigin)   position / rotationY of a placed ship
  */
 import type { PlacedShip, ShipId } from '../engine'
+import { LodGroup } from '../perf/LodShip'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
 import { BRIGANTINE } from './brigantine'
 import { FRIGATE } from './frigate'
@@ -63,7 +64,8 @@ export interface FleetProps {
   /** Per ship id, 0..1 sink progress (driven by the sinking VFX / director). */
   sinkProgress?: Partial<Record<ShipId, number>>
   firing?: Partial<Record<ShipId, CannonRef[]>>
-  lod?: ShipModelProps['lod']
+  /** Fixed detail level, or `'auto'` to pick per ship from camera distance each frame (`src/perf`). */
+  lod?: ShipModelProps['lod'] | 'auto'
   quality?: ShipModelProps['quality']
 }
 
@@ -79,7 +81,13 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
         return (
           <group key={ship.spec.id} position={[position[0], position[1] - pose.depth, position[2]]} rotation-y={rotationY + pose.yaw}>
             <group rotation={[pose.roll, 0, pose.pitch]}>
-              <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />
+              {lod === 'auto' ? (
+                <LodGroup position={position} hullLength={ship.spec.length}>
+                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={autoLod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />}
+                </LodGroup>
+              ) : (
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />
+              )}
             </group>
           </group>
         )

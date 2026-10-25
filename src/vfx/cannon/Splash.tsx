@@ -6,6 +6,7 @@ import { easeInCubic, easeOutCubic } from '../math'
 import { seededRandom } from '../random'
 import { FoamRing } from './FoamRing'
 import { DEFAULT_WIND, useReducedMotion } from './motion'
+import { useParticlesScale } from '../../perf/store'
 import { SpriteCloud, type SpriteCloudHandle } from './SpriteCloud'
 import { noiseTexture, smokeTexture, sprayTexture } from './textures'
 import { useEffectTimeline } from './timeline'
@@ -132,7 +133,7 @@ export function Splash({ position, seed = 1, scale = 1, delay = 0, wind = DEFAUL
   const reduced = useReducedMotion()
   const total = reduced ? SPLASH_DURATION * 0.65 : SPLASH_DURATION
   const tl = useEffectTimeline(delay + total, { onDone })
-  const density = reduced ? 0.4 : 1
+  const density = (reduced ? 0.4 : 1) * useParticlesScale()
   const spray = useMemo(() => {
     const rnd = seededRandom(seed * 13 + 5)
     return [

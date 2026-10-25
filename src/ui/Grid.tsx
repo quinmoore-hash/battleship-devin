@@ -48,10 +48,13 @@ export function Grid({
         ArrowRight: { x: 1, y: 0 },
       }
       const d = delta[e.key]
-      if (!d) return
+      let next: Coord
+      if (d) next = { x: (c.x + d.x + size) % size, y: (c.y + d.y + size) % size }
+      else if (e.key === 'Home') next = { x: 0, y: e.ctrlKey ? 0 : c.y }
+      else if (e.key === 'End') next = { x: size - 1, y: e.ctrlKey ? size - 1 : c.y }
+      else return
       e.preventDefault()
-      const next = { x: (c.x + d.x + size) % size, y: (c.y + d.y + size) % size }
-      const el = e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(
+      const el = e.currentTarget.closest('.grid')?.querySelector<HTMLButtonElement>(
         `[data-testid="${testId}-${next.x}-${next.y}"]`,
       )
       el?.focus()
@@ -86,8 +89,11 @@ export function Grid({
         aria-label={label}
         style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
       >
-        {Array.from({ length: size * size }, (_, i) => {
-          const c = { x: i % size, y: Math.floor(i / size) }
+        {Array.from({ length: size }, (_, y) => (
+          <div key={y} role="row" aria-rowindex={y + 1} style={{ display: 'contents' }}>
+            {Array.from({ length: size }, (_, x) => {
+              const i = y * size + x
+              const c = { x, y }
           const info = cell(c)
           const resolved = info.state === 'miss' || info.state === 'hit' || info.state === 'sunk'
           const isDisabled = disabled || !onCell || (lockResolved && resolved)
@@ -101,6 +107,7 @@ export function Grid({
               data-state={info.state}
               data-preview={info.preview}
               aria-label={`${coordLabel(c)}${info.state !== 'unknown' ? `, ${info.state}` : ''}`}
+              aria-colindex={x + 1}
               title={info.title}
               disabled={isDisabled}
               tabIndex={i === 0 ? 0 : -1}
@@ -126,7 +133,9 @@ export function Grid({
               }
             />
           )
-        })}
+            })}
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -202,7 +202,8 @@ export function SkyDome({ atmosphere, clouds = 1, lightning }: SkyDomeProps) {
 }
 
 /** Sun + moon directional lights, hemisphere fill, ambient and fog, all driven by the atmosphere. */
-export function Lighting({ atmosphere, quality, lightning }: { atmosphere: Atmosphere; quality: 'low' | 'high'; lightning?: LightningState }) {
+/** `shadowSize` (perf tier) overrides the quality default; 0 disables the sun's shadow pass. */
+export function Lighting({ atmosphere, quality, lightning, shadowSize }: { atmosphere: Atmosphere; quality: 'low' | 'high'; lightning?: LightningState; shadowSize?: number }) {
   const sun = useRef<THREE.DirectionalLight>(null)
   const bolt = useRef<THREE.DirectionalLight>(null)
   useFrame(() => {
@@ -214,7 +215,7 @@ export function Lighting({ atmosphere, quality, lightning }: { atmosphere: Atmos
   const [sx, sy, sz] = atmosphere.sunDir
   const sunPos: [number, number, number] = [sx * 70, Math.max(sy, 0.08) * 70, sz * 70]
   const moonPos: [number, number, number] = [-sx * 70, Math.max(-sy, 0.1) * 70, sz * 70]
-  const shadowSize = quality === 'high' ? 2048 : 1024
+  const size = shadowSize ?? (quality === 'high' ? 2048 : 1024)
   const fogNear = 55 - atmosphere.storm * 25
   const fogFar = 230 - atmosphere.storm * 110
   return (
@@ -225,8 +226,8 @@ export function Lighting({ atmosphere, quality, lightning }: { atmosphere: Atmos
         position={sunPos}
         color={atmosphere.sunColor}
         intensity={atmosphere.sunIntensity}
-        castShadow
-        shadow-mapSize={[shadowSize, shadowSize]}
+        castShadow={size > 0}
+        shadow-mapSize={[size || 1024, size || 1024]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
         shadow-camera-near={10}

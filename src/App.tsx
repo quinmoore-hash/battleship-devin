@@ -1,6 +1,11 @@
 import { lazy, Suspense } from 'react'
 import { OceanScene } from './scene'
 import { GameUI } from './ui'
+import { A11yBootstrap } from './perf/a11y/A11yBootstrap'
+import { PerfBootstrap, perfOverlayRequested } from './perf/PerfBootstrap'
+import { PerfOverlay } from './perf/PerfOverlay'
+import { FpsWatchdog } from './perf/FpsWatchdog'
+import { QualityToast } from './perf/QualityToast'
 
 const SceneDemo = lazy(() => import('./scene/SceneDemo').then((m) => ({ default: m.SceneDemo })))
 const ShipDemo = lazy(() => import('./ships/ShipDemo').then((m) => ({ default: m.ShipDemo })))
@@ -9,6 +14,7 @@ const KitDemo = lazy(() => import('./ships/kit/KitDemo').then((m) => ({ default:
 const SinkingDemo = lazy(() => import('./vfx/sinking/SinkingDemo').then((m) => ({ default: m.SinkingDemo })))
 const CannonDemo = lazy(() => import('./vfx/cannon/CannonDemo').then((m) => ({ default: m.CannonDemo })))
 const VfxDamageDemo = lazy(() => import('./vfx/VfxDamageDemo').then((m) => ({ default: m.VfxDamageDemo })))
+const PerfDemo = lazy(() => import('./perf/PerfDemo').then((m) => ({ default: m.PerfDemo })))
 const FrigateDemo = lazy(() => import('./ships/frigate/demo').then((m) => ({ default: m.FrigateDemoApp })))
 
 /**
@@ -18,6 +24,7 @@ const FrigateDemo = lazy(() => import('./ships/frigate/demo').then((m) => ({ def
  */
 const DEMOS: Record<string, React.LazyExoticComponent<() => React.JSX.Element>> = {
   'scene-demo': SceneDemo,
+  'perf-demo': PerfDemo,
   'ship-demo': ShipDemo,
   'audio-demo': AudioDemo,
   'kit-demo': KitDemo,
@@ -38,14 +45,20 @@ export default function App() {
   if (Demo) {
     return (
       <Suspense fallback={null}>
+        <PerfBootstrap />
         <Demo />
       </Suspense>
     )
   }
   return (
     <>
+      <PerfBootstrap />
+      <FpsWatchdog />
+      <A11yBootstrap />
       <OceanScene />
       <GameUI />
+      <QualityToast />
+      {perfOverlayRequested() && <PerfOverlay />}
     </>
   )
 }

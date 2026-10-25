@@ -1,0 +1,97 @@
+/* Cross-cutting accessibility styles (owned by src/perf). Keyed off <html data-*> set by <A11yBootstrap>. */
+
+/* Visible focus ring everywhere, including over the bright 3D scene (double ring = contrast on any backdrop). */
+:focus-visible {
+  outline: 3px solid #ffd166;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.85);
+}
+
+/* High-contrast HUD text over the ocean: every UI text gets a dark halo. */
+.ui-root {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+/* Colour-blind safe markers: shapes/patterns, not just colour. */
+html[data-colorblind='true'] .cell-hit::after,
+html[data-colorblind='true'] .cell-hit::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 70%;
+  height: 14%;
+  background: #fff;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 2px;
+  box-shadow: 0 0 2px #000;
+}
+html[data-colorblind='true'] .cell-hit::before {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+html[data-colorblind='true'] .cell-miss::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  height: 34%;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 2px #000, inset 0 0 2px #000;
+}
+html[data-colorblind='true'] .cell-sunk {
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0 3px, transparent 3px 7px) !important;
+}
+html[data-colorblind='true'] .cell-sunk::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60%;
+  height: 60%;
+  background: #111;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  transform: translate(-50%, -50%);
+  outline: 2px solid #fff;
+}
+html[data-colorblind='true'] .cell-ship {
+  background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.25) 0 2px, transparent 2px 6px);
+}
+
+/* Touch devices: hit targets >= 44px. The grid scrolls inside .grid-wrap instead of shrinking below the target
+   (mouse/trackpad layouts keep the responsive cell size so the whole board stays in view). */
+@media (pointer: coarse) {
+  html .grid-wrap {
+    --cell: 44px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .ui-root .grid button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+html[data-reduced-motion='true'] *,
+html[data-reduced-motion='true'] *::before,
+html[data-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Native selects in the settings modal: readable on the dark panel (axe color-contrast). */
+.setting select {
+  color: #fff8ec;
+  background: #1f2a33;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  min-height: 44px;
+}

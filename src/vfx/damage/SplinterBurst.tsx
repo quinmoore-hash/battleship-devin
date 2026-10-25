@@ -7,6 +7,7 @@ import { makeBurst, particleAt, burstDuration } from '../particles'
 import { attachParams, makeSpriteMaterial, spriteQuad } from './sprites'
 import { makeSplinters, splinterAt, splinterDuration } from './splinters'
 import { useReducedMotion } from './useReducedMotion'
+import { scaleCount, useParticlesScale } from '../../perf/store'
 
 export interface SplinterBurstProps {
   position: Vec3
@@ -31,7 +32,8 @@ const CHAR = new THREE.Color('#1b120b')
  */
 export function SplinterBurst({ position, normal, seed = 1, count, waterY = BOARD_LAYOUT.surfaceY, onDone }: SplinterBurstProps) {
   const reduced = useReducedMotion()
-  const n = count ?? (reduced ? 18 : 42)
+  const particles = useParticlesScale()
+  const n = count ?? scaleCount(reduced ? 18 : 42, particles)
   const mesh = useRef<THREE.InstancedMesh>(null)
   const dust = useRef<THREE.InstancedMesh>(null)
   const shards = useMemo(() => makeSplinters({ seed, count: n, normal, size: reduced ? 0.9 : 1 }), [seed, n, normal, reduced])

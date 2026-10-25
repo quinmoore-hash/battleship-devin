@@ -21,15 +21,22 @@ Deployed from `main` to GitHub Pages: https://quinmoore-hash.github.io/battleshi
 
 ```bash
 npm ci
-npm run dev        # http://localhost:5173   (?no3d, ?scene-demo, ?ship-demo, ?audio-demo, ?kit-demo)
+npm run dev        # http://localhost:5173   (?no3d, ?scene-demo, ?ship-demo, ?audio-demo, ?kit-demo, ?perf-demo, &perf HUD, &quality=low|medium|high)
 npm run lint       # oxlint
 npm run typecheck  # tsc -b
 npm test           # vitest unit tests
-npm run e2e        # playwright: plays a full game on every difficulty
+npm run e2e        # playwright: plays a full game on every difficulty + axe-core a11y audit
+npm run perf       # after `npm run build`: median FPS / draw calls per quality tier on ?perf-demo
+                   # (no GPU / VM: PERF_HEADED=1 PERF_FRAMES=20 xvfb-run -a npm run perf — headless SwiftShader drops the WebGL context)
 npm run build
 ```
 
 Stack: Vite, React 19, TypeScript, react-three-fiber / drei / three, zustand, GSAP, Howler, Vitest, Playwright.
+
+Graphics quality (Settings › first row, or `?quality=`): `auto` picks `medium` for integrated GPUs (Apple M-series,
+Intel Iris/Xe — the tuned 60 fps target is a MacBook Air M4 at native resolution), `low` for phones / old GPUs, and
+`high` (2k shadows, bloom, full-detail fleet) only on discrete GPUs that pass a ≥ 90 fps probe. If a battle runs
+under 45 fps for 4 s on `auto`, the game drops one tier once and says so.
 
 ## Repo layout and ownership
 
