@@ -1,7 +1,8 @@
+import type * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { GALLEON, crossPlane, deckStrip, halfWidth, hullBand, keelLine, loftProfile, railY, stations, stemCurve, triangleCount, wale } from './hull'
 
-const finite = (g: { attributes: { position: { array: ArrayLike<number> } } }) => Array.from(g.attributes.position.array).every(Number.isFinite)
+const finite = (g: THREE.BufferGeometry) => Array.from(g.attributes.position.array as ArrayLike<number>).every(Number.isFinite)
 
 describe('galleon lofting', () => {
   it('lofts a band with one vertex per station per profile point per side and outward normals', () => {
