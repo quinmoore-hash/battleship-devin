@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BRIGANTINE_ANCHORS, cannonPosition, cellOfX } from './anchors'
-import { BEAM, DECK_Y, HALF, LENGTH, PORT_BOTTOM, PORT_TOP, STEM_X, TRANSOM_X, buildDeckGeometry, buildHullGeometry, hermite, hullHalfWidth, keelY, sheerY } from './hull'
+import { BEAM, DECK_CAMBER, DECK_Y, HALF, LENGTH, PORT_BOTTOM, PORT_TOP, STEM_X, TRANSOM_X, buildDeckGeometry, buildHullGeometry, deckSurfaceY, hermite, hullHalfWidth, keelY, sheerY } from './hull'
 
 describe('brigantine hull field', () => {
   it('hermite interpolates through its knots and stays monotone on a line', () => {
@@ -65,6 +65,14 @@ describe('brigantine hull geometry', () => {
     // openings remove skin quads but add reveals; the net vertex count is identical
     expect(withPorts.geometry.getAttribute('position').count).toBe(solid.geometry.getAttribute('position').count)
     expect(withPorts.geometry.getIndex()!.count).not.toBe(solid.geometry.getIndex()!.count)
+  })
+
+  it('deckSurfaceY matches the lofted deck: highest on the centre line, DECK_Y at the edge', () => {
+    expect(deckSurfaceY(0, 0)).toBeCloseTo(DECK_Y + DECK_CAMBER, 6)
+    const w = hullHalfWidth(0, DECK_Y) - 0.03
+    expect(deckSurfaceY(0, w)).toBeCloseTo(DECK_Y, 6)
+    expect(deckSurfaceY(0.5, 0.2)).toBeGreaterThan(DECK_Y)
+    expect(deckSurfaceY(0.5, 0.2)).toBeLessThan(DECK_Y + DECK_CAMBER)
   })
 
   it('deck surface sits at deck height with a small camber', () => {
