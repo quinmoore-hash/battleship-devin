@@ -34,7 +34,6 @@ export function SplinterBurst({ position, normal, seed = 1, count, waterY = BOAR
   const n = count ?? (reduced ? 18 : 42)
   const mesh = useRef<THREE.InstancedMesh>(null)
   const dust = useRef<THREE.InstancedMesh>(null)
-  const dustAttr = useRef<THREE.InstancedBufferAttribute | null>(null)
   const shards = useMemo(() => makeSplinters({ seed, count: n, normal, size: reduced ? 0.9 : 1 }), [seed, n, normal, reduced])
   const relWater = waterY - position[1]
   const total = useMemo(() => splinterDuration(shards, relWater), [shards, relWater])
@@ -81,8 +80,7 @@ export function SplinterBurst({ position, normal, seed = 1, count, waterY = BOAR
 
     const d = dust.current
     if (d) {
-      if (!dustAttr.current) dustAttr.current = attachParams(d, dustParts.length)
-      const a = dustAttr.current
+      const a = attachParams(d, dustParts.length)
       dustMat.uniforms.uTime.value = clock.elapsedTime
       for (let i = 0; i < dustParts.length; i++) {
         const p = dustParts[i]

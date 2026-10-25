@@ -24,7 +24,6 @@ export function ImpactFlash({ position, normal = [0, 0, 1], scale = 1, onDone }:
   const flash = useRef<THREE.InstancedMesh>(null)
   const ring = useRef<THREE.Mesh>(null)
   const light = useRef<THREE.PointLight>(null)
-  const attr = useRef<THREE.InstancedBufferAttribute | null>(null)
   const start = useRef<number | null>(null)
   const done = useRef(false)
   const mat = useMemo(() => makeSpriteMaterial('glow', { color: '#ff8a2a', upright: 0, intensity: 2.5 }), [])
@@ -42,8 +41,7 @@ export function ImpactFlash({ position, normal = [0, 0, 1], scale = 1, onDone }:
     const t = clock.elapsedTime - start.current
     const f = flash.current
     if (f) {
-      if (!attr.current) attr.current = attachParams(f, 2)
-      const a = attr.current
+      const a = attachParams(f, 2)
       const k = Math.min(1, t / FLASH_T)
       const s = scale * (0.6 + easeOutCubic(k) * 1.6)
       tmpObj.position.set(0, 0, 0)

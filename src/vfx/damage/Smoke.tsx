@@ -26,7 +26,6 @@ export function Smoke({ position, scale = 1, seed = 2, intensity = 1, color = '#
   const reduced = useReducedMotion()
   const n = count ?? (reduced ? 8 : 14)
   const mesh = useRef<THREE.InstancedMesh>(null)
-  const attr = useRef<THREE.InstancedBufferAttribute | null>(null)
   const mat = useMemo(() => makeSpriteMaterial('smoke', { color, opacity: 0.75 }), [color])
   useEffect(() => () => mat.dispose(), [mat])
   const opts = useMemo<SmokePlumeOptions>(
@@ -38,8 +37,7 @@ export function Smoke({ position, scale = 1, seed = 2, intensity = 1, color = '#
   useFrame(({ clock }) => {
     const m = mesh.current
     if (!m) return
-    if (!attr.current) attr.current = attachParams(m, n)
-    const a = attr.current
+    const a = attachParams(m, n)
     const t = clock.elapsedTime
     mat.uniforms.uTime.value = t
     for (let i = 0; i < n; i++) {

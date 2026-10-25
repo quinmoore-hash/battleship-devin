@@ -162,8 +162,14 @@ export function spriteQuad(): THREE.PlaneGeometry {
   return quad
 }
 
-/** Allocate the per-instance `aParam` attribute on a fresh InstancedMesh. */
+/**
+ * The per-instance `aParam` attribute of an InstancedMesh, allocated on first use. Idempotent and
+ * keyed on the mesh itself: when R3F rebuilds the mesh (e.g. the instance count changes with the
+ * reduced-motion setting) the new mesh gets its own attribute instead of inheriting a stale ref.
+ */
 export function attachParams(mesh: THREE.InstancedMesh, count: number): THREE.InstancedBufferAttribute {
+  const existing = mesh.geometry.getAttribute('aParam') as THREE.InstancedBufferAttribute | undefined
+  if (existing && existing.count === count) return existing
   const geom = mesh.geometry.clone()
   const attr = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4)
   attr.setUsage(THREE.DynamicDrawUsage)

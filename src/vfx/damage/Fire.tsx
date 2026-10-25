@@ -73,7 +73,6 @@ export function Fire({ position, scale = 1, seed = 1, intensity = 1, budget = de
     [emberCount, seed, scale, reduced],
   )
   const emberSeedArr = useMemo(() => emberSeeds(emberOpts), [emberOpts])
-  const params = useRef<{ flame?: THREE.InstancedBufferAttribute; glow?: THREE.InstancedBufferAttribute }>({})
   useEffect(() => () => void (flameMat.dispose(), glowMat.dispose(), emberMat.dispose()), [flameMat, glowMat, emberMat])
 
   // Light budget registration. The oldest live fire renders the shared lights.
@@ -88,8 +87,7 @@ export function Fire({ position, scale = 1, seed = 1, intensity = 1, budget = de
     const t = clock.elapsedTime
     const fm = flames.current
     if (fm) {
-      if (!params.current.flame) params.current.flame = attachParams(fm, tongueCount)
-      const attr = params.current.flame
+      const attr = attachParams(fm, tongueCount)
       flameMat.uniforms.uTime.value = t
       flameMat.uniforms.uIntensity.value = intensity
       for (let i = 0; i < tongues.length; i++) {
@@ -110,8 +108,7 @@ export function Fire({ position, scale = 1, seed = 1, intensity = 1, budget = de
     }
     const gm = glow.current
     if (gm) {
-      if (!params.current.glow) params.current.glow = attachParams(gm, 1)
-      const a = params.current.glow
+      const a = attachParams(gm, 1)
       const pulse = 0.85 + 0.15 * Math.sin(t * 7 + seed)
       tmpObj.position.set(0, 0.25 * scale, 0)
       tmpObj.rotation.set(0, 0, 0)
