@@ -26,6 +26,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/howler": "^2.2.13",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
@@ -33,6 +35,7 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
     "gh-pages": "^6.3.0",
+    "jsdom": "^26.1.0",
     "oxlint": "^1.88.0",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",

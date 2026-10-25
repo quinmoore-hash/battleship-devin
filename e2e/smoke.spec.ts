@@ -4,6 +4,8 @@ import { expect, test } from '@playwright/test'
 // makes the whole page crawl. scene.spec.ts covers the canvas itself.
 for (const difficulty of ['easy', 'medium', 'hard'] as const) {
   test(`a full game can be played on ${difficulty}`, async ({ page }) => {
+    // The UI honours prefers-reduced-motion by collapsing turn pacing, which keeps a 100-shot game well inside the timeout.
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/?no3d')
     await expect(page.getByTestId('ocean-fallback')).toBeVisible()
     await expect(page.getByTestId('main-menu')).toBeVisible()
