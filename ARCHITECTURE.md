@@ -57,9 +57,10 @@ createOpponent(difficulty, rng?) => AiOpponent;  describeStrategy(difficulty);  
 (or a timer when cinematics are off) and then calls `enemyTurn()`.
 
 ### scene (`src/scene`)
-`<OceanScene quality? timeOfDay? view? interactive? dressing?>{children}</OceanScene>` full-screen Canvas with
+`<OceanScene quality? timeOfDay? view? interactive? cameraOverride? dressing? weather?>{children}</OceanScene>` full-screen Canvas with
 WebGL fallback (`?no3d` forces the fallback). `<BoardGrid origin size cellSize highlight? onCellPointerMove? onCellClick? color?>`,
-`<CameraRig view>` with `CameraView = 'menu' | 'placement' | 'battle' | 'gameover'`, `computeAtmosphere`,
+`<CameraRig view interactive? override?>` with `CameraView = 'menu' | 'placement' | 'battle' | 'gameover'` (`override` = a cinematic owns the
+camera: the rig stops writing position/target/fov and disables orbit, then damps back when it flips off), `computeAtmosphere`,
 `sampleWaveHeight/Normal`, layout helpers above, `<SceneDemo>` (`?scene-demo`). Perf knobs (set by `OceanScene` from
 `usePerf()`): `<Lighting shadowSize?>` (0 = no shadow pass), `<Water waves?>`, `<Effects enabled?>` (lazy chunk).
 
@@ -77,6 +78,7 @@ uses it. `useParticlesScale()` / `scaleCount(n, scale)` for VFX counts. `?perf` 
 `<A11yBootstrap>` (prefers-reduced-motion → `reducedMotion` + `cinematics:'fast'`, `<html data-colorblind|
 data-reduced-motion|data-quality>`, Space → `SKIP_CINEMATIC_EVENT`), `announce()`/`<Announcer>` live regions,
 `a11y.css` (focus rings, HUD text halo, colour-blind marker shapes behind `settings.colorblind`, ≥ 44 px cells on touch).
+
 
 ### ships (`src/ships`)
 ```tsx
@@ -102,7 +104,21 @@ Shared helpers today: `particles.ts` (`makeBurst`, `smokePuff`, `particleAt`), `
 
 ### cinematics (`src/cinematics`)
 See `types.ts`: `CinematicEvent` (`shot`, `sink`, `battle-start`, `victory`), `CinematicDirector.play(event, level)`,
-`CINEMATIC_TIMING`. Wave 2 implements `createDirector()` + `<CinematicLayer />`.
+`CINEMATIC_TIMING`.
+```tsx
+director.play(event, level): Promise<void>   // shared instance; resolves when the sequence ends (at once for 'off')
+director.skip(); director.busy; director.setFleets(() => ({ human, enemy }) | null)
+createDirector({ fleets?, reducedMotion?, autoTick?, audio? })   // isolated instance (tests, demos)
+useDirector((s) => s.busy | s.firing | s.sinkProgress | s.impacted | s.letterbox | s.timeScale)
+<CinematicLayer />      // inside <OceanScene>: cannonballs, flashes, splashes, hull impacts, sink water fx, fireworks/wrecks
+<CinematicCamera />     // inside <OceanScene>; pair with <OceanScene cameraOverride={busy}>
+<Letterbox />           // HTML: cinema bars + click / Space / Esc skip
+const cine = useBattleCinematics()   // plays a sequence for every new store event; cine.busy, await cine.idle(), cine.visibleShots(shots)
+pickBattery(ships, target, ownOrigin, targetOrigin), planShot(by, result, shooters, targets), buildSequence(event, level, reducedMotion)
+```
+Pass `firing={useDirector((s) => s.firing)}` and `sinkProgress={useDirector((s) => s.sinkProgress)}` to both `<Fleet>`s.
+Enemy shots fire from an unseen gun line past the far edge of the Navy waters (showing the real ship would leak its
+position). `?cinematics-demo` exercises every sequence.
 
 ### audio (`src/audio`)
 `initAudio()`, `playSfx(name, opts?)` → `SfxHandle` (`stop()` for the `fire-loop` / `bubbles` loops), `playSfxAt(name, worldPos)`

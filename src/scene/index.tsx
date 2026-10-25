@@ -55,6 +55,8 @@ export interface OceanSceneProps {
   view?: CameraView
   /** Allow orbit/zoom. Defaults to true in the battle view only. */
   interactive?: boolean
+  /** A cinematic is driving the camera: the rig stands down until it is false again (see `CameraRig.override`). */
+  cameraOverride?: boolean
   /** Render the islands / landmarks / wildlife (default true). */
   dressing?: boolean
   /** `calm` (default) or `stormy`: overcast, rain, bigger waves, lightning. Also read from `?weather=stormy`. */
@@ -96,7 +98,7 @@ function defaultTimeOfDay(): number {
  * children (ships, markers, grids, the mascot) inside the lit scene. Degrades to a flat
  * gradient when WebGL is unavailable or the URL has `?no3d`.
  */
-export function OceanScene({ children, quality, timeOfDay, view, interactive, dressing = true, weather, onLightning }: OceanSceneProps) {
+export function OceanScene({ children, quality, timeOfDay, view, interactive, cameraOverride, dressing = true, weather, onLightning }: OceanSceneProps) {
   const perf = usePerf()
   if (is3dDisabled()) return <OceanFallback />
   const q = quality ?? defaultQuality()
@@ -112,7 +114,7 @@ export function OceanScene({ children, quality, timeOfDay, view, interactive, dr
         style={{ position: 'fixed', inset: 0, zIndex: 0 }}
         data-testid="ocean-canvas"
       >
-        <SceneContents quality={q} timeOfDay={tod} view={view} interactive={interactive} dressing={dressing} weather={w} onLightning={onLightning}>
+        <SceneContents quality={q} timeOfDay={tod} view={view} interactive={interactive} cameraOverride={cameraOverride} dressing={dressing} weather={w} onLightning={onLightning}>
           {children}
         </SceneContents>
         {perfOverlayRequested() && <PerfStats />}
@@ -127,10 +129,11 @@ function SceneContents({
   timeOfDay,
   view,
   interactive,
+  cameraOverride,
   dressing,
   weather,
   onLightning,
-}: Required<Pick<OceanSceneProps, 'quality' | 'timeOfDay' | 'dressing' | 'weather'>> & Pick<OceanSceneProps, 'children' | 'view' | 'interactive' | 'onLightning'>) {
+}: Required<Pick<OceanSceneProps, 'quality' | 'timeOfDay' | 'dressing' | 'weather'>> & Pick<OceanSceneProps, 'children' | 'view' | 'interactive' | 'cameraOverride' | 'onLightning'>) {
   const perf = usePerf()
   const phase = useGameStore((s) => s.phase)
   const activeView = view ?? PHASE_VIEW[phase] ?? 'menu'
@@ -143,7 +146,7 @@ function SceneContents({
       <Water quality={quality} atmosphere={atmosphere} lightning={lightning} waves={perf.waves} />
       {dressing && <BayDressing atmosphere={atmosphere} quality={quality} />}
       <Rain storm={atmosphere.storm} quality={quality} />
-      <CameraRig view={activeView} interactive={interactive ?? activeView === 'battle'} />
+      <CameraRig view={activeView} interactive={interactive ?? activeView === 'battle'} override={cameraOverride} />
       {children}
       {perf.postprocessing && quality !== 'low' && (
         <Suspense fallback={null}>
