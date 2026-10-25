@@ -1,65 +1,79 @@
-import { isSunk } from '../engine'
+import { useMemo } from 'react'
+import { playSfx } from '../audio'
 import { useGameStore } from '../store/gameStore'
 import { Confetti } from './Confetti'
-import { withSfx } from './sfx'
+import { Skull, WaxSeal } from './Ornaments'
+import { battleReport, captainRank, formatDuration } from './stats'
+import { useUiStore } from './uiStore'
 
+/**
+ * Parchment after-action report. "Replay" and "Photo mode" are owned by the extras session: the
+ * buttons dispatch `battleship:replay` / `battleship:photo` window events for it to hook into.
+ */
 export function GameOverScreen() {
   const winner = useGameStore((s) => s.winner)
-  const difficulty = useGameStore((s) => s.difficulty)
   const events = useGameStore((s) => s.events)
   const playerBoard = useGameStore((s) => s.playerBoard)
   const enemyBoard = useGameStore((s) => s.enemyBoard)
+  const difficulty = useGameStore((s) => s.difficulty)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
-  const reset = useGameStore((s) => s.reset)
   const startGame = useGameStore((s) => s.startGame)
+  const reset = useGameStore((s) => s.reset)
+  const battleStartedAt = useUiStore((s) => s.battleStartedAt)
 
   const won = winner === 'human'
+  const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt])
 
-  const shots = events.filter((e) => e.by === 'human')
-  const hits = shots.filter((e) => e.result.outcome !== 'miss').length
-  const accuracy = shots.length ? Math.round((hits / shots.length) * 100) : 0
-  const shipsLost = playerBoard.ships.filter(isSunk).length
-  const shipsSunk = enemyBoard.ships.filter(isSunk).length
+  const rows: [string, string, string][] = [
+    ['stat-shots', 'Shots fired', String(report.shots)],
+    ['stat-accuracy', 'Accuracy', `${report.accuracy}%`],
+    ['stat-turns', 'Turns', String(report.turns)],
+    ['stat-sunk', 'Enemy ships sunk', `${report.shipsSunk}/5`],
+    ['stat-lost', 'Ships lost', `${report.shipsLost}/5`],
+    ['stat-streak', 'Best streak', String(report.bestStreak)],
+    ['stat-time', 'Battle time', formatDuration(report.seconds)],
+  ]
 
   return (
-    <section className={`gameover ${won ? 'won' : 'lost'}`} data-testid="gameover" data-winner={winner}>
+    <div className="gameover hud" data-testid="gameover" data-winner={winner ?? ''}>
       {won && !reducedMotion && <Confetti />}
-      <div className="panel gameover-card">
-        <p className="eyebrow">{won ? 'Victory' : 'Defeat'}</p>
-        <h1 className="title">{won ? 'You sank the Royal Navy!' : 'Your fleet lies on the seabed.'}</h1>
-
-        <dl className="stats" data-testid="stats">
-          <div>
-            <dt>Shots fired</dt>
-            <dd data-testid="stat-shots">{shots.length}</dd>
-          </div>
-          <div>
-            <dt>Accuracy</dt>
-            <dd data-testid="stat-accuracy">{accuracy}%</dd>
-          </div>
-          <div>
-            <dt>Turns</dt>
-            <dd data-testid="stat-turns">{shots.length}</dd>
-          </div>
-          <div>
-            <dt>Ships sunk</dt>
-            <dd data-testid="stat-sunk">{shipsSunk}/5</dd>
-          </div>
-          <div>
-            <dt>Ships lost</dt>
-            <dd data-testid="stat-lost">{shipsLost}/5</dd>
-          </div>
+      <article className={`panel parchment report ink-in ${won ? 'report-won' : 'report-lost'}`}>
+        <header className="report-head">
+          <span className="report-kicker">After-action report · {difficulty}</span>
+          <h2 className="report-title">{won ? 'Victory!' : 'Sunk!'}</h2>
+          <p className="report-sub">
+            {won ? 'The enemy fleet rests on the seabed. The cove is yours, Captain.' : 'The enemy sent your last ship to the depths. Davy Jones sends his regards.'}
+          </p>
+          <p className="report-rank">
+            Rank earned: <strong data-testid="rank">{captainRank(report, won)}</strong>
+          </p>
+        </header>
+        <dl className="report-stats">
+          {rows.map(([id, label, value]) => (
+            <div key={id} className="stat">
+              <dt>{label}</dt>
+              <dd data-testid={id}>{value}</dd>
+            </div>
+          ))}
         </dl>
-
-        <div className="actions">
-          <button type="button" className="btn primary big" data-testid="rematch" onClick={withSfx(() => startGame(difficulty))}>
-            Rematch on {difficulty}
+        <div className="report-actions">
+          <button type="button" className="btn btn-crimson btn-big" data-testid="rematch" onClick={() => (playSfx('ui-click'), startGame(difficulty))}>
+            Rematch
           </button>
-          <button type="button" className="btn ghost big" data-testid="play-again" onClick={withSfx(reset)}>
-            Play again
+          <button type="button" className="btn btn-brass" data-testid="play-again" onClick={() => (playSfx('ui-click'), reset())}>
+            Menu
+          </button>
+          <button type="button" className="btn btn-rope" data-testid="report-replay" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:replay')))}>
+            Replay
+          </button>
+          <button type="button" className="btn btn-rope" data-testid="report-photo" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:photo')))}>
+            Photo mode
           </button>
         </div>
-      </div>
-    </section>
+        <WaxSeal tone={won ? 'gold' : 'crimson'} className="report-seal">
+          <Skull size={22} />
+        </WaxSeal>
+      </article>
+    </div>
   )
 }

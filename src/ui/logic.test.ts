@@ -1,0 +1,135 @@
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createBoard, FLEET_BY_ID, placeShip } from '../engine'
+import { useGameStore } from '../store/gameStore'
+import { footprintAt } from './placementUtils'
+import { battleReport, captainRank, formatDuration } from './stats'
+import { aimDelay, createTurnFlow, fallbackDuration, setDirector, Sleeper, TimerDirector } from './turnFlow'
+import { resetInteraction, useUiStore } from './uiStore'
+
+describe('footprintAt', () => {
+  const sloop = FLEET_BY_ID.sloop
+  const frigate = FLEET_BY_ID.frigate
+  it('anchors the ship under the grabbed cell and clamps to the board', () => {
+    const f = footprintAt(createBoard(), frigate, { x: 5, y: 2 }, 'horizontal', 2)
+    expect(f.origin).toEqual({ x: 3, y: 2 })
+    expect(f.valid).toBe(true)
+    const edge = footprintAt(createBoard(), frigate, { x: 9, y: 9 }, 'vertical', 0)
+    expect(edge.origin).toEqual({ x: 9, y: 7 })
+    expect(edge.cells).toHaveLength(3)
+    const low = footprintAt(createBoard(), frigate, { x: 0, y: 0 }, 'horizontal', 2)
+    expect(low.origin).toEqual({ x: 0, y: 0 })
+  })
+  it('flags overlaps as invalid', () => {
+    const board = placeShip(createBoard(), sloop, { x: 0, y: 0 }, 'horizontal')!
+    expect(footprintAt(board, frigate, { x: 1, y: 0 }, 'horizontal').valid).toBe(false)
+    expect(footprintAt(board, frigate, { x: 1, y: 1 }, 'horizontal').valid).toBe(true)
+  })
+})
+
+describe('stats', () => {
+  it('summarises shots, accuracy, streaks and time', () => {
+    const s = useGameStore.getState()
+    s.startGame('easy')
+    s.autoPlacePlayerFleet()
+    s.confirmPlacement()
+    const target = useGameStore.getState().enemyBoard.ships.find((x) => x.spec.id === 'sloop')!
+    for (const c of target.cells) {
+      useGameStore.getState().fireAt(c)
+      useGameStore.getState().enemyTurn()
+    }
+    const g = useGameStore.getState()
+    const r = battleReport(g.events, g.playerBoard, g.enemyBoard, 1000, 66_000)
+    expect(r.shots).toBe(2)
+    expect(r.hits).toBe(2)
+    expect(r.accuracy).toBe(100)
+    expect(r.bestStreak).toBe(2)
+    expect(r.shipsSunk).toBe(1)
+    expect(r.enemyShots).toBe(2)
+    expect(r.seconds).toBe(65)
+    expect(formatDuration(65)).toBe('1:05')
+    expect(formatDuration(3723)).toBe('1:02:03')
+    expect(captainRank(r, true)).toBe('Terror of the Seas')
+    expect(captainRank({ ...r, shipsSunk: 0 }, false)).toBe('Powder Monkey')
+  })
+})
+
+describe('turnFlow', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset()
+    useGameStore.getState().updateSettings({ cinematics: 'full', reducedMotion: false })
+    setDirector(null)
+    resetInteraction()
+  })
+
+  it('scales timings and collapses them when cinematics are off / reduced motion', () => {
+    expect(fallbackDuration({ type: 'shot', by: 'human', target: { x: 0, y: 0 }, result: { coord: { x: 0, y: 0 }, outcome: 'miss' } }, 'full')).toBe(675)
+    expect(fallbackDuration({ type: 'sink', owner: 'enemy', shipId: 'sloop' }, 'fast')).toBe(300)
+    expect(fallbackDuration({ type: 'battle-start' }, 'off')).toBe(30)
+    expect(fallbackDuration({ type: 'victory', winner: 'human' }, 'full', true)).toBe(30)
+    expect(aimDelay('hard', false, () => 0)).toBe(500)
+    expect(aimDelay('easy', false, () => 1)).toBe(1700)
+    expect(aimDelay('easy', true, () => 0.5)).toBe(90)
+  })
+
+  it('a Sleeper can be skipped', async () => {
+    vi.useFakeTimers()
+    const s = new Sleeper()
+    let done = false
+    void s.wait(5000).then(() => (done = true))
+    s.skip()
+    await Promise.resolve()
+    expect(done).toBe(true)
+    const d = new TimerDirector()
+    const p = d.play({ type: 'battle-start' }, 'full')
+    expect(d.busy).toBe(true)
+    d.skip()
+    await p
+    expect(d.busy).toBe(false)
+    vi.useRealTimers()
+  })
+
+  it('plays player shot → enemy aims → enemy shot through the store and a custom director', async () => {
+    const g = useGameStore.getState()
+    g.startGame('medium')
+    g.autoPlacePlayerFleet()
+    g.confirmPlacement()
+    g.updateSettings({ cinematics: 'off' })
+    const played: string[] = []
+    setDirector({
+      busy: false,
+      play: async (e) => void played.push(e.type + (e.type === 'shot' ? `:${e.by}` : '')),
+      skip: () => {},
+    })
+    const beats: string[] = []
+    const flow = createTurnFlow({ onBeat: (b) => beats.push(b.phase), rng: () => 0 })
+    const result = await flow.fire({ x: 0, y: 0 })
+    expect(result?.coord).toEqual({ x: 0, y: 0 })
+    expect(useGameStore.getState().events).toHaveLength(2)
+    expect(played[0]).toBe('shot:human')
+    expect(played).toContain('shot:enemy')
+    expect(beats[0]).toBe('player-shot')
+    expect(beats).toContain('enemy-aiming')
+    expect(beats.at(-1)).toBe('done')
+    expect(await flow.fire({ x: 0, y: 0 })).toBeUndefined() // already shot
+    flow.dispose()
+  })
+})
+
+describe('uiStore', () => {
+  it('resets interaction state on phase change but keeps prefs', () => {
+    const ui = useUiStore.getState()
+    ui.setCarrying('sloop', 'vertical')
+    ui.setPendingTarget({ x: 1, y: 1 })
+    useGameStore.getState().startGame('easy')
+    const after = useUiStore.getState()
+    expect(after.carrying).toBeNull()
+    expect(after.pendingTarget).toBeNull()
+    expect(after.orientation).toBe('horizontal')
+    after.rotate()
+    expect(useUiStore.getState().orientation).toBe('vertical')
+    after.dismissHint('battle')
+    after.dismissHint('battle')
+    expect(useUiStore.getState().hintsSeen).toEqual(['battle'])
+  })
+})

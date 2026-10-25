@@ -6,13 +6,15 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
     <Modal title="How to play" testId="how-to-play" onClose={onClose}>
       <ol className="howto">
         <li>
-          <strong>Place your fleet.</strong> Pick a ship from the tray, hover the grid to preview, press{' '}
-          <kbd>R</kbd> to rotate, click to drop it. Click a placed ship to pick it back up, or just
-          hit <em>Auto-place</em>.
+          <strong>Muster your fleet.</strong> Pick a ship from the tray and hover your waters — on the sea or
+          on the chart — to preview where it anchors. Press <kbd>R</kbd>, right-click or tap <em>Rotate</em> to
+          turn it, click to drop it. Drag a ship on the water to move it, click it to lift it, or just hit{' '}
+          <em>Auto-place</em>.
         </li>
         <li>
-          <strong>Take turns firing.</strong> Click a cell in the enemy waters. Orange means hit, blue
-          means miss, red means you sank something. Then the enemy fires back.
+          <strong>Take turns firing.</strong> Aim your spyglass over the enemy waters and click to fire (on a
+          touch screen, tap once to aim and again to fire). Orange means hit, blue means miss, crimson means
+          you sank something. Then the enemy fires back — press <kbd>Space</kbd> to skip the cinematic.
         </li>
         <li>
           <strong>Sink all five</strong> enemy ships before they sink yours.

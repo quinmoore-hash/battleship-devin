@@ -124,7 +124,7 @@ describe('battle', () => {
     store().confirmPlacement()
   })
 
-  it('fires, blocks input while the enemy aims, then hands the turn back', () => {
+  it('fires, blocks input while the enemy aims, then hands the turn back', async () => {
     vi.useFakeTimers()
     ui()
     expect(screen.getByTestId('status').textContent).toContain('Your turn')
@@ -136,13 +136,13 @@ describe('battle', () => {
     fireEvent.click(cell('enemy-grid', 1, 0))
     expect(store().events).toHaveLength(1)
 
-    act(() => vi.advanceTimersByTime(800))
+    await act(() => vi.advanceTimersByTimeAsync(800))
     expect(screen.getByTestId('status').textContent).toContain('The enemy is aiming')
 
-    act(() => vi.advanceTimersByTime(1400))
+    await act(() => vi.advanceTimersByTimeAsync(1400))
     expect(store().events).toHaveLength(2)
     expect(store().events[1].by).toBe('enemy')
-    act(() => vi.advanceTimersByTime(600))
+    await act(() => vi.advanceTimersByTimeAsync(800))
     expect(screen.getByTestId('status').textContent).toContain('Your turn')
     expect(screen.getByTestId('shot-log').querySelectorAll('li')).toHaveLength(2)
   })
@@ -170,13 +170,13 @@ describe('battle', () => {
     expect(screen.getByTestId('main-menu')).toBeTruthy()
   })
 
-  it('shows fleet status that greys out sunk ships', () => {
+  it('shows fleet status that greys out sunk ships', async () => {
     const target = store().enemyBoard.ships.find((s) => s.spec.id === 'sloop')!
     ui()
     vi.useFakeTimers()
     for (const c of target.cells) {
       fireEvent.click(cell('enemy-grid', c.x, c.y))
-      act(() => vi.advanceTimersByTime(3000))
+      await act(() => vi.advanceTimersByTimeAsync(4000))
     }
     expect(screen.getByTestId('fleet-status-enemy-sloop').dataset.sunk).toBe('true')
     expect(screen.getByTestId('fleet-status-enemy-afloat').textContent).toBe('4/5 afloat')
@@ -214,3 +214,15 @@ describe('game over', () => {
   })
 })
 
+
+describe('battle player chart', () => {
+  it('marks own ship cells on the player chart', () => {
+    store().startGame('easy')
+    store().autoPlacePlayerFleet()
+    store().confirmPlacement()
+    ui()
+    const own = store().playerBoard.ships.flatMap((s) => s.cells)
+    for (const c of own) expect(cell('player-grid', c.x, c.y).dataset.state).toBe('ship')
+    expect(screen.getByTestId('player-grid').querySelectorAll('[data-state="ship"]')).toHaveLength(17)
+  })
+})

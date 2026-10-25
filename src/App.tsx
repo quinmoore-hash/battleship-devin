@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { ExtrasLayer, useGameWeather } from './extras'
 import { OceanScene } from './scene'
 import { GameUI } from './ui'
+import { GameWorld } from './ui/world/GameWorld'
 import { A11yBootstrap } from './perf/a11y/A11yBootstrap'
 import { PerfBootstrap, perfOverlayRequested } from './perf/PerfBootstrap'
 import { PerfOverlay } from './perf/PerfOverlay'
@@ -58,11 +59,12 @@ export default function App() {
   }
   return (
     <>
-      <OceanScene weather={weather} />
       <PerfBootstrap />
       <FpsWatchdog />
       <A11yBootstrap />
-      <OceanScene />
+      <OceanScene weather={weather}>
+        <GameWorld />
+      </OceanScene>
       <GameUI />
       <ExtrasLayer />
       <QualityToast />
