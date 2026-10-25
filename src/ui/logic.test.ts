@@ -228,7 +228,10 @@ describe('turnFlow integration (director, volleys, victory)', () => {
     const g = useGameStore.getState()
     // sink everything but one cell of the enemy fleet
     const cells = g.enemyBoard.ships.flatMap((s) => s.cells)
-    for (const c of cells.slice(0, -1)) g.fireAt(c), useGameStore.setState({ turn: 'human' })
+    for (const c of cells.slice(0, -1)) {
+      g.fireAt(c)
+      useGameStore.setState({ turn: 'human' })
+    }
     const played: string[] = []
     let skipped = 0
     setDirector({ ...recordingDirector(played), skip: () => skipped++ })
