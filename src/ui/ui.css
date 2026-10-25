@@ -13,7 +13,13 @@
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 1;
+  /* fixed roots are stacking contexts: stay above the canvas but below the extras dock/overlays (z 20);
+     modals portal to <body> (.ui-portal, z 40) so they still beat the dock */
+  z-index: 10;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+.ui-portal {
   font-family: var(--font-body);
   color: var(--ink);
 }
@@ -23,11 +29,12 @@
 .ui-root .panel,
 .ui-root button,
 .ui-root .modal-backdrop,
+.ui-portal,
 .ui-root .hint,
-.ui-root .loading,
-.ui-root .menu {
+.ui-root .loading {
   pointer-events: auto;
 }
+/* the menu root itself stays click-through so the extras dock underneath (game modes, stats) is reachable */
 .phase {
   position: absolute;
   inset: 0;
@@ -281,7 +288,8 @@
   stroke: var(--brass-dark);
 }
 .compass-spin .compass-needle {
-  animation: needle-wobble 1.6s ease-in-out infinite;
+  /* one swing while the enemy aims — no continuous animation during battle */
+  animation: needle-wobble 1.4s ease-in-out 1;
 }
 .skull {
   display: inline-block;
@@ -380,9 +388,10 @@
   display: grid;
   grid-template-rows: auto 1fr auto auto;
   justify-items: center;
-  align-content: center;
-  gap: clamp(10px, 2vh, 26px);
-  padding: clamp(12px, 3vh, 32px) 16px;
+  align-content: start;
+  gap: clamp(10px, 2vh, 22px);
+  /* bottom room for the extras dock (game modes / salvo), which is fixed at bottom: 18px */
+  padding: clamp(12px, 3vh, 32px) 16px 190px;
   overflow: auto;
   background: radial-gradient(ellipse at 50% 35%, rgba(5, 20, 30, 0) 30%, rgba(5, 15, 25, 0.55) 100%);
 }
@@ -560,15 +569,17 @@
   font-size: 0.85rem;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
-.menu-foot .compass {
-  animation: slow-spin 40s linear infinite;
+@media (prefers-reduced-motion: no-preference) {
+  .menu-foot .compass {
+    animation: slow-spin 40s linear infinite;
+  }
 }
 
 /* ---------- loading ---------- */
 .loading {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 45;
   display: grid;
   place-items: center;
   background: radial-gradient(ellipse at 50% 40%, #16485c, var(--sea) 75%);
@@ -599,8 +610,10 @@
   font-weight: 400;
   font-size: 1.6rem;
 }
-.loading .compass {
-  animation: slow-spin 6s linear infinite;
+@media (prefers-reduced-motion: no-preference) {
+  .loading .compass {
+    animation: slow-spin 6s linear infinite;
+  }
 }
 .progress {
   width: 100%;
@@ -1004,6 +1017,9 @@
   font-size: 1.1rem;
 }
 .target-readout {
+  /* fixed width: the readout must never change the panel size (it would re-wrap the charts under the pointer) */
+  min-width: 7.5ch;
+  text-align: right;
   margin-left: auto;
   font-family: var(--font-display);
   letter-spacing: 0.1em;
@@ -1302,15 +1318,19 @@
   position: absolute;
   top: -20px;
   border-radius: 2px;
-  animation: confetti-fall linear infinite;
   opacity: 0.9;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .confetti i {
+    animation: confetti-fall linear infinite;
+  }
 }
 
 /* ---------- modals ---------- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: 40; /* above the extras dock (z 20) */
   display: grid;
   place-items: center;
   padding: 1rem;
@@ -1418,6 +1438,15 @@
 .settings input[type='range'] {
   accent-color: var(--crimson);
   width: 100%;
+}
+.settings .select {
+  font: inherit;
+  font-family: var(--font-display);
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--brass-dark);
+  background: rgba(255, 250, 235, 0.6);
+  color: var(--ink);
 }
 .settings input[type='checkbox'] {
   width: 18px;
@@ -1654,4 +1683,43 @@
 .settings-quality {
   border-color: var(--brass-dark);
   background: rgba(217, 169, 60, 0.12);
+}
+
+/* touch devices: 44 px targets; the board scrolls sideways inside its panel instead of clipping (a11y e2e) */
+@media (pointer: coarse) {
+  .ui-root .grid-wrap,
+  .ui-root[data-no3d='true'] .battle .grid-wrap,
+  .ui-root[data-no3d='true'] .placement .grid-wrap {
+    --cell: 44px;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .chart-panel,
+  .charts .chart-panel,
+  .placement-chart {
+    width: 100%;
+    max-width: 100%;
+  }
+  .ui-root .grid-wrap {
+    width: auto;
+    justify-self: stretch;
+  }
+  .charts {
+    align-items: stretch;
+    width: 100%;
+  }
+  /* percentages must resolve against the viewport, not the board's natural width */
+  .battle-body,
+  .charts,
+  .chart-panel,
+  .grid-wrap,
+  .placement-body,
+  .placement-chart {
+    min-width: 0;
+  }
+  .battle-body,
+  .placement-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

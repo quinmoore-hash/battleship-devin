@@ -27,7 +27,7 @@ const LIFT = 0.45
  */
 export function GameWorld() {
   const phase = useGameStore((s) => s.phase)
-  const quality = useUiStore((s) => s.quality)
+  const quality = useGameStore((s) => s.settings.quality)
   // low = cheap ocean + low ship detail; medium = cheap ocean, full ships; high/auto = everything.
   const shipQuality = quality === 'low' ? 'low' : 'high'
   return (

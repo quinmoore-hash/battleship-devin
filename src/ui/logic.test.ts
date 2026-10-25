@@ -119,7 +119,6 @@ describe('turnFlow', () => {
 describe('uiStore', () => {
   it('resets interaction state on phase change but keeps prefs', () => {
     const ui = useUiStore.getState()
-    ui.setPrefs({ colorblind: true, quality: 'low' })
     ui.setCarrying('sloop', 'vertical')
     ui.setPendingTarget({ x: 1, y: 1 })
     useGameStore.getState().startGame('easy')
@@ -127,8 +126,6 @@ describe('uiStore', () => {
     expect(after.carrying).toBeNull()
     expect(after.pendingTarget).toBeNull()
     expect(after.orientation).toBe('horizontal')
-    expect(after.colorblind).toBe(true)
-    expect(after.quality).toBe('low')
     after.rotate()
     expect(useUiStore.getState().orientation).toBe('vertical')
     after.dismissHint('battle')

@@ -1,6 +1,7 @@
 import type { CinematicDirector, CinematicEvent } from '../cinematics'
 import { CINEMATIC_TIMING } from '../cinematics'
 import type { Coord, Difficulty, ShotResult } from '../engine'
+import { is3dDisabled } from '../scene/flags'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
 
 /**
@@ -55,6 +56,11 @@ export function fallbackDuration(event: CinematicEvent, level: CinematicsLevel, 
 export function aimDelay(difficulty: Difficulty, quick: boolean, rng = Math.random): number {
   const [a, b] = quick ? AIM_DELAY.reduced : AIM_DELAY[difficulty]
   return Math.round(a + rng() * (b - a))
+}
+
+/** The cinematics level the turn flow actually uses: `full` needs the 3D world to be worth watching. */
+export function effectiveLevel(level: CinematicsLevel, no3d: boolean = is3dDisabled()): CinematicsLevel {
+  return level === 'full' && no3d ? 'fast' : level
 }
 
 /** A skippable wait. `skip()` resolves it immediately. */
@@ -132,7 +138,8 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
   let disposed = false
 
   const play = async (event: CinematicEvent) => {
-    const { cinematics } = useGameStore.getState().settings
+    // Without the 3D world (`?no3d` / no WebGL) there is nothing to watch, so 'full' pacing drops to 'fast'.
+    const cinematics = effectiveLevel(useGameStore.getState().settings.cinematics)
     const d = director ?? timers
     try {
       await d.play(event, cinematics)

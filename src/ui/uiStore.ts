@@ -5,14 +5,10 @@ import { useGameStore } from '../store/gameStore'
 
 export const UI_PREFS_STORAGE_KEY = 'battleship-devin.ui'
 
-export type QualitySetting = 'auto' | 'low' | 'medium' | 'high'
 export type BoardSide = 'player' | 'enemy'
 
 /** Persisted player preferences that don't belong to the game rules store. */
 export interface UiPrefs {
-  quality: QualitySetting
-  /** Draw hit/miss/sunk glyphs on the HTML charts as well as colour. */
-  colorblind: boolean
   /** First-play hints the player has dismissed. */
   hintsSeen: string[]
 }
@@ -48,7 +44,7 @@ export interface UiState extends UiPrefs, UiInteraction {
   dismissHint: (id: string) => void
 }
 
-const DEFAULT_PREFS: UiPrefs = { quality: 'auto', colorblind: false, hintsSeen: [] }
+const DEFAULT_PREFS: UiPrefs = { hintsSeen: [] }
 
 export const useUiStore = create<UiState>()(
   persist(
@@ -77,13 +73,11 @@ export const useUiStore = create<UiState>()(
       name: UI_PREFS_STORAGE_KEY,
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ quality: s.quality, colorblind: s.colorblind, hintsSeen: s.hintsSeen }),
+      partialize: (s) => ({ hintsSeen: s.hintsSeen }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<UiPrefs>
         return {
           ...current,
-          quality: p.quality === 'low' || p.quality === 'medium' || p.quality === 'high' || p.quality === 'auto' ? p.quality : current.quality,
-          colorblind: typeof p.colorblind === 'boolean' ? p.colorblind : current.colorblind,
           hintsSeen: Array.isArray(p.hintsSeen) ? p.hintsSeen.filter((h): h is string => typeof h === 'string') : current.hintsSeen,
         }
       },

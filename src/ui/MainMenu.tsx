@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useProgress } from '@react-three/drei'
 import { useEffect, useState } from 'react'
 import { playSfx } from '../audio'
@@ -112,8 +113,8 @@ export function LoadingScreen() {
 
   if (hidden) return null
   const pct = Math.round(Math.min(100, done ? 100 : worldReady ? Math.max(progress, 90) : Math.min(progress, 85)))
-  return (
-    <div className={`loading ${done ? 'loading-out' : ''}`} data-testid="loading" role="status" aria-live="polite">
+  return createPortal(
+    <div className={`loading ui-portal ${done ? 'loading-out' : ''}`} data-testid="loading" role="status" aria-live="polite">
       <div className="loading-card">
         <CompassRose size={84} spinning />
         <h2>Rigging the ships…</h2>
@@ -125,6 +126,7 @@ export function LoadingScreen() {
           <em>Tip:</em> {tip}
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

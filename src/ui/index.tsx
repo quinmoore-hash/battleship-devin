@@ -9,7 +9,6 @@ import { MainMenu } from './MainMenu'
 import { PlacementScreen } from './Placement'
 import { SettingsModal } from './SettingsPanel'
 import { UiContext, type UiModal } from './UiContext'
-import { useUiStore } from './uiStore'
 import './ui.css'
 
 export { GameWorld } from './world/GameWorld'
@@ -20,7 +19,7 @@ export function GameUI() {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const winner = useGameStore((s) => s.winner)
   const updateSettings = useGameStore((s) => s.updateSettings)
-  const colorblind = useUiStore((s) => s.colorblind)
+  const colorblind = useGameStore((s) => s.settings.colorblind)
   const [modal, setModal] = useState<UiModal>(null)
 
   useEffect(() => {

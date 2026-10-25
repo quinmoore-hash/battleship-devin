@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { type ReactNode, useEffect, useRef } from 'react'
 import { withSfx } from './sfx'
 
@@ -24,8 +25,8 @@ export function Modal({ title, testId, onClose, children }: ModalProps) {
     }
   }, [onClose])
 
-  return (
-    <div className="modal-backdrop" onClick={onClose} data-testid={`${testId}-backdrop`}>
+  return createPortal(
+    <div className="modal-backdrop ui-portal" onClick={onClose} data-testid={`${testId}-backdrop`}>
       <div
         ref={ref}
         className="modal panel"
@@ -49,6 +50,7 @@ export function Modal({ title, testId, onClose, children }: ModalProps) {
         </header>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

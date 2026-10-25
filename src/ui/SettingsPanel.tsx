@@ -1,7 +1,6 @@
 import { playSfx, useAudioSettings } from '../audio'
-import { useGameStore, type CinematicsLevel } from '../store/gameStore'
+import { useGameStore, type CinematicsLevel, type QualitySetting } from '../store/gameStore'
 import { Modal } from './Modal'
-import { useUiStore, type QualitySetting } from './uiStore'
 
 /**
  * Settings. Volumes/mute are written to both the game store (rules/cinematics timing) and the
@@ -14,9 +13,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const setSfx = useAudioSettings((s) => s.setSfxVolume)
   const setMusic = useAudioSettings((s) => s.setMusicVolume)
   const toggleMuted = useAudioSettings((s) => s.toggleMuted)
-  const quality = useUiStore((s) => s.quality)
-  const colorblind = useUiStore((s) => s.colorblind)
-  const setPrefs = useUiStore((s) => s.setPrefs)
 
   const onSfx = (v: number) => (updateSettings({ sfxVolume: v }), setSfx(v))
   const onMusic = (v: number) => (updateSettings({ musicVolume: v }), setMusic(v))
@@ -28,7 +24,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <legend>Picture</legend>
           <label className="row">
             <span>Quality</span>
-            <Segmented value={quality} options={['auto', 'low', 'medium', 'high']} testId="setting-quality" onChange={(v) => setPrefs({ quality: v as QualitySetting })} />
+            <select className="select" data-testid="setting-quality" value={settings.quality} onChange={(e) => (playSfx('ui-click'), updateSettings({ quality: e.target.value as QualitySetting }))}>
+              <option value="auto">Auto</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
           </label>
           <p className="muted small">If the sea stutters, pick Low or Medium: no bloom, shadows or far waves (Low also simplifies the ships). Auto picks for your machine.</p>
           <label className="row">
@@ -58,7 +59,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <span>Reduced motion (no camera shake, shorter effects, quick turns)</span>
           </label>
           <label className="row row-check">
-            <input type="checkbox" checked={colorblind} data-testid="setting-colorblind" onChange={(e) => setPrefs({ colorblind: e.target.checked })} />
+            <input type="checkbox" checked={settings.colorblind} data-testid="setting-colorblind" onChange={(e) => updateSettings({ colorblind: e.target.checked })} />
             <span>Colorblind-safe markers (shapes on hits, misses and sunk cells)</span>
           </label>
         </fieldset>

@@ -63,10 +63,10 @@ export function GameOverScreen() {
           <button type="button" className="btn btn-brass" data-testid="play-again" onClick={() => (playSfx('ui-click'), reset())}>
             Menu
           </button>
-          <button type="button" className="btn btn-rope" data-testid="replay" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:replay')))}>
+          <button type="button" className="btn btn-rope" data-testid="report-replay" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:replay')))}>
             Replay
           </button>
-          <button type="button" className="btn btn-rope" data-testid="photo-mode" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:photo')))}>
+          <button type="button" className="btn btn-rope" data-testid="report-photo" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:photo')))}>
             Photo mode
           </button>
         </div>

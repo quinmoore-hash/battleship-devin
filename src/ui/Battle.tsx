@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, viewGrid, type Coord, type ShotResult } from '../engine'
 import { useGameStore } from '../store/gameStore'
+import { SKIP_CINEMATIC_EVENT } from '../perf/a11y/A11yBootstrap'
 import { useBattleController } from './battleController'
 import { FleetStatus } from './FleetStatus'
 import { Grid, type GridCellInfo } from './Grid'
@@ -62,8 +63,13 @@ export function BattleScreen() {
       }
       if (e.key === 'Escape') setPendingTarget(null)
     }
+    const onSkipEvent = () => skip()
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener(SKIP_CINEMATIC_EVENT, onSkipEvent)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener(SKIP_CINEMATIC_EVENT, onSkipEvent)
+    }
   }, [busy, skip, setPendingTarget])
 
   const yourTurn = turn === 'human' && !busy
@@ -111,6 +117,9 @@ export function BattleScreen() {
             <p className="status" data-testid="status" role="status" aria-live="polite">
               {statusText}
             </p>
+            <span className="sr-only" aria-live="assertive" data-testid="shot-announcer">
+              {last ? `${last.by === 'human' ? 'You' : 'The enemy'} fired at ${coordLabel(last.result.coord)}: ${outcomeWord(last.result)}` : ''}
+            </span>
             {busy && cinematics !== 'off' && (
               <button type="button" className="link-btn skip-hint" data-testid="skip-cinematic" onClick={skip}>
                 Press Space or click to skip
@@ -143,7 +152,7 @@ export function BattleScreen() {
           <div className="panel parchment chart-panel chart-enemy" aria-label="Enemy waters">
             <h2 className="panel-title small-title">
               Enemy waters <span className="spyglass" aria-hidden>◎</span>
-              {target && yourTurn && <span className="target-readout">Target {coordLabel(target)}</span>}
+              <span className="target-readout">{target && yourTurn ? `Target ${coordLabel(target)}` : '—'}</span>
             </h2>
             <Grid testId="enemy-grid" label="Enemy waters — fire" cell={enemyCell} onCell={onEnemyCell} onHover={(c) => setHover(c ? { side: 'enemy', coord: c } : null)} disabled={!yourTurn} lockResolved />
             {pending && yourTurn && (

@@ -145,7 +145,7 @@ Game over dispatches `window` events `battleship:replay` and `battleship:photo` 
 (contains "Your turn" when the human may fire), `gameover[data-winner]`, `play-again`, `rematch`, `quit`, `quit-confirm`,
 `nav-settings`, `nav-how-to-play`. Also used: `ship-tray-{id}[data-placed][aria-pressed]`, `placed-count`, `rotate`,
 `clear-placement`, `restart`, `skip-cinematic`, `fire-confirm(-yes|-no)`, `shot-log`, `fleet-status-{side}-{id}[data-sunk]`,
-`stat-{shots|accuracy|turns|sunk|lost|streak|time}`, `rank`, `replay`, `photo-mode`, `hint-{placement|battle}`, `loading`,
+`stat-{shots|accuracy|turns|sunk|lost|streak|time}`, `rank`, `report-replay`, `report-photo`, `hint-{placement|battle}`, `loading`,
 `setting-{sfx|music|mute|reduced-motion|colorblind}`, `setting-{cinematics|quality}-{option}`, `settings-close`,
 `ui-root[data-colorblind][data-no3d]`. If you redesign the UI, keep these (or update `e2e/` in the same PR).
 Playwright runs with `?no3d` for flow tests and with SwiftShader for the 3D smoke test; cinematics must honour

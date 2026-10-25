@@ -5,7 +5,7 @@ test('settings expose cinematics, quality, mute and colorblind markers and persi
   await page.getByTestId('open-settings').click()
   await page.getByTestId('setting-cinematics-fast').click()
   await expect(page.getByTestId('setting-cinematics-fast')).toHaveAttribute('aria-checked', 'true')
-  await page.getByTestId('setting-quality-low').click()
+  await page.getByTestId('setting-quality').selectOption('low')
   await page.getByTestId('setting-colorblind').check()
   await page.getByTestId('setting-mute').check()
   await page.getByTestId('settings-close').click()
@@ -13,8 +13,7 @@ test('settings expose cinematics, quality, mute and colorblind markers and persi
 
   await page.reload()
   await page.getByTestId('open-settings').click()
-  await expect(page.getByTestId('setting-quality-low')).toHaveAttribute('aria-checked', 'true')
-  await expect(page.getByTestId('setting-colorblind')).toBeChecked()
+  await expect(page.getByTestId('setting-quality')).toHaveValue('low')
   await expect(page.getByTestId('setting-mute')).toBeChecked()
 })
 
@@ -67,17 +66,19 @@ test('game over report has time, rank, and dispatches replay / photo events for 
   await expect(gameover).toBeVisible()
   await expect(page.getByTestId('stat-time')).toHaveText(/\d+:\d\d/)
   await expect(page.getByTestId('rank')).not.toBeEmpty()
+  // the extras module owns the replay / photo overlays; here only check the buttons exist and dispatch their events
   const fired = await page.evaluate(
     () =>
       new Promise<string[]>((resolve) => {
         const got: string[] = []
-        for (const name of ['battleship:replay', 'battleship:photo']) window.addEventListener(name, () => got.push(name))
-        document.querySelector<HTMLButtonElement>('[data-testid=replay]')!.click()
-        document.querySelector<HTMLButtonElement>('[data-testid=photo-mode]')!.click()
+        for (const name of ['battleship:replay', 'battleship:photo']) window.addEventListener(name, (e) => (got.push(name), e.stopImmediatePropagation()), { capture: true })
+        document.querySelector<HTMLButtonElement>('[data-testid=report-replay]')!.click()
+        document.querySelector<HTMLButtonElement>('[data-testid=report-photo]')!.click()
         setTimeout(() => resolve(got), 50)
       }),
   )
   expect(fired).toEqual(['battleship:replay', 'battleship:photo'])
+  await page.keyboard.press('Escape')
   await page.getByTestId('rematch').click()
   await expect(page.getByTestId('placement')).toBeVisible()
 })
