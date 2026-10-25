@@ -169,7 +169,7 @@ function Row({ livery, recoil, set, torn, snapped, lit, lod }: RowProps) {
       <group position={[x('mast'), 0, 0]}>
         <Mast position={[0, 0, 0]} height={3.4} livery={livery} yards={[[2.0, 1.4], [1.5, 2.3], [1.0, 3.05]]} sails={set} torn={torn} snapped={snapped} crowsNest flag="both" lod={lod} />
         <Ratlines from={[0.1, 0.1, 0.95]} to={[0, 1.88, 0.18]} livery={livery} rungs={11} lod={lod} />
-        <Rope from={[0, 3.3, 0]} to={[1.2, 0.3, 0]} sag={0.08} livery={livery} lod={lod} />
+        <Rope from={[0, snapped > 0.3 ? 1.95 : 3.3, 0]} to={[1.2, 0.3, 0]} sag={0.08} livery={livery} lod={lod} />
         <Rope from={[0, 1.85, 0]} to={[-1.15, 0.3, 0]} sag={0.12} livery={livery} lod={lod} />
         <Cleat position={[1.2, 0, 0]} livery={livery} />
         <Cleat position={[-1.15, 0, 0]} livery={livery} />
