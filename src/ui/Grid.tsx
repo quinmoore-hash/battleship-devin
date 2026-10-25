@@ -54,12 +54,16 @@ export function Grid({
   )
   let tabStop = active
   if (isDisabledAt(active)) {
-    outer: for (let y = 0; y < size; y++)
-      for (let x = 0; x < size; x++)
-        if (!isDisabledAt({ x, y })) {
+    // nearest live cell, so keyboard focus (and a scrolled phone board) stays where the player was
+    let best = Infinity
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const d = Math.abs(x - active.x) + Math.abs(y - active.y)
+        if (d < best && !isDisabledAt({ x, y })) {
+          best = d
           tabStop = { x, y }
-          break outer
         }
+      }
   }
   const stopDisabled = isDisabledAt(tabStop)
   useEffect(() => {
@@ -68,7 +72,7 @@ export function Grid({
     const ae = document.activeElement
     if (!root || (ae && root.contains(ae) && !(ae as HTMLButtonElement).disabled)) return
     if (ae && ae !== document.body && !root.contains(ae)) return
-    root.querySelector<HTMLButtonElement>(`[data-testid="${testId}-${tabStop.x}-${tabStop.y}"]`)?.focus()
+    root.querySelector<HTMLButtonElement>(`[data-testid="${testId}-${tabStop.x}-${tabStop.y}"]`)?.focus({ preventScroll: true })
   }, [stopDisabled, tabStop.x, tabStop.y, testId])
   const onBlur = (e: FocusEvent<HTMLDivElement>) => {
     const to = e.relatedTarget as Node | null

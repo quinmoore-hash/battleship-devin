@@ -50,7 +50,7 @@ export function PerfOverlay() {
       <pre ref={ref} style={{ margin: 0 }} data-testid="perf-stats" />
       <div style={{ marginTop: 6, color: '#cfe8ff' }}>
         tier <b data-testid="perf-tier">{profile.tier}</b> (detected {detected}
-        {probed ? `, probe ${probeFps?.toFixed(0)} fps` : ', probing…'}) · dpr ≤{profile.dpr[1]} · shadows {profile.shadows || 'off'} · post {profile.postprocessing ? 'on' : 'off'} · lod ≥{profile.lod} · particles ×{profile.particlesScale}
+        {probed ? (probeFps === undefined ? ', probe skipped' : `, probe ${probeFps.toFixed(0)} fps`) : ', probing…'}) · dpr ≤{profile.dpr[1]} · shadows {profile.shadows || 'off'} · post {profile.postprocessing ? 'on' : 'off'} · lod ≥{profile.lod} · particles ×{profile.particlesScale}
       </div>
       <div style={{ marginTop: 4, display: 'flex', gap: 4, alignItems: 'center' }}>
         <label htmlFor="perf-quality" style={{ color: '#cfe8ff' }}>
