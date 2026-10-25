@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import type { Vec3 } from '../../scene/layout'
+import { BOARD_LAYOUT, type Vec3 } from '../../scene/layout'
 import { seededRandom } from '../random'
 import { normalize } from './ballistics'
 import { DEFAULT_WIND, dragDistance, perpendicularBasis, useReducedMotion } from './motion'
@@ -41,6 +41,8 @@ interface Puff {
 }
 
 const RING = 12
+/** Wave crests reach ~0.4 above the resting surface; fade puffs out below that. */
+const WATER_FLOOR = BOARD_LAYOUT.surfaceY + 0.25
 
 /**
  * Thick white-grey powder smoke: a fast jet of billowing puffs that slow down, expand and drift
@@ -137,5 +139,5 @@ export function CannonSmoke({ position, direction, seed = 1, duration, delay = 0
     c.commit()
   })
 
-  return <SpriteCloud ref={cloud} count={puffs.length} map={smokeTexture()} colorA="#7d7a74" colorB="#f1eee6" shading={0.6} renderOrder={12} />
+  return <SpriteCloud ref={cloud} count={puffs.length} map={smokeTexture()} colorA="#7d7a74" colorB="#f1eee6" shading={0.6} renderOrder={12} floorY={WATER_FLOOR} floorFade={0.9} />
 }

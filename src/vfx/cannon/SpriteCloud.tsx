@@ -27,6 +27,10 @@ export interface SpriteCloudProps {
   shading?: number
   depthTest?: boolean
   renderOrder?: number
+  /** World height below which sprites fade out (soft intersection with the water). Default: no fade. */
+  floorY?: number
+  /** Height of the fade band above `floorY`. */
+  floorFade?: number
 }
 
 const vertex = /* glsl */ `
@@ -36,6 +40,7 @@ const vertex = /* glsl */ `
   varying float vAlpha;
   varying float vTint;
   varying float vUp;
+  varying float vWorldY;
   void main() {
     vUv = uv;
     vAlpha = iData.y;
@@ -46,6 +51,8 @@ const vertex = /* glsl */ `
     vUp = corner.y / max(iData.x, 1e-5) + 0.5;
     vec4 mv = modelViewMatrix * vec4(iPos, 1.0);
     mv.xy += corner;
+    // approximate world height of this corner (billboard up ≈ world up for our camera pitches)
+    vWorldY = (modelMatrix * vec4(iPos, 1.0)).y + corner.y;
     gl_Position = projectionMatrix * mv;
   }
 `
@@ -56,13 +63,17 @@ const fragment = /* glsl */ `
   uniform vec3 uColorB;
   uniform float uShading;
   uniform float uPremultiply;
+  uniform float uFloorY;
+  uniform float uFloorFade;
   varying vec2 vUv;
   varying float vAlpha;
   varying float vTint;
   varying float vUp;
+  varying float vWorldY;
   void main() {
     vec4 tex = texture2D(uMap, vUv);
-    float a = tex.a * vAlpha;
+    // fade out where the quad would dip into the water instead of a hard depth-clipped edge
+    float a = tex.a * vAlpha * smoothstep(uFloorY, uFloorY + uFloorFade, vWorldY);
     if (a < 0.004) discard;
     vec3 col = mix(uColorA, uColorB, vTint) * tex.rgb;
     col *= 1.0 - uShading * 0.5 + uShading * clamp(vUp, 0.0, 1.0);
@@ -73,7 +84,7 @@ const fragment = /* glsl */ `
 `
 
 export const SpriteCloud = forwardRef<SpriteCloudHandle, SpriteCloudProps>(function SpriteCloud(
-  { count, map, colorA = '#ffffff', colorB = '#ffffff', blending = 'normal', shading = 0, depthTest = true, renderOrder = 10 },
+  { count, map, colorA = '#ffffff', colorB = '#ffffff', blending = 'normal', shading = 0, depthTest = true, renderOrder = 10, floorY = -1e6, floorFade = 0.6 },
   ref,
 ) {
   const geometry = useMemo(() => {
@@ -105,6 +116,8 @@ export const SpriteCloud = forwardRef<SpriteCloudHandle, SpriteCloudProps>(funct
           uColorB: { value: new THREE.Color(colorB) },
           uShading: { value: shading },
           uPremultiply: { value: blending === 'additive' ? 1 : 0 },
+          uFloorY: { value: floorY },
+          uFloorFade: { value: floorFade },
         },
         transparent: true,
         depthWrite: false,
@@ -118,6 +131,8 @@ export const SpriteCloud = forwardRef<SpriteCloudHandle, SpriteCloudProps>(funct
   material.uniforms.uColorA.value.set(colorA)
   material.uniforms.uColorB.value.set(colorB)
   material.uniforms.uShading.value = shading
+  material.uniforms.uFloorY.value = floorY
+  material.uniforms.uFloorFade.value = floorFade
 
   useImperativeHandle(
     ref,
