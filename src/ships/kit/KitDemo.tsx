@@ -11,7 +11,7 @@ import {
 /**
  * `?kit-demo` — every kit part on a wooden stage, pirate row (front) and navy row (back).
  * Params: `recoil=0..1`, `set=0..1`, `torn=0..1`, `snapped=0..1`, `lit=0|1` (night lighting when lit),
- * `lod=0|1|2`, `focus=<slot>` (camera ~3 m from one slot), `livery=pirate|navy` (single row).
+ * `lod=0|1|2`, `focus=<slot>` (camera ~3 m from one slot), `cam=x,y,z` (explicit camera position), `livery=pirate|navy` (single row).
  */
 export function KitDemo() {
   const q = new URLSearchParams(window.location.search)
@@ -29,7 +29,8 @@ export function KitDemo() {
   const focus = q.get('focus')
   const slot = focus ? SLOTS.findIndex((s) => s.id === focus) : -1
   const focusX = slot >= 0 ? slotX(slot) : 0
-  const camPos: [number, number, number] = slot >= 0 ? [focusX + 1.6, 1.6, (rows[0]?.z ?? 0) + 2.4] : [0, 5.5, 11]
+  const cam = q.get('cam')?.split(',').map(Number)
+  const camPos: [number, number, number] = cam && cam.length === 3 ? [cam[0], cam[1], cam[2]] : slot >= 0 ? [focusX + 1.6, 1.6, (rows[0]?.z ?? 0) + 2.4] : [0, 5.5, 11]
   const target: [number, number, number] = slot >= 0 ? [focusX, 0.6, rows[0]?.z ?? 0] : [0, 0.6, 0]
   const night = state.lit
   return (
@@ -127,7 +128,7 @@ function Row({ livery, recoil, set, torn, snapped, lit, lod }: RowProps) {
       gunPorts: [{ x: -0.9, y: 0.26, side: 'both' }, { x: 0, y: 0.26, side: 'both' }, { x: 0.9, y: 0.26, side: 'both' }],
     })
   }, [])
-  const hole = hull.surfaceAt(-0.4, -0.05, 'starboard')
+  const hole = hull.surfaceAt(-0.4, 0.2, 'starboard')
   const x = (id: string) => slotX(SLOTS.findIndex((s) => s.id === id))
   return (
     <group>

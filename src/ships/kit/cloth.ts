@@ -110,7 +110,7 @@ export function patchClothShader(shader: { vertexShader: string; fragmentShader:
         vec2 q = vClothUv * vec2(uSize.x, uSize.y) * 2.2 + uPhase;
         float n = clothFbm(q);
         float edgeBias = (1.0 - vClothUv.y) * 0.25 + (1.0 - abs(vClothUv.x - 0.5) * 2.0) * -0.1;
-        float cut = uTorn * (0.42 + edgeBias) ;
+        float cut = uTorn * (0.62 + edgeBias);
         if (n < cut) discard;
         ${lit ? 'float scorch = smoothstep(cut + 0.14, cut, n); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.02, 0.012), scorch * 0.92);' : ''}
       }
