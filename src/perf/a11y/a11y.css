@@ -64,11 +64,32 @@ html[data-colorblind='true'] .cell-ship {
 /* Touch devices: hit targets >= 44px. The grid scrolls inside .grid-wrap instead of shrinking below the target
    (mouse/trackpad layouts keep the responsive cell size so the whole board stays in view). */
 @media (pointer: coarse) {
+  /* 10 × 44 px does not fit a phone, so the board scrolls sideways inside its wrapper. Every
+     ancestor must be allowed to shrink (grid tracks default to min-content) or the panel grows
+     past the viewport and gets clipped instead. */
   html .grid-wrap {
     --cell: 44px;
+    width: 100%;
+    max-width: 100%;
+    justify-self: stretch;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 4px;
+  }
+  html .grid-wrap .grid-rows {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: inherit;
+  }
+  .ui-root .board-panel {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ui-root .battle-grid,
+  .ui-root .placement-body {
+    grid-template-columns: minmax(0, 1fr);
   }
   .ui-root .grid button {
     min-height: 44px;

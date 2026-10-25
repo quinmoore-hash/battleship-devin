@@ -70,7 +70,7 @@ persisted override `settings.quality: 'auto' | 'low' | 'medium' | 'high'` (`?qua
 and the tuned target (MacBook Air M4 / Iris Xe at native res, dpr ≤ 1.5, 1k shadows, no post, lod ≥ 1); Apple GPUs
 always start there; `high` (2k shadows, bloom/SMAA, lod 0, full particles) is manual or needs a discrete-class GPU
 *and* a ≥ 90 fps probe. `<FpsWatchdog>` drops one tier once when battle FPS stays < 45 for 4 s (`auto` only) and
-`<QualityToast>` shows the one-time notice; `window.__perf.autoLower()` triggers it for tests. `useDistanceLod(position,
+`<QualityToast>` shows the one-time notice; `window.__perf.autoLower()` triggers it for tests; `?gpu=` pins the detected tier (skips the probe). `useDistanceLod(position,
 hullLength)` / `<LodGroup>` pick a ship `lod` from camera distance with hysteresis + 1 s dwell; `<Fleet lod="auto">`
 uses it. `useParticlesScale()` / `scaleCount(n, scale)` for VFX counts. `?perf` adds `<PerfStats>` (gl.info) +
 `<PerfOverlay>`; `window.__perf.summary()` feeds `npm run perf`. `?perf-demo` = full-game load. Accessibility:

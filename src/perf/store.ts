@@ -48,14 +48,23 @@ function readStoredQuality(): QualitySetting {
   return 'auto'
 }
 
+/** `?gpu=low|medium|high` pins the *detected* tier (and skips the probe) so the auto path — including the
+ *  in-battle watchdog — can be exercised on any machine. `?quality=` is the player override instead. */
+function readUrlDetected(): Tier | null {
+  if (typeof window === 'undefined') return null
+  const g = new URLSearchParams(window.location.search).get('gpu')
+  return g === 'low' || g === 'medium' || g === 'high' ? g : null
+}
+
 const device = readDeviceInfo()
-const detected = guessTier(device)
+const pinnedDetected = readUrlDetected()
+const detected = pinnedDetected ?? guessTier(device)
 const initialSetting = readStoredQuality()
 
 export const usePerfStore = create<PerfState>((set, get) => ({
   device,
   detected,
-  probed: false,
+  probed: pinnedDetected !== null,
   setting: initialSetting,
   profile: profileFor(resolveTier(initialSetting, detected)),
   setQuality: (setting) => {

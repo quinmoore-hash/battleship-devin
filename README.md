@@ -36,7 +36,8 @@ Stack: Vite, React 19, TypeScript, react-three-fiber / drei / three, zustand, GS
 Graphics quality (Settings › first row, or `?quality=`): `auto` picks `medium` for integrated GPUs (Apple M-series,
 Intel Iris/Xe — the tuned 60 fps target is a MacBook Air M4 at native resolution), `low` for phones / old GPUs, and
 `high` (2k shadows, bloom, full-detail fleet) only on discrete GPUs that pass a ≥ 90 fps probe. If a battle runs
-under 45 fps for 4 s on `auto`, the game drops one tier once and says so.
+under 45 fps for 4 s on `auto`, the game drops one tier once and says so (`?gpu=low|medium|high` pins the detected
+tier to try that path on any machine; `?perf` shows the HUD).
 
 ## Repo layout and ownership
 
