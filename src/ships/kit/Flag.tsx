@@ -51,9 +51,9 @@ export function Flag({ position, livery, width = 0.5, height = 0.3, phase = 0, k
   }, [mats, base])
   useFrame(({ clock }) => {
     uniforms.uTime.value = clock.elapsedTime
+    uniforms.uPhase.value = phase
+    uniforms.uWind.value = reducedMotion ? 0.25 : 1
   })
-  uniforms.uPhase.value = phase
-  uniforms.uWind.value = reducedMotion ? 0.25 : 1
   return (
     <group position={position} rotation-y={Math.PI}>
       {/* halyard toggle */}

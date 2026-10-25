@@ -68,7 +68,8 @@ export interface ShipMaterials {
 const CACHE = new Map<Livery, ShipMaterials>()
 
 function std(color: string, maps: PbrMaps | null, extra: Partial<THREE.MeshStandardMaterialParameters> = {}, repeat: [number, number] = [1, 1]) {
-  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0, ...extra })
+  // The baked colour map already carries the wood/canvas colour; `color` is only the fallback for DOM-less runs.
+  const m = new THREE.MeshStandardMaterial({ color: maps?.map ? '#ffffff' : color, roughness: 0.8, metalness: 0, ...extra })
   if (maps?.map) {
     const tex = repeat[0] === 1 && repeat[1] === 1 ? maps.map : maps.map.clone()
     tex.repeat.set(repeat[0], repeat[1])
@@ -118,7 +119,7 @@ function build(livery: Livery): ShipMaterials {
   const oakMaps = woodPlain('oak', { seed: 52, light: hex('#9a7246'), dark: hex('#5a3d20') })
   const tarredMaps = woodPlanks('tarred', { seed: 61, light: hex('#3a2816'), dark: hex('#1a1008'), rows: 8, tar: 0.7 })
   const sailMaps = pirate
-    ? canvasWeave('sail-pirate', { seed: 71, base: hex('#2a2624'), stain: hex('#15120f'), grime: 0.7 })
+    ? canvasWeave('sail-pirate', { seed: 71, base: hex('#5a4f44'), stain: hex('#2a231d'), grime: 0.7 })
     : canvasWeave('sail-navy', { seed: 72, base: hex('#e9dfc8'), stain: hex('#a8936c'), grime: 0.45 })
   const ropeMaps = ropeTwist(`rope-${livery}`, pirate ? [122, 98, 62] : [150, 124, 86], 81)
   const ironMaps = castIron('iron', 91, pirate ? 0.45 : 0.25)
@@ -134,7 +135,7 @@ function build(livery: Livery): ShipMaterials {
     hullBelow: pirate ? std('#6f6a5c', belowMaps, { roughness: 0.9 }, [2, 1]) : std('#b86b45', belowMaps, { roughness: 0.5, metalness: 0.55 }, [2, 1]),
     deck: std(pirate ? '#8a6a44' : '#a98a62', deckMaps, { roughness: 0.85 }, [1, 1]),
     trim: std(pirate ? '#8c1d1d' : '#1f3f7a', trimMaps, { roughness: 0.6 }),
-    sail: std(pirate ? '#1c1a19' : '#efe6d2', sailMaps, { side: THREE.DoubleSide, roughness: 0.95 }),
+    sail: std(pirate ? '#4a403a' : '#efe6d2', sailMaps, { side: THREE.DoubleSide, roughness: 0.95 }),
     rope: std(pirate ? '#6d5a3d' : '#8a7355', ropeMaps, { roughness: 1 }, [6, 1]),
     iron: std('#2a2a2d', ironMaps, { roughness: 0.5, metalness: 0.75 }),
     brass: std(pirate ? '#b8893a' : '#d1a64a', brassMaps, { roughness: 0.3, metalness: 0.9 }),
@@ -155,7 +156,7 @@ function build(livery: Livery): ShipMaterials {
     tarredPlanks: std('#2a1c10', tarredMaps, { roughness: 0.7 }),
     paint: new THREE.MeshStandardMaterial({ color: accent, roughness: 0.55, metalness: 0 }),
     gold: new THREE.MeshStandardMaterial({ color: pirate ? '#9c7a2e' : '#d9b24a', roughness: 0.35, metalness: 0.9, map: brassMaps.map ?? undefined }),
-    canvasFurled: std(pirate ? '#2a2624' : '#d9cfb6', sailMaps, { roughness: 0.95 }, [1, 0.25]),
+    canvasFurled: std(pirate ? '#4a403a' : '#d9cfb6', sailMaps, { roughness: 0.95 }, [1, 0.25]),
     flame: new THREE.MeshStandardMaterial({ color: "#ffe9b0", emissive: "#ffb347", emissiveIntensity: 3, roughness: 1, toneMapped: false }),
     windowGlass: new THREE.MeshPhysicalMaterial({
       map: windowGlass() ?? undefined,

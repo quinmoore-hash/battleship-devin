@@ -54,11 +54,11 @@ export function Sail({ width, height, livery, set = 1, torn = 0, phase = 0, lod 
   const ref = useRef<THREE.Mesh>(null)
   useFrame(({ clock }) => {
     uniforms.uTime.value = clock.elapsedTime
+    uniforms.uSet.value = set
+    uniforms.uTorn.value = torn
+    uniforms.uPhase.value = phase
+    uniforms.uWind.value = reducedMotion ? 0.25 : 1
   })
-  uniforms.uSet.value = set
-  uniforms.uTorn.value = torn
-  uniforms.uPhase.value = phase
-  uniforms.uWind.value = reducedMotion ? 0.25 : 1
   const bundle = furledBundle && set < 0.92
   const bundleR = 0.012 + (1 - set) * Math.min(0.06, height * 0.07)
   return (
