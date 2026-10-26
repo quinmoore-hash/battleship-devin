@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { BOARD_LAYOUT, type Vec3 } from '../../scene/layout'
 import { sampleWaveHeight, sampleWaveNormal } from '../../scene/waves'
 import { layoutGridBuoys } from './layout'
+import { BakedGroup } from '../../ships/bake'
 
 export interface GridBuoysProps {
   origin?: Vec3
@@ -73,19 +74,20 @@ export function GridBuoys({ origin = BOARD_LAYOUT.enemy.origin, size = 10, cellS
   })
 
   return (
-    <group>
-      <mesh ref={ropes} geometry={ropeGeom} castShadow>
+    <group name="buoys">
+      <mesh ref={ropes} geometry={ropeGeom}>
         <meshStandardMaterial color={color} roughness={1} />
       </mesh>
-      <instancedMesh ref={floats} args={[undefined, undefined, layout.floats.length]} castShadow frustumCulled={false}>
+      <instancedMesh ref={floats} args={[undefined, undefined, layout.floats.length]} frustumCulled={false}>
         <cylinderGeometry args={[0.045, 0.05, 0.07, 8]} />
         <meshStandardMaterial color="#b58a52" roughness={0.95} />
       </instancedMesh>
       <group ref={corners}>
         {layout.corners.map((p, i) => (
           <group key={i} position={[p[0], p[1], p[2]]} scale={cellSize}>
+            <BakedGroup>
             {/* barrel buoy with iron hoops, a post, and a lantern */}
-            <mesh position={[0, 0.05, 0]} castShadow>
+            <mesh position={[0, 0.05, 0]}>
               <cylinderGeometry args={[0.2, 0.17, 0.42, 14]} />
               <meshStandardMaterial color="#6b4a2b" roughness={0.9} />
             </mesh>
@@ -95,7 +97,7 @@ export function GridBuoys({ origin = BOARD_LAYOUT.enemy.origin, size = 10, cellS
                 <meshStandardMaterial color="#2a2a2d" roughness={0.5} metalness={0.7} />
               </mesh>
             ))}
-            <mesh position={[0, 0.65, 0]} castShadow>
+            <mesh position={[0, 0.65, 0]}>
               <cylinderGeometry args={[0.028, 0.034, 0.9, 7]} />
               <meshStandardMaterial color="#3b2a18" roughness={0.9} />
             </mesh>
@@ -120,6 +122,7 @@ export function GridBuoys({ origin = BOARD_LAYOUT.enemy.origin, size = 10, cellS
               <coneGeometry args={[0.09, 0.06, 4]} />
               <meshStandardMaterial color="#1f1f22" roughness={0.5} metalness={0.6} />
             </mesh>
+            </BakedGroup>
           </group>
         ))}
       </group>

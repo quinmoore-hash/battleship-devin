@@ -173,7 +173,7 @@ function BurnFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'burn' }>; onDon
   })
   const pos: Vec3 = [fx.position[0], fx.position[1] + 0.15, fx.position[2]]
   return (
-    <group ref={group} position={pos} scale={0.001}>
+    <group name="cinematic" ref={group} position={pos} scale={0.001}>
       <Fire position={[0, 0, 0]} seed={fx.seed} scale={0.8} intensity={1} />
       <Smoke position={[0, 0, 0]} seed={fx.seed} scale={0.9} intensity={1} />
     </group>

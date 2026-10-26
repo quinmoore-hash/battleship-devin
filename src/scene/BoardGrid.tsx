@@ -24,31 +24,88 @@ export interface BoardGridProps {
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
-function makeLabelTexture(text: string, color: string): THREE.CanvasTexture {
+const ATLAS_COLS = 5
+const ATLAS_CELL = 128
+
+/** One canvas with every row/column glyph (letters first, then numbers) — one texture and one draw per board instead of 40. */
+function makeLabelAtlas(glyphs: readonly string[], color: string): THREE.CanvasTexture {
+  const rows = Math.ceil(glyphs.length / ATLAS_COLS)
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 128
+  canvas.width = ATLAS_COLS * ATLAS_CELL
+  canvas.height = rows * ATLAS_CELL
   const ctx = canvas.getContext('2d')!
-  ctx.clearRect(0, 0, 128, 128)
-  // a small driftwood plaque behind each letter
-  ctx.fillStyle = 'rgba(70,50,30,0.75)'
-  ctx.beginPath()
-  ctx.roundRect(14, 22, 100, 84, 10)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(226,179,90,0.8)'
-  ctx.lineWidth = 3
-  ctx.stroke()
-  ctx.font = '700 70px Georgia, "Times New Roman", serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.shadowColor = 'rgba(0,0,0,0.6)'
-  ctx.shadowBlur = 6
-  ctx.fillStyle = color
-  ctx.fillText(text, 64, 66)
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  glyphs.forEach((text, i) => {
+    const x = (i % ATLAS_COLS) * ATLAS_CELL
+    const y = Math.floor(i / ATLAS_COLS) * ATLAS_CELL
+    // a small driftwood plaque behind each letter
+    ctx.shadowBlur = 0
+    ctx.fillStyle = 'rgba(70,50,30,0.75)'
+    ctx.beginPath()
+    ctx.roundRect(x + 14, y + 22, 100, 84, 10)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(226,179,90,0.8)'
+    ctx.lineWidth = 3
+    ctx.stroke()
+    ctx.font = '700 70px Georgia, "Times New Roman", serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'
+    ctx.shadowBlur = 6
+    ctx.fillStyle = color
+    ctx.fillText(text, x + 64, y + 66)
+  })
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 4
+  tex.flipY = false
   return tex
+}
+
+/** Flat quads (facing +y) at `at[i]` showing atlas glyph `glyph[i]`, merged into one geometry. */
+function labelQuads(items: { glyph: number; position: Vec3 }[], size: number, glyphCount: number): THREE.BufferGeometry {
+  const rows = Math.ceil(glyphCount / ATLAS_COLS)
+  const pos = new Float32Array(items.length * 12)
+  const uv = new Float32Array(items.length * 8)
+  const idx = new Uint16Array(items.length * 6)
+  const h = size / 2
+  items.forEach(({ glyph, position: [x, y, z] }, i) => {
+    const u0 = (glyph % ATLAS_COLS) / ATLAS_COLS
+    const v0 = Math.floor(glyph / ATLAS_COLS) / rows
+    const u1 = u0 + 1 / ATLAS_COLS
+    const v1 = v0 + 1 / rows
+    pos.set([x - h, y, z - h, x + h, y, z - h, x + h, y, z + h, x - h, y, z + h], i * 12)
+    uv.set([u0, v0, u1, v0, u1, v1, u0, v1], i * 8)
+    const b = i * 4
+    idx.set([b, b + 2, b + 1, b, b + 3, b + 2], i * 6)
+  })
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+  g.setIndex(new THREE.BufferAttribute(idx, 1))
+  g.computeBoundingSphere()
+  return g
+}
+
+function Labels({ size, cellSize, extent, labelSize, labelOffset, color }: { size: number; cellSize: number; extent: number; labelSize: number; labelOffset: number; color: string }) {
+  const glyphs = useMemo(() => [...Array.from({ length: size }, (_, i) => LETTERS[i]), ...Array.from({ length: size }, (_, i) => String(i + 1))], [size])
+  const texture = useMemo(() => makeLabelAtlas(glyphs, color), [glyphs, color])
+  const geometry = useMemo(() => {
+    const items: { glyph: number; position: Vec3 }[] = []
+    for (let i = 0; i < size; i++) {
+      const o = -extent / 2 + (i + 0.5) * cellSize
+      // column letters along the near (+z) and far (-z) edges, row numbers along the left and right edges
+      items.push({ glyph: i, position: [o, 0.03, extent / 2 + labelOffset] }, { glyph: i, position: [o, 0.03, -extent / 2 - labelOffset] })
+      items.push({ glyph: size + i, position: [-extent / 2 - labelOffset, 0.03, o] }, { glyph: size + i, position: [extent / 2 + labelOffset, 0.03, o] })
+    }
+    return labelQuads(items, labelSize, glyphs.length)
+  }, [size, cellSize, extent, labelSize, labelOffset, glyphs.length])
+  useEffect(() => () => void (texture.dispose(), geometry.dispose()), [texture, geometry])
+  return (
+    <mesh geometry={geometry} renderOrder={5}>
+      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} opacity={0.95} side={THREE.DoubleSide} />
+    </mesh>
+  )
 }
 
 function makeRopeTexture(): THREE.CanvasTexture {
@@ -71,16 +128,6 @@ function makeRopeTexture(): THREE.CanvasTexture {
   tex.wrapS = THREE.RepeatWrapping
   tex.repeat.set(12, 1)
   return tex
-}
-
-function Label({ text, position, size, color }: { text: string; position: Vec3; size: number; color: string }) {
-  const texture = useMemo(() => makeLabelTexture(text, color), [text, color])
-  return (
-    <mesh position={position} rotation={[-Math.PI / 2, 0, 0]} renderOrder={5}>
-      <planeGeometry args={[size, size]} />
-      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} opacity={0.95} />
-    </mesh>
-  )
 }
 
 /**
@@ -213,7 +260,7 @@ export function BoardGrid({
   const brass = useMemo(() => new THREE.Color(highlightColor), [highlightColor])
 
   return (
-    <group position={center}>
+    <group name="grid" position={center}>
       {/* pointer target only: writes neither colour nor depth, so it can never occlude the ropes */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} onPointerMove={handleMove} onPointerLeave={handleLeave} onClick={handleClick}>
         <planeGeometry args={[extent, extent]} />
@@ -233,20 +280,7 @@ export function BoardGrid({
           </mesh>
         </group>
       )}
-      {labels &&
-        Array.from({ length: size }, (_, i) => {
-          const o = -extent / 2 + (i + 0.5) * cellSize
-          return (
-            <group key={i}>
-              {/* column letters along the near (+z) and far (-z) edges */}
-              <Label text={LETTERS[i]} position={[o, 0.03, extent / 2 + labelOffset]} size={labelSize} color="#f6e7c6" />
-              <Label text={LETTERS[i]} position={[o, 0.03, -extent / 2 - labelOffset]} size={labelSize} color="#f6e7c6" />
-              {/* row numbers along the left and right edges */}
-              <Label text={String(i + 1)} position={[-extent / 2 - labelOffset, 0.03, o]} size={labelSize} color="#f6e7c6" />
-              <Label text={String(i + 1)} position={[extent / 2 + labelOffset, 0.03, o]} size={labelSize} color="#f6e7c6" />
-            </group>
-          )
-        })}
+      {labels && <Labels size={size} cellSize={cellSize} extent={extent} labelSize={labelSize} labelOffset={labelOffset} color="#f6e7c6" />}
     </group>
   )
 }

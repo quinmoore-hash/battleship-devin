@@ -2,6 +2,9 @@ import { useEffect } from 'react'
 import { runFpsProbe } from './probe'
 import { usePerfStore } from './store'
 import { frameStats, resetHistory, summarize } from './stats'
+import type * as THREE from 'three'
+import { dumpScene } from './PerfStats'
+import { perfRefs, programSummary } from './stats'
 
 export function perfOverlayRequested(): boolean {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('perf')
@@ -18,6 +21,11 @@ export function PerfBootstrap() {
       reset: resetHistory,
       tier: () => usePerfStore.getState().profile.tier,
       autoLower: () => usePerfStore.getState().autoLower(),
+      dump: () => (perfRefs.scene ? dumpScene(perfRefs.scene as THREE.Object3D) : []),
+      programs: () => programSummary(),
+      scene: () => perfRefs.scene,
+      gl: () => perfRefs.gl,
+      camera: () => perfRefs.camera,
     }
     return () => {
       delete window.__perf

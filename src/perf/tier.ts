@@ -24,15 +24,17 @@ export interface PerfProfile {
   quality: 'low' | 'high'
   /** Water wave count (Gerstner bank size). */
   waves: number
+  /** Near water sheet subdivisions per side (two triangles per cell). */
+  waterSegments: number
 }
 
 export const TIER_PROFILES: Record<Tier, PerfProfile> = {
   // phones / old integrated GPUs / software GL: flat lighting, 3 waves, coarse ships
-  low: { tier: 'low', dpr: [1, 1], shadows: 0, particlesScale: 0.35, postprocessing: false, lod: 2, quality: 'low', waves: 3 },
+  low: { tier: 'low', dpr: [1, 1], shadows: 0, particlesScale: 0.35, postprocessing: false, lod: 2, quality: 'low', waves: 3, waterSegments: 96 },
   // the default and the target for integrated laptops (MacBook Air M4 @ 2560×1664, Iris Xe @ 1080p): 60 fps sustained
-  medium: { tier: 'medium', dpr: [1, 1.5], shadows: 1024, particlesScale: 0.6, postprocessing: false, lod: 1, quality: 'high', waves: 4 },
+  medium: { tier: 'medium', dpr: [1, 1.5], shadows: 1024, particlesScale: 0.6, postprocessing: false, lod: 1, quality: 'high', waves: 4, waterSegments: 128 },
   // opt-in or probe-confirmed discrete GPUs only: full-detail fleet, 2k shadows, bloom/SMAA, every particle
-  high: { tier: 'high', dpr: [1, 1.75], shadows: 2048, particlesScale: 1, postprocessing: true, lod: 0, quality: 'high', waves: 6 },
+  high: { tier: 'high', dpr: [1, 1.75], shadows: 2048, particlesScale: 1, postprocessing: true, lod: 0, quality: 'high', waves: 6, waterSegments: 224 },
 }
 
 export const TIERS: Tier[] = ['low', 'medium', 'high']
@@ -117,6 +119,23 @@ export function lowerTier(tier: Tier): Tier {
  * In-battle watchdog: sustained FPS under `minFps` for `sustainMs` drops one tier (once). `graceMs`
  * after entering the battle is ignored so shader compilation and the opening cinematic do not count.
  */
+/** Physical pixels (screen.width × devicePixelRatio) above which Medium drops its DPR cap to 1.25 (Retina MacBooks). */
+export const WIDE_RETINA_PX = 2500
+
+/**
+ * DPR range for the Canvas. Medium is the "no-lag" tier: its cap drops from 1.5 to 1.25 on
+ * wide Retina screens (2560-wide MacBook panels) where 1.5 × 2560 would be a 3840px backbuffer.
+ */
+export function resolveDpr(
+  profile: Pick<PerfProfile, 'tier' | 'dpr'>,
+  screenWidth: number = typeof screen !== 'undefined' ? screen.width : 0,
+  devicePixelRatio: number = typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+): [number, number] {
+  const [min, max] = profile.dpr
+  if (profile.tier === 'medium' && screenWidth * devicePixelRatio > WIDE_RETINA_PX) return [min, Math.min(max, 1.25)]
+  return [min, max]
+}
+
 export const WATCHDOG = { minFps: 45, sustainMs: 4000, graceMs: 3000 } as const
 
 /**

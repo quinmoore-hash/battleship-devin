@@ -6,6 +6,7 @@ import { CoveDressing } from './Islands'
 import type { Atmosphere } from './sun'
 import { sampleWaveHeight, sampleWaveNormal } from './waves'
 import { Dolphins, Gulls } from './Weather'
+import { BakedGroup } from '../ships/bake'
 
 type Quality = 'low' | 'high'
 
@@ -64,13 +65,14 @@ export function Floaters({ night }: { night: number }) {
     <group ref={group}>
       {items.map((f, i) => (
         <group key={i} scale={f.scale}>
+          <BakedGroup>
           {f.kind === 'buoy' && (
             <>
-              <mesh position={[0, 0.25, 0]} castShadow>
+              <mesh position={[0, 0.25, 0]}>
                 <cylinderGeometry args={[0.45, 0.55, 0.6, 10]} />
                 <meshStandardMaterial color="#c8352f" roughness={0.6} />
               </mesh>
-              <mesh position={[0, 0.8, 0]} castShadow>
+              <mesh position={[0, 0.8, 0]}>
                 <cylinderGeometry args={[0.06, 0.08, 0.9, 6]} />
                 <meshStandardMaterial color="#2b2b2b" metalness={0.6} roughness={0.5} />
               </mesh>
@@ -81,17 +83,18 @@ export function Floaters({ night }: { night: number }) {
             </>
           )}
           {f.kind === 'barrel' && (
-            <mesh rotation={[0, 0, Math.PI / 2]} position={[0, -0.1, 0]} castShadow>
+            <mesh rotation={[0, 0, Math.PI / 2]} position={[0, -0.1, 0]}>
               <cylinderGeometry args={[0.36, 0.36, 0.9, 10]} />
               <meshStandardMaterial color="#6a4e30" roughness={0.9} />
             </mesh>
           )}
           {f.kind === 'plank' && (
-            <mesh position={[0, -0.05, 0]} castShadow>
+            <mesh position={[0, -0.05, 0]}>
               <boxGeometry args={[2.4, 0.1, 0.4]} />
               <meshStandardMaterial color="#7a6244" roughness={1} />
             </mesh>
           )}
+          </BakedGroup>
         </group>
       ))}
     </group>
@@ -102,8 +105,10 @@ export function Floaters({ night }: { night: number }) {
 export function BayDressing({ atmosphere, quality }: { atmosphere: Atmosphere; quality: Quality }) {
   const night = 1 - atmosphere.daylight
   return (
-    <group>
-      <CoveDressing night={night} quality={quality} />
+    <group name="dressing">
+      <BakedGroup>
+        <CoveDressing night={night} quality={quality} />
+      </BakedGroup>
       <Floaters night={night} />
       <Gulls count={quality === 'high' ? 8 : 4} storm={atmosphere.storm} />
       {quality === 'high' && <Dolphins storm={atmosphere.storm} />}

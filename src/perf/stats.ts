@@ -8,6 +8,10 @@ export interface FrameStats {
   fps: number
   /** Milliseconds between the last two frames. */
   frameMs: number
+  /** Smoothed main-thread JS cost per frame (useFrame callbacks + gl.render submit), ms. */
+  jsMs: number
+  /** Smoothed `gl.render` duration, ms (CPU submit; software GL includes rasterisation). */
+  renderMs: number
   drawCalls: number
   triangles: number
   geometries: number
@@ -18,7 +22,29 @@ export interface FrameStats {
   frames: number
 }
 
-export const frameStats: FrameStats = { fps: 0, frameMs: 0, drawCalls: 0, triangles: 0, geometries: 0, textures: 0, programs: 0, heapMb: 0, frames: 0 }
+/** Set by `<PerfStats>` so `window.__perf.dump()` can walk the live scene. */
+export const perfRefs: { scene: unknown; gl: unknown; camera: unknown } = { scene: null, gl: null, camera: null }
+
+interface ProgramLike {
+  cacheKey: string
+  usedTimes: number
+}
+
+/** Live shader programs grouped by the material-parameter part of their cache key (debugging program growth). */
+export function programSummary(): { key: string; programs: number; usedTimes: number }[] {
+  const gl = perfRefs.gl as { info: { programs: ProgramLike[] | null } } | null
+  const out = new Map<string, { key: string; programs: number; usedTimes: number }>()
+  for (const p of gl?.info.programs ?? []) {
+    const key = p.cacheKey.length > 200 ? `shader(${p.cacheKey.length})` + p.cacheKey.slice(-120) : p.cacheKey
+    const r = out.get(key) ?? { key, programs: 0, usedTimes: 0 }
+    r.programs++
+    r.usedTimes += p.usedTimes
+    out.set(key, r)
+  }
+  return [...out.values()].sort((a, b) => b.programs - a.programs)
+}
+
+export const frameStats: FrameStats = { fps: 0, frameMs: 0, jsMs: 0, renderMs: 0, drawCalls: 0, triangles: 0, geometries: 0, textures: 0, programs: 0, heapMb: 0, frames: 0 }
 
 const fpsHistory: number[] = []
 const drawHistory: number[] = []
@@ -60,6 +86,6 @@ export function summarize(): PerfSummary {
 
 declare global {
   interface Window {
-    __perf?: { stats: FrameStats; summary: () => PerfSummary; reset: () => void; tier: () => string; autoLower: () => boolean }
+    __perf?: { stats: FrameStats; summary: () => PerfSummary; reset: () => void; tier: () => string; autoLower: () => boolean; dump: () => unknown[]; programs: () => unknown[]; scene: () => unknown; gl: () => unknown; camera: () => unknown }
   }
 }

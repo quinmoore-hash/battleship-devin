@@ -5,9 +5,9 @@ import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../../scene/layout'
 import { SHIPS, shipWorldTransform } from '../../ships'
 import type { Side } from '../../ships/types'
 import { hashString } from '../random'
-import { Fire } from './Fire'
 import { HullBreach } from './HullBreach'
-import { Smoke } from './Smoke'
+import { Fires, Smokes, type FireEmitter, type SmokeEmitter } from './FireField'
+import { useParticlesScale } from '../../perf/store'
 
 export interface DamageLayerProps {
   ships: PlacedShip[]
@@ -87,14 +87,42 @@ export function damageEntries(ships: PlacedShip[], boardOrigin: Vec3, cellSize: 
  * class's `anchors.deckY`) and a hull breach at its impact point. Sunk ships only smoulder at the
  * waterline (the model animates away, so no fire or breach follows it).
  */
+/** Hull breaches are ~9 draw calls each, so only the newest `BREACH_CAP` breaches are rendered (fire + smoke still mark every hit). */
+export const BREACH_CAP = 4
+
 export function DamageLayer({ ships, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, fires = true, smoke = true, breachSide = 'starboard' }: DamageLayerProps) {
   const entries = useMemo(() => damageEntries(ships, boardOrigin, cellSize, breachSide), [ships, boardOrigin, cellSize, breachSide])
+  const fireEmitters = useMemo<FireEmitter[]>(
+    () => (fires ? entries.filter((e) => !e.sunk).map((e) => ({ key: e.key, position: e.deck, seed: e.seed, scale: cellSize * 0.9 })) : []),
+    [entries, fires, cellSize],
+  )
+  const burningSmoke = useMemo<SmokeEmitter[]>(
+    () => (smoke ? entries.filter((e) => !e.sunk).map((e) => ({ key: e.key, position: e.deck, seed: e.seed + 1, scale: cellSize })) : []),
+    [entries, smoke, cellSize],
+  )
+  const sunkSmoke = useMemo<SmokeEmitter[]>(
+    () => (smoke ? entries.filter((e) => e.sunk).map((e) => ({ key: e.key, position: e.deck, seed: e.seed + 1, scale: cellSize * 0.7, intensity: 0.6 })) : []),
+    [entries, smoke, cellSize],
+  )
+  const particles = useParticlesScale()
+  const cap = particles < 0.5 ? BREACH_CAP / 2 : BREACH_CAP
+  const breached = useMemo(() => {
+    const out: Entry[] = []
+    let n = 0
+    for (let i = entries.length - 1; i >= 0 && n < cap; i--) {
+      if (entries[i].breaches.length === 0) continue
+      out.unshift(entries[i])
+      n += entries[i].breaches.length
+    }
+    return out
+  }, [entries, cap])
   return (
-    <group>
-      {entries.map((e) => (
+    <group name="damage">
+      <Fires emitters={fireEmitters} />
+      <Smokes emitters={burningSmoke} />
+      <Smokes emitters={sunkSmoke} color="#55504b" />
+      {breached.map((e) => (
         <group key={e.key}>
-          {fires && !e.sunk && <Fire position={e.deck} seed={e.seed} scale={cellSize * 0.9} />}
-          {smoke && <Smoke position={e.deck} seed={e.seed + 1} scale={cellSize * (e.sunk ? 0.7 : 1)} intensity={e.sunk ? 0.6 : 1} color={e.sunk ? '#55504b' : '#2f2b28'} />}
           {e.breaches.map((b, i) => (
             <HullBreach key={i} position={b.position} normal={b.normal} seed={b.seed} radius={cellSize * 0.17} glowing={!e.sunk} />
           ))}

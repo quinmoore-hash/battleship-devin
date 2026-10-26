@@ -114,7 +114,7 @@ export function SplinterBurst({ position, normal, seed = 1, count, waterY = BOAR
 
   return (
     <group position={position}>
-      <instancedMesh ref={mesh} args={[undefined, undefined, shards.length]} frustumCulled={false} castShadow>
+      <instancedMesh ref={mesh} args={[undefined, undefined, shards.length]} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color="#ffffff" roughness={0.85} metalness={0} />
       </instancedMesh>

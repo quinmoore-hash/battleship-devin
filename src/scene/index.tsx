@@ -16,6 +16,8 @@ import { Rain, useLightning, type LightningStrike } from './Weather'
 import { usePerf, usePerfStore } from '../perf/store'
 import { PerfStats } from '../perf/PerfStats'
 import { perfOverlayRequested } from '../perf/PerfBootstrap'
+import { ShipBakery } from '../ships/bake'
+import { resolveDpr } from '../perf/tier'
 
 // BUG-006: @react-three/fiber still constructs `THREE.Clock` for its root store, which three
 // r183+ flags as deprecated the moment it is instantiated. The scene cannot swap that clock out
@@ -108,7 +110,7 @@ export function OceanScene({ children, quality, timeOfDay, view, interactive, ca
     <WebGLBoundary>
       <Canvas
         shadows={perf.shadows > 0 ? { type: THREE.PCFShadowMap } : false}
-        dpr={perf.dpr}
+        dpr={resolveDpr(perf)}
         gl={{ antialias: q === 'low', powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         camera={{ position: [0, 9, 30], fov: 42, near: 0.5, far: 1500 }}
         style={{ position: 'fixed', inset: 0, zIndex: 0 }}
@@ -143,7 +145,8 @@ function SceneContents({
     <>
       <SkyDome atmosphere={atmosphere} clouds={quality === 'high' ? 1 : 0.7} lightning={lightning} />
       <Lighting atmosphere={atmosphere} quality={quality} lightning={lightning} shadowSize={perf.shadows} />
-      <Water quality={quality} atmosphere={atmosphere} lightning={lightning} waves={perf.waves} />
+      <Water quality={quality} atmosphere={atmosphere} lightning={lightning} waves={perf.waves} segments={perf.waterSegments} />
+      <ShipBakery />
       {dressing && <BayDressing atmosphere={atmosphere} quality={quality} />}
       <Rain storm={atmosphere.storm} quality={quality} />
       <CameraRig view={activeView} interactive={interactive ?? activeView === 'battle'} override={cameraOverride} />

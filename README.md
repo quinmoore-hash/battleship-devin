@@ -28,6 +28,9 @@ npm test           # vitest unit tests
 npm run e2e        # playwright: plays a full game on every difficulty + axe-core a11y audit
 npm run perf       # after `npm run build`: median FPS / draw calls per quality tier on ?perf-demo
                    # (no GPU / VM: PERF_HEADED=1 PERF_FRAMES=20 xvfb-run -a npm run perf — headless SwiftShader drops the WebGL context)
+npm run perf:game  # after `npm run build`: plays a real game (menu → placement → 60 shots → rematch) and prints draw calls /
+                   # tris / geometries / textures / programs / heap / JS ms per checkpoint. PERF_TIER=low|medium|high,
+                   # PERF_SHOTS=60, PERF_DUMP=1 (per-group mesh dump + live programs), PERF_SHOT_DIR=dir for screenshots
 npm run build
 ```
 
