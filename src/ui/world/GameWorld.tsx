@@ -52,6 +52,16 @@ function usePlacementLod(): Lod {
   return Math.max(1, usePerf().lod) as Lod
 }
 
+/** Only the sink entries that belong to ships of this fleet that are actually sunk. */
+export function sinkFor(ships: PlacedShip[], sink: Partial<Record<ShipId, number>>): Partial<Record<ShipId, number>> {
+  const out: Partial<Record<ShipId, number>> = {}
+  for (const ship of ships) {
+    const p = sink[ship.spec.id]
+    if (p !== undefined && ship.hits.length >= ship.spec.length) out[ship.spec.id] = p
+  }
+  return out
+}
+
 function ReadyProbe() {
   const setWorldReady = useUiStore((s) => s.setWorldReady)
   const done = useRef(false)
@@ -219,6 +229,10 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const busy = useBattleController((s) => s.busy)
   const firing = useDirector((s) => s.firing)
   const sinkProgress = useDirector((s) => s.sinkProgress)
+  // the director keys sink progress by ShipId only; give each fleet just its own sunk ships' entries so the
+  // player's man-o'-war does not go under when the enemy's does (BUG-361)
+  const playerSink = useMemo(() => sinkFor(playerShips, sinkProgress), [playerShips, sinkProgress])
+  const enemySink = useMemo(() => sinkFor(enemyShips, sinkProgress), [enemyShips, sinkProgress])
   const active = useDirector((s) => s.active)
   const impacted = useDirector((s) => s.impacted)
   const perf = usePerf()
@@ -259,8 +273,8 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
           if (canAim && !hasBeenShot(enemyBoard, c)) requestFire(c, lastPointerType)
         }}
       />
-      <Fleet ships={playerShips} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={lod} firing={firing} sinkProgress={sinkProgress} />
-      <Fleet ships={enemyShips} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={lod} firing={firing} sinkProgress={sinkProgress} />
+      <Fleet ships={playerShips} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={lod} firing={firing} sinkProgress={playerSink} />
+      <Fleet ships={enemyShips} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={lod} firing={firing} sinkProgress={enemySink} />
       <ShotMarkers shots={theirShots} boardOrigin={PLAYER.origin} fires={false} />
       <ShotMarkers shots={myShots} boardOrigin={ENEMY.origin} fires={!over} />
       {/* permanent light slots: fires + muzzle/impact flashes borrow these so the scene's light count never changes (no shader recompiles mid-battle) */}
