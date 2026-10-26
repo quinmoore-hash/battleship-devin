@@ -71,7 +71,8 @@ export function FoamRing({ position, radius = 2, duration = 2.6, delay = 0, seed
         side: THREE.DoubleSide,
       }),
     [seed],
-  )  useEffect(() => () => material.dispose(), [material])
+  )
+  useEffect(() => () => material.dispose(), [material])
 
   const mesh = useRef<THREE.Mesh>(null)
   useFrame(() => {

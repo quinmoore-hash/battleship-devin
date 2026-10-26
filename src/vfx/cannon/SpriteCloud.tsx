@@ -128,7 +128,8 @@ export const SpriteCloud = forwardRef<SpriteCloudHandle, SpriteCloudProps>(funct
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [map, blending, depthTest],
-  )  useEffect(() => () => material.dispose(), [material])
+  )
+  useEffect(() => () => material.dispose(), [material])
 
   material.uniforms.uColorA.value.set(colorA)
   material.uniforms.uColorB.value.set(colorB)

@@ -164,7 +164,8 @@ export function Splash({ position, seed = 1, scale = 1, delay = 0, wind = DEFAUL
         side: THREE.DoubleSide,
       }),
     [seed, scale],
-  )  useEffect(() => () => column.dispose(), [column])
+  )
+  useEffect(() => () => column.dispose(), [column])
 
   const columnGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, 40, 24, true).translate(0, 0.5, 0), [])
   useEffect(() => () => columnGeometry.dispose(), [columnGeometry])

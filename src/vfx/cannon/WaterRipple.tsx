@@ -60,7 +60,8 @@ export function WaterRipple({ position, radius = 3, duration = 3, delay = 0, rin
         side: THREE.DoubleSide,
       }),
     [rings],
-  )  useEffect(() => () => material.dispose(), [material])
+  )
+  useEffect(() => () => material.dispose(), [material])
 
   const mesh = useRef<THREE.Mesh>(null)
   useFrame(() => {
