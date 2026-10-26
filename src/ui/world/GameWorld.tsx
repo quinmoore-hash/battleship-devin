@@ -11,7 +11,7 @@ import { useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
 import { ShotMarkers } from '../../vfx/markers'
 import { Flotsam, placedShipSeed } from '../../vfx/sinking'
-import { maskPendingHit, settledWrecks, visibleShots, type PendingShot } from './pending'
+import { maskPendingHit, settledWrecks, visibleShots, withoutFogged, type PendingShot } from './pending'
 import { useBattleController } from '../battleController'
 import { footprintAt } from '../placementUtils'
 import { useUiStore } from '../uiStore'
@@ -221,6 +221,7 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const playerBoard = useGameStore((s) => s.playerBoard)
   const enemyBoard = useGameStore((s) => s.enemyBoard)
   const events = useGameStore((s) => s.events)
+  const fogged = useGameStore((s) => s.fogged)
   const turn = useGameStore((s) => s.turn)
   const hover = useUiStore((s) => s.hover)
   const pending = useUiStore((s) => s.pendingTarget)
@@ -237,7 +238,8 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const inFlight: PendingShot | null = active?.event.type === 'shot' && !impacted ? { by: active.event.by, target: active.event.target } : null
   const pendingKey = inFlight ? `${inFlight.by}:${inFlight.target.x},${inFlight.target.y}` : ''
   /* eslint-disable react-hooks/exhaustive-deps -- pendingKey stands in for the pending object */
-  const myShots = useMemo(() => visibleShots(events, 'human', inFlight), [events, pendingKey])
+  // stormy seas: fogged misses stay hidden on the water until the game is over, like on the chart (BUG-315)
+  const myShots = useMemo(() => withoutFogged(visibleShots(events, 'human', inFlight), over ? [] : fogged), [events, pendingKey, fogged, over])
   const theirShots = useMemo(() => visibleShots(events, 'enemy', inFlight), [events, pendingKey])
   const playerShips = useMemo(() => maskPendingHit(playerBoard.ships, inFlight?.by === 'enemy' ? inFlight.target : null), [playerBoard, pendingKey])
   const enemyShips = useMemo(() => maskPendingHit(enemyBoard.ships, inFlight?.by === 'human' ? inFlight.target : null), [enemyBoard, pendingKey])
@@ -263,6 +265,7 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
       <BoardGrid
         origin={ENEMY.origin}
         color={ENEMY_ROPE}
+        labels="far"
         highlight={canAim ? target : null}
         highlightColor={targetShot ? '#8a8a8a' : pending ? '#ffcc33' : '#e2473b'}
         onCellPointerMove={(c) => {

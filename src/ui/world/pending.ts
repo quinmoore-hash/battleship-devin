@@ -1,4 +1,4 @@
-import type { Coord, PlacedShip, Player, ShotResult } from '../../engine'
+import { coordKey, type Coord, type PlacedShip, type Player, type ShotResult } from '../../engine'
 import type { GameEvent } from '../../store/gameStore'
 
 /** The shot the director is still flying: its marker, hit damage and (if it sank a ship) the wreck wait for impact. */
@@ -36,4 +36,14 @@ export function maskPendingHit(ships: PlacedShip[], target: Coord | null): Place
 /** Sunk ships whose sinking has finished playing (or was never animated), i.e. the ones that get flotsam. */
 export function settledWrecks(ships: PlacedShip[], sinkProgress: Partial<Record<string, number>>): PlacedShip[] {
   return ships.filter((s) => s.hits.length >= s.spec.length && (sinkProgress[s.spec.id] ?? 1) >= 1)
+}
+
+/**
+ * Stormy seas: misses swallowed by the fog get no persistent 3D marker either (BUG-315) — the same `fogged` keys the
+ * HTML chart hides via `foggedEnemyView`. Returns the same array when nothing is fogged.
+ */
+export function withoutFogged(shots: readonly ShotResult[], fogged: readonly string[]): ShotResult[] {
+  if (fogged.length === 0) return shots as ShotResult[]
+  const hidden = new Set(fogged)
+  return shots.filter((s) => s.outcome !== 'miss' || !hidden.has(coordKey(s.coord)))
 }

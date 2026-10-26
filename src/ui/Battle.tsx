@@ -11,7 +11,7 @@ import { Modal } from './Modal'
 import { CompassRose, Hint } from './Ornaments'
 import { ShotLog } from './ShotLog'
 import { battleReport, formatDuration } from './stats'
-import { useUiStore } from './uiStore'
+import { isCoarsePointer, useUiStore } from './uiStore'
 
 const outcomeWord = (r: ShotResult) => (r.outcome === 'sunk' ? `sunk the ${r.shipId ? FLEET_BY_ID[r.shipId].name : 'ship'}!` : r.outcome === 'hit' ? 'a hit!' : 'a miss.')
 
@@ -76,6 +76,44 @@ export function BattleScreen() {
   const yourTurn = turn === 'human' && !busy
   // while the director plays, the side panels step back so the cannonball / sinking is not hidden behind parchment
   const cinematic = useDirector((s) => s.busy)
+  const active = useDirector((s) => s.active)
+  // whose volley is on screen: the turn-flow beat first, then the director's active event (`by` / sunk ship's
+  // `owner`) while a cinematic outlives its beat — never the game-store `turn`, which has already flipped (BUG-304)
+  const sideInPlay =
+    beat.phase === 'player-shot' || beat.phase === 'player-sink'
+      ? 'human'
+      : beat.phase === 'enemy-aiming' || beat.phase === 'enemy-shot' || beat.phase === 'enemy-sink'
+        ? 'enemy'
+        : active?.event.type === 'shot'
+          ? active.event.by
+          : active?.event.type === 'sink'
+            ? active.event.owner === 'enemy'
+              ? 'human'
+              : 'enemy'
+            : null
+  const turnLabel = yourTurn
+    ? 'Your turn'
+    : beat.phase === 'intro'
+      ? 'Battle stations'
+      : sideInPlay === 'human'
+        ? 'Your broadside'
+        : sideInPlay === 'enemy'
+          ? 'Enemy turn'
+          : beat.phase === 'victory'
+            ? 'Battle over'
+            : turn === 'human'
+              ? 'Reloading'
+              : 'Enemy turn'
+  const touch = isCoarsePointer()
+
+  // first-play hint: gone after the first shot or ~12 s, not pinned over the action for the whole game (BUG-307)
+  const battleHintSeen = hintsSeen.includes('battle')
+  useEffect(() => {
+    if (battleHintSeen) return
+    if (events.length > 0) return dismissHint('battle')
+    const t = setTimeout(() => dismissHint('battle'), 12_000)
+    return () => clearTimeout(t)
+  }, [battleHintSeen, events.length, dismissHint])
   const enemyCells = useMemo(() => viewGrid(enemyView(enemyBoard)), [enemyBoard])
   const playerView = useMemo(() => viewGrid(enemyView(playerBoard), playerBoard), [playerBoard])
   const ownCells = useMemo(() => new Set(playerBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [playerBoard])
@@ -116,9 +154,11 @@ export function BattleScreen() {
     <div className="battle hud" data-testid="battle" data-cinematic={cinematic ? 'true' : 'false'}>
       <header className="battle-top">
         <div className={`panel parchment status-panel ${yourTurn ? 'is-yours' : 'is-theirs'}`}>
-          <CompassRose size={64} heading={turn === 'human' && !busy ? 0 : beat.phase === 'enemy-aiming' ? 170 : 180} />
+          <CompassRose size={64} heading={yourTurn || sideInPlay === 'human' ? 0 : beat.phase === 'enemy-aiming' ? 170 : 180} />
           <div className="status-text">
-            <span className="status-turn">{yourTurn ? 'Your turn' : turn === 'human' ? 'Reloading' : 'Enemy turn'}</span>
+            <span className="status-turn" data-testid="status-turn" data-side={sideInPlay ?? (yourTurn ? 'human' : turn)}>
+              {turnLabel}
+            </span>
             <p className="status" data-testid="status" role="status" aria-live="polite">
               {statusText}
             </p>
@@ -127,7 +167,7 @@ export function BattleScreen() {
             </span>
             {busy && cinematics !== 'off' && (
               <button type="button" className="link-btn skip-hint" data-testid="skip-cinematic" onClick={skip}>
-                Press Space or click to skip
+                {touch ? 'Tap to skip' : 'Press Space or click to skip'}
               </button>
             )}
           </div>
@@ -185,7 +225,7 @@ export function BattleScreen() {
       </div>
 
       <Hint id="battle" seen={hintsSeen.includes('battle')} onDismiss={dismissHint}>
-        Hover the enemy waters to aim your spyglass, click to fire. The enemy fleet stays hidden until a ship goes down.
+        {touch ? 'Tap the enemy waters to aim your spyglass, tap again to fire.' : 'Hover the enemy waters to aim your spyglass, click to fire.'} The enemy fleet stays hidden until a ship goes down.
       </Hint>
 
       {quitting && (
