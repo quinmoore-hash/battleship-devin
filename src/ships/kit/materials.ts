@@ -25,7 +25,7 @@ import {
  * `brass`, `glass`, `flag`) are stable; the rest were added by the kit.
  */
 export interface ShipMaterials {
-  /** Topsides planking (pirate: tarred black oak; navy: varnished oak with an ochre band). */
+  /** Topsides planking (pirate: weathered dark oak; navy: varnished oak with an ochre band). */
   hull: THREE.Material
   /** Below the waterline (pirate: fouled tallow; navy: copper sheathing). */
   hullBelow: THREE.Material
@@ -95,7 +95,7 @@ function build(livery: Livery): ShipMaterials {
   const accent = new THREE.Color(pirate ? '#8c1d1d' : '#1f3f7a')
 
   const hullMaps = pirate
-    ? woodPlanks('hull-pirate', { seed: 11, light: hex('#4a331c'), dark: hex('#241608'), rows: 10, tar: 0.55, plankLength: 300 })
+    ? woodPlanks('hull-pirate', { seed: 11, light: hex('#8a6238'), dark: hex('#4a2f17'), rows: 10, tar: 0.3, plankLength: 300 })
     : woodPlanks('hull-navy', { seed: 12, light: hex('#8a5f33'), dark: hex('#4a3015'), rows: 10, tar: 0.1, plankLength: 300 })
   const belowMaps = pirate ? foulBottom('below-pirate', 21) : copperPlates('below-navy', 22)
   const deckMaps = woodPlanks('deck', {
@@ -115,11 +115,11 @@ function build(livery: Livery): ShipMaterials {
     nails: false,
     paint: { color: pirate ? hex('#8c1d1d') : hex('#1f3f7a'), coverage: 0.92 },
   })
-  const sparMaps = woodPlain(`spar-${livery}`, { seed: 51, light: hex('#7a5a36'), dark: hex('#3b2812'), tar: pirate ? 0.5 : 0.25 })
+  const sparMaps = woodPlain(`spar-${livery}`, { seed: 51, light: hex('#7a5a36'), dark: hex('#3b2812'), tar: pirate ? 0.3 : 0.25 })
   const oakMaps = woodPlain('oak', { seed: 52, light: hex('#9a7246'), dark: hex('#5a3d20') })
   const tarredMaps = woodPlanks('tarred', { seed: 61, light: hex('#3a2816'), dark: hex('#1a1008'), rows: 8, tar: 0.7 })
   const sailMaps = pirate
-    ? canvasWeave('sail-pirate', { seed: 71, base: hex('#5a4f44'), stain: hex('#2a231d'), grime: 0.7 })
+    ? canvasWeave('sail-pirate', { seed: 71, base: hex('#9c8c78'), stain: hex('#5a4e42'), grime: 0.45 })
     : canvasWeave('sail-navy', { seed: 72, base: hex('#e9dfc8'), stain: hex('#a8936c'), grime: 0.45 })
   const ropeMaps = ropeTwist(`rope-${livery}`, pirate ? [122, 98, 62] : [150, 124, 86], 81)
   const ironMaps = castIron('iron', 91, pirate ? 0.45 : 0.25)
@@ -131,11 +131,11 @@ function build(livery: Livery): ShipMaterials {
   const m: ShipMaterials = {
     livery,
     accent,
-    hull: std(pirate ? '#3b2614' : '#6a4a2a', hullMaps, { roughness: 0.75 }, [2, 1]),
+    hull: std(pirate ? '#7a5230' : '#6a4a2a', hullMaps, { roughness: 0.75 }, [2, 1]),
     hullBelow: pirate ? std('#6f6a5c', belowMaps, { roughness: 0.9 }, [2, 1]) : std('#b86b45', belowMaps, { roughness: 0.5, metalness: 0.55 }, [2, 1]),
     deck: std(pirate ? '#8a6a44' : '#a98a62', deckMaps, { roughness: 0.85 }, [1, 1]),
     trim: std(pirate ? '#8c1d1d' : '#1f3f7a', trimMaps, { roughness: 0.6 }),
-    sail: std(pirate ? '#4a403a' : '#efe6d2', sailMaps, { side: THREE.DoubleSide, roughness: 0.95 }),
+    sail: std(pirate ? '#948270' : '#efe6d2', sailMaps, { side: THREE.DoubleSide, roughness: 0.95 }),
     rope: std(pirate ? '#6d5a3d' : '#8a7355', ropeMaps, { roughness: 1 }, [6, 1]),
     iron: std('#2a2a2d', ironMaps, { roughness: 0.5, metalness: 0.75 }),
     brass: std(pirate ? '#b8893a' : '#d1a64a', brassMaps, { roughness: 0.3, metalness: 0.9 }),
@@ -151,7 +151,7 @@ function build(livery: Livery): ShipMaterials {
       depthWrite: false,
     }),
     flag: std(pirate ? '#111' : '#c8102e', flagTex ? { map: flagTex, normalMap: null, roughnessMap: null } : null, { side: THREE.DoubleSide, roughness: 0.9 }),
-    spar: std(pirate ? '#3c2a16' : '#5a4024', sparMaps, { roughness: 0.7 }, [1, 4]),
+    spar: std(pirate ? '#5c3f22' : '#5a4024', sparMaps, { roughness: 0.7 }, [1, 4]),
     oak: std('#8a6a44', oakMaps, { roughness: 0.8 }),
     tarredPlanks: std('#2a1c10', tarredMaps, { roughness: 0.7 }),
     paint: new THREE.MeshStandardMaterial({ color: accent, roughness: 0.55, metalness: 0 }),

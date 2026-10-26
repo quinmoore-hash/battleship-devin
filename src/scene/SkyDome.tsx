@@ -244,8 +244,8 @@ export function Lighting({ atmosphere, quality, lightning, shadowSize }: { atmos
       <directionalLight position={moonPos} color="#9fb4ff" intensity={atmosphere.moonIntensity} />
       {/* lightning: a cold flash from above */}
       <directionalLight ref={bolt} position={[20, 80, -60]} color="#dfe8ff" intensity={0} />
-      <hemisphereLight color={atmosphere.skyZenith} groundColor={atmosphere.waterDeep} intensity={0.35 + 0.45 * atmosphere.daylight} />
-      <ambientLight color={atmosphere.ambientColor} intensity={atmosphere.ambientIntensity * 0.5} />
+      <hemisphereLight color={atmosphere.skyZenith} groundColor={atmosphere.waterDeep} intensity={0.6 + 0.6 * atmosphere.daylight} />
+      <ambientLight color={atmosphere.ambientColor} intensity={atmosphere.ambientIntensity * 0.9} />
     </>
   )
 }
