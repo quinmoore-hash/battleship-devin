@@ -19,6 +19,8 @@ export interface DifficultyStats {
   wins: number
   /** Fewest human shots in a won game; null until the first win. */
   bestShots: number | null
+  /** Fewest turns (volleys in salvo) in a won game; null until the first win. Older logs lack it (BUG-316). */
+  bestTurns: number | null
   /** Best hit ratio (0..1) over all games. */
   bestAccuracy: number
   /** Consecutive wins right now (0 after a loss). */
@@ -41,6 +43,8 @@ export interface GameSummary {
   shots: number
   /** Of which hit a ship. */
   hits: number
+  /** Turns the human took: shots in classic, volleys in salvo (BUG-316). Defaults to `shots`. */
+  turns?: number
   durationMs: number
   modes?: GameModes
 }
@@ -49,6 +53,7 @@ export const emptyDifficultyStats = (): DifficultyStats => ({
   games: 0,
   wins: 0,
   bestShots: null,
+  bestTurns: null,
   bestAccuracy: 0,
   streak: 0,
   bestStreak: 0,
@@ -72,6 +77,7 @@ export function recordGame(stats: Stats, summary: GameSummary, now = Date.now())
     games: prev.games + 1,
     wins: prev.wins + (summary.won ? 1 : 0),
     bestShots: summary.won ? Math.min(prev.bestShots ?? Infinity, summary.shots) : prev.bestShots,
+    bestTurns: summary.won ? Math.min(prev.bestTurns ?? Infinity, summary.turns ?? summary.shots) : prev.bestTurns,
     bestAccuracy: Math.max(prev.bestAccuracy, accuracyOf(summary)),
     streak,
     bestStreak: Math.max(prev.bestStreak, streak),
@@ -83,11 +89,18 @@ export function recordGame(stats: Stats, summary: GameSummary, now = Date.now())
 /** Builds the summary of the game in `state` (call when `phase === 'gameover'`). */
 export function summarizeGame(state: Pick<GameState, 'difficulty' | 'winner' | 'events' | 'modes'>, durationMs: number): GameSummary {
   const human = state.events.filter((e) => e.by === 'human')
+  let turns = 0
+  let prev: GameState['turn'] | null = null
+  for (const e of state.events) {
+    if (e.by === 'human' && prev !== 'human') turns++
+    prev = e.by
+  }
   return {
     difficulty: state.difficulty,
     won: state.winner === 'human',
     shots: human.length,
     hits: human.filter((e) => e.result.outcome !== 'miss').length,
+    turns,
     durationMs,
     modes: state.modes,
   }
@@ -140,7 +153,11 @@ function defaultStorage(): StorageLike | null {
 function isDifficultyStats(v: unknown): v is DifficultyStats {
   if (!v || typeof v !== 'object') return false
   const o = v as Record<string, unknown>
-  return ['games', 'wins', 'bestAccuracy', 'streak', 'bestStreak', 'playTimeMs'].every((k) => typeof o[k] === 'number') && (o.bestShots === null || typeof o.bestShots === 'number')
+  return (
+    ['games', 'wins', 'bestAccuracy', 'streak', 'bestStreak', 'playTimeMs'].every((k) => typeof o[k] === 'number') &&
+    (o.bestShots === null || typeof o.bestShots === 'number') &&
+    (o.bestTurns === undefined || o.bestTurns === null || typeof o.bestTurns === 'number')
+  )
 }
 
 /** Parses a stored blob defensively: anything malformed falls back to empty stats (per difficulty). */
@@ -152,7 +169,7 @@ export function parseStats(raw: string | null): Stats {
     if (!parsed || typeof parsed !== 'object' || !parsed.byDifficulty) return base
     for (const d of DIFFICULTIES) {
       const v = (parsed.byDifficulty as Record<string, unknown>)[d]
-      if (isDifficultyStats(v)) base.byDifficulty[d] = { ...v }
+      if (isDifficultyStats(v)) base.byDifficulty[d] = { ...v, bestTurns: v.bestTurns ?? null }
     }
     base.updatedAt = typeof parsed.updatedAt === 'number' ? parsed.updatedAt : null
     return base

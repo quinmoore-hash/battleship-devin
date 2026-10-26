@@ -216,7 +216,7 @@ export function ShotMarkers({ shots, boardOrigin = BOARD_LAYOUT.enemy.origin, ce
   return (
     <group name="markers">
       {/* buoy: white float dome, white cone, red waterline band, pole with a red top */}
-      <instancedMesh ref={hull} args={[geo.hull, undefined, CAP]} frustumCulled={false}>
+      <instancedMesh ref={hull} name="buoy-hull" args={[geo.hull, undefined, CAP]} frustumCulled={false}>
         <meshStandardMaterial color="#f2eee4" roughness={0.45} />
       </instancedMesh>
       <instancedMesh ref={cone} args={[geo.cone, undefined, CAP]} frustumCulled={false}>

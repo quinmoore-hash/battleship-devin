@@ -304,9 +304,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   reset: () =>
-    set({
+    set((s) => ({
       phase: 'menu',
-      modes: DEFAULT_MODES,
+      // the chosen rules survive "Menu" / "Play again" like the difficulty does (BUG-320)
+      modes: s.modes,
       playerBoard: createBoard(),
       enemyBoard: createBoard(),
       opponent: undefined,
@@ -317,5 +318,5 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastVolley: [],
       salvo: emptySalvo(),
       fogged: [],
-    }),
+    })),
 }))

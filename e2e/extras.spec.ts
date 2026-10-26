@@ -36,7 +36,17 @@ test('salvo + stormy seas game: volleys queue, fog hides misses, replay and phot
     await cell.click()
   }
   await expect(gameover).toBeVisible()
+  // BUG-316: a salvo turn is a volley, not a shot
+  const shots = Number(await page.getByTestId('stat-shots').textContent())
+  const turns = Number(await page.getByTestId('stat-turns').textContent())
+  expect(turns).toBeGreaterThan(0)
+  expect(turns).toBeLessThan(shots)
+  // BUG-270 / BUG-308: the log is a corner toggle, Replay / Photo live on the report only
+  await expect(page.getByTestId('open-replay')).toHaveCount(0)
+  await page.getByTestId('toggle-log').click()
   await expect(page.getByTestId('stats-totals')).toContainText('1 battle')
+  await page.getByTestId('toggle-log').click()
+  await expect(page.getByTestId('stats-panel')).toHaveCount(0)
 
   await page.getByTestId('report-replay').click()
   await expect(page.getByTestId('replay-player')).toBeVisible()
@@ -53,6 +63,9 @@ test('salvo + stormy seas game: volleys queue, fog hides misses, replay and phot
 
   await page.getByTestId('play-again').click()
   await expect(page.getByTestId('stats-panel')).toContainText('1 / 1')
+  // BUG-320: the modes survive "Menu"
+  await expect(page.getByTestId('mode-salvo')).toBeChecked()
+  await expect(page.getByTestId('mode-storm')).toBeChecked()
   // "Clear log" asks in-app first, then wipes battleship-devin.stats (BUG-321)
   await page.getByTestId('stats-clear').click()
   await page.getByTestId('stats-clear-no').click()
