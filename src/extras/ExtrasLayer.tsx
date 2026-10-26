@@ -2,7 +2,7 @@
  * Mounted next to `<GameUI>` in the main app. Adds, without touching `src/ui`:
  *  - stats recording + `<StatsPanel>` on the menu and game-over screens,
  *  - the salvo / stormy-seas mode picker on the menu and a salvo/fog status strip in battle,
- *  - Replay / Photo buttons on game over, the `battleship:replay` / `battleship:photo` listeners and the overlays,
+ *  - the `battleship:replay` / `battleship:photo` listeners and the overlays (the report's buttons dispatch them),
  *  - a DOM shim that paints fog on hidden misses in the UI's enemy grid until `src/ui` adopts `foggedEnemyView`.
  */
 import { useEffect, useLayoutEffect, useState } from 'react'

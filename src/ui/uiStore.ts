@@ -94,3 +94,10 @@ export function resetInteraction() {
 useGameStore.subscribe((state, prev) => {
   if (state.phase !== prev.phase) resetInteraction()
 })
+
+/** Touch-first device (phones / tablets): copy says "tap" instead of "click" / "hover" (BUG-312). Evaluated once per load. */
+let coarse: boolean | null = null
+export function isCoarsePointer(): boolean {
+  if (coarse === null) coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
+  return coarse
+}

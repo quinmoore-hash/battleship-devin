@@ -5,7 +5,7 @@ import { useGameStore } from '../store/gameStore'
 import { Grid, type GridCellInfo } from './Grid'
 import { Hint, WaxSeal } from './Ornaments'
 import { footprintAt } from './placementUtils'
-import { useUiStore } from './uiStore'
+import { isCoarsePointer, useUiStore } from './uiStore'
 
 /**
  * Placement HUD. The ship being carried, its orientation and the hovered cell live in `uiStore`
@@ -168,7 +168,14 @@ export function PlacementScreen() {
       </section>
 
       <Hint id="placement" seen={hintsSeen.includes('placement')} onDismiss={dismissHint}>
-        Drag a ship across your waters, press <kbd>R</kbd> or right-click to rotate, click a ship to lift it again. Sea stuttering? Lower <strong>Quality</strong> in Settings (⚙).
+        {isCoarsePointer() ? (
+          <>Drag a ship across your waters, use the Rotate button to turn it, tap a ship to lift it again.</>
+        ) : (
+          <>
+            Drag a ship across your waters, press <kbd>R</kbd> or right-click to rotate, click a ship to lift it again.
+          </>
+        )}{' '}
+        Sea stuttering? Lower <strong>Quality</strong> in Settings (⚙).
       </Hint>
     </div>
   )

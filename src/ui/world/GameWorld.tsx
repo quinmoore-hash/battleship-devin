@@ -265,6 +265,7 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
       <BoardGrid
         origin={ENEMY.origin}
         color={ENEMY_ROPE}
+        labels="far"
         highlight={canAim ? target : null}
         highlightColor={targetShot ? '#8a8a8a' : pending ? '#ffcc33' : '#e2473b'}
         onCellPointerMove={(c) => {

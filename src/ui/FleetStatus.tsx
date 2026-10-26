@@ -9,6 +9,7 @@ interface FleetStatusProps {
 export function FleetStatus({ board, side, title }: FleetStatusProps) {
   const byId = new Map<string, PlacedShip>(board.ships.map((s) => [s.spec.id, s]))
   const afloat = board.ships.filter((s) => !isSunk(s)).length
+  const totalHits = board.ships.reduce((n, s) => n + s.hits.length, 0)
   return (
     <section className={`fleet-status side-${side}`} data-testid={`fleet-status-${side}`}>
       <header>
@@ -16,19 +17,26 @@ export function FleetStatus({ board, side, title }: FleetStatusProps) {
         <span className="count" data-testid={`fleet-status-${side}-afloat`}>
           {afloat}/{FLEET.length} afloat
         </span>
+        {side === 'enemy' && (
+          <span className="count hits" data-testid="fleet-status-enemy-hits">
+            {totalHits} {totalHits === 1 ? 'hit' : 'hits'}
+          </span>
+        )}
       </header>
       <ul>
         {FLEET.map((spec) => {
           const ship = byId.get(spec.id)
-          const hits = ship?.hits.length ?? 0
           const sunk = ship ? isSunk(ship) : false
+          // the enemy fleet stays hidden until a ship goes down: no per-ship damage before the sunk reveal (BUG-303)
+          const hits = side === 'enemy' && !sunk ? 0 : (ship?.hits.length ?? 0)
+          const hidden = side === 'enemy' && !sunk
           return (
             <li
               key={spec.id}
               className={sunk ? 'sunk' : hits > 0 ? 'damaged' : ''}
               data-testid={`fleet-status-${side}-${spec.id}`}
               data-sunk={sunk}
-              aria-label={`${spec.name}: ${sunk ? 'sunk' : `${hits} of ${spec.length} hit`}`}
+              aria-label={`${spec.name}: ${sunk ? 'sunk' : hidden ? `${spec.length} cells, afloat` : `${hits} of ${spec.length} hit`}`}
             >
               <span className="silhouette" aria-hidden>
                 {Array.from({ length: spec.length }, (_, i) => (
@@ -36,7 +44,7 @@ export function FleetStatus({ board, side, title }: FleetStatusProps) {
                 ))}
               </span>
               <span className="name">{spec.name}</span>
-              <span className="len">{sunk ? 'sunk' : spec.length}</span>
+              <span className="len">{sunk ? 'sunk' : hidden ? `${spec.length} · ?` : spec.length}</span>
             </li>
           )
         })}

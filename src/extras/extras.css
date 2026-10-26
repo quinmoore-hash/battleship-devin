@@ -326,6 +326,11 @@
 .xt-dock-menu > :last-child {
   width: min(440px, 55vw);
 }
+/* the game-over stats sit over the 3D scene: an opaque-enough parchment-dark panel instead of bare glass (BUG-308) */
+.xt-dock-gameover .xt-panel {
+  background: rgba(14, 26, 44, 0.86);
+  border-color: rgba(214, 177, 102, 0.45);
+}
 .xt-dock-left {
   left: 14px;
   top: 76px;
@@ -578,4 +583,20 @@
 }
 .xt-sandbox .xt-topbar {
   top: 14px;
+}
+
+/* "Clear log" asks in-app before wiping battleship-devin.stats (BUG-321) */
+.xt-stats-confirm {
+  margin-top: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+.xt-btn.danger {
+  background: rgba(170, 40, 30, 0.85);
+  border-color: rgba(255, 120, 100, 0.6);
+  color: #fff4e6;
+}
+.xt-btn.danger:hover:not(:disabled) {
+  background: rgba(200, 50, 35, 0.95);
 }

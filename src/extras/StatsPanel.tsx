@@ -1,15 +1,7 @@
-import { useState } from "react";
-import type { Difficulty } from "../engine";
-import {
-  clearStats,
-  DIFFICULTIES,
-  formatDuration,
-  formatPercent,
-  totals,
-  useStats,
-  winRate,
-} from "./stats";
-import "./extras.css";
+import { useState } from 'react'
+import type { Difficulty } from '../engine'
+import { clearStats, DIFFICULTIES, formatDuration, formatPercent, totals, useStats, winRate } from './stats'
+import './extras.css'
 
 const LABEL: Record<Difficulty, string> = {
   easy: "Easy",
@@ -27,16 +19,11 @@ export interface StatsPanelProps {
 }
 
 /** Captain's log: per-difficulty games, wins, best shots-to-win, best accuracy, win streak and time at sea. */
-export function StatsPanel({
-  difficulty,
-  compact = false,
-  title = "Captain’s log",
-  className = "",
-}: StatsPanelProps) {
-  const [confirming, setConfirming] = useState(false);
-  const stats = useStats();
-  const t = totals(stats);
-  const played = DIFFICULTIES.filter((d) => stats.byDifficulty[d].games > 0);
+export function StatsPanel({ difficulty, compact = false, title = 'Captain’s log', className = '' }: StatsPanelProps) {
+  const stats = useStats()
+  const [confirming, setConfirming] = useState(false)
+  const t = totals(stats)
+  const played = DIFFICULTIES.filter((d) => stats.byDifficulty[d].games > 0)
   return (
     <section
       className={`xt-panel xt-stats${compact ? " compact" : ""} ${className}`}
@@ -113,41 +100,23 @@ export function StatsPanel({
           </tbody>
         </table>
       )}
-      {t.games > 0 &&
+      {t.games > 0 && (
         (confirming ? (
-          <span
-            className="xt-row xt-stats-clear"
-            role="group"
-            aria-label="Clear the captain’s log?"
-          >
-            <span className="xt-muted">Clear the log?</span>
-            <button
-              type="button"
-              className="xt-btn tiny"
-              data-testid="stats-clear-confirm"
-              onClick={() => (clearStats(), setConfirming(false))}
-            >
-              Yes, clear
+          <div className="xt-row xt-stats-confirm" role="alertdialog" aria-label="Clear the captain’s log?" data-testid="stats-clear-confirm">
+            <span>Clear the captain’s log? This cannot be undone.</span>
+            <button type="button" className="xt-btn tiny danger" data-testid="stats-clear-yes" onClick={() => (clearStats(), setConfirming(false))}>
+              Clear
             </button>
-            <button
-              type="button"
-              className="xt-btn ghost tiny"
-              data-testid="stats-clear-cancel"
-              onClick={() => setConfirming(false)}
-            >
+            <button type="button" className="xt-btn ghost tiny" data-testid="stats-clear-no" onClick={() => setConfirming(false)}>
               Keep
             </button>
-          </span>
+          </div>
         ) : (
-          <button
-            type="button"
-            className="xt-btn ghost tiny xt-stats-clear"
-            data-testid="stats-clear"
-            onClick={() => setConfirming(true)}
-          >
+          <button type="button" className="xt-btn ghost tiny xt-stats-clear" data-testid="stats-clear" onClick={() => setConfirming(true)}>
             Clear log
           </button>
-        ))}
+        ))
+      )}
     </section>
   );
 }

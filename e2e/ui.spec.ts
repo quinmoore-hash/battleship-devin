@@ -30,6 +30,8 @@ test('battle HUD: compass status, captain’s log, restart, skip hint and quit c
 
   await page.getByTestId('enemy-grid-0-0').click()
   await expect(page.getByTestId('skip-cinematic')).toBeVisible()
+  // the turn label names the volley on screen, never "Reloading" / the already-flipped store turn (BUG-304)
+  await expect(page.getByTestId('status-turn')).toHaveText(/Your broadside|Enemy turn/)
   await page.keyboard.press(' ')
   await expect(page.getByTestId('status').filter({ hasText: 'Your turn' })).toBeVisible()
   await expect(page.getByTestId('shot-log').locator('li')).toHaveCount(2)

@@ -6,6 +6,7 @@ import { FLEET } from '../engine'
 import { useGameStore } from '../store/gameStore'
 import { GameUI } from './index'
 import { clampOrigin } from './placementUtils'
+import { useUiStore } from './uiStore'
 
 const store = () => useGameStore.getState()
 const ui = () => render(createElement(GameUI))
@@ -180,6 +181,64 @@ describe('battle', () => {
     }
     expect(screen.getByTestId('fleet-status-enemy-sloop').dataset.sunk).toBe('true')
     expect(screen.getByTestId('fleet-status-enemy-afloat').textContent).toBe('4/5 afloat')
+  })
+
+  it('hides which enemy ship a hit belongs to until it sinks (BUG-303)', async () => {
+    const target = store().enemyBoard.ships.find((s) => s.spec.id === 'galleon')!
+    ui()
+    vi.useFakeTimers()
+    fireEvent.click(cell('enemy-grid', target.cells[0].x, target.cells[0].y))
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+    const row = screen.getByTestId('fleet-status-enemy-galleon')
+    expect(row.className).not.toContain('damaged')
+    expect(row.querySelectorAll('.silhouette i.hit')).toHaveLength(0)
+    expect(row.getAttribute('aria-label')).not.toContain('1 of')
+    expect(screen.getByTestId('fleet-status-enemy-hits').textContent).toBe('1 hit')
+    // the player's own card still shows per-ship damage
+    expect(screen.queryByTestId('fleet-status-player-hits')).toBeNull()
+  })
+
+  it('status turn label follows the volley on screen, not the flipped store turn (BUG-304)', async () => {
+    vi.useFakeTimers()
+    ui()
+    expect(screen.getByTestId('status-turn').textContent).toBe('Your turn')
+    fireEvent.click(cell('enemy-grid', 0, 0))
+    // store.turn is already 'enemy' while the player's broadside plays
+    expect(store().turn).toBe('enemy')
+    expect(screen.getByTestId('status-turn').textContent).toBe('Your broadside')
+    await act(() => vi.advanceTimersByTimeAsync(800))
+    expect(screen.getByTestId('status-turn').textContent).toBe('Enemy turn')
+    await act(() => vi.advanceTimersByTimeAsync(2200))
+    expect(screen.getByTestId('status-turn').textContent).toBe('Your turn')
+  })
+
+  it('dismisses the first-play hint after the first shot (BUG-307)', async () => {
+    vi.useFakeTimers()
+    useUiStore.setState({ hintsSeen: [] })
+    ui()
+    expect(screen.getByTestId('hint-battle')).toBeTruthy()
+    fireEvent.click(cell('enemy-grid', 0, 0))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(screen.queryByTestId('hint-battle')).toBeNull()
+  })
+
+  it('quit dialog traps focus, closes on Escape and returns focus to the opener (BUG-325)', () => {
+    ui()
+    const opener = screen.getByTestId('quit')
+    opener.focus()
+    fireEvent.click(opener)
+    const modal = screen.getByTestId('quit-modal')
+    expect(modal.getAttribute('aria-modal')).toBe('true')
+    const buttons = Array.from(modal.querySelectorAll<HTMLElement>('button'))
+    expect(document.activeElement).toBe(buttons[0])
+    buttons[buttons.length - 1].focus()
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(buttons[0])
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(buttons[buttons.length - 1])
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByTestId('quit-modal')).toBeNull()
+    expect(document.activeElement).toBe(opener)
   })
 })
 

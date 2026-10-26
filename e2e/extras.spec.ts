@@ -66,12 +66,12 @@ test('salvo + stormy seas game: volleys queue, fog hides misses, replay and phot
   // BUG-320: the modes survive "Menu"
   await expect(page.getByTestId('mode-salvo')).toBeChecked()
   await expect(page.getByTestId('mode-storm')).toBeChecked()
-  // BUG-321: "Clear log" asks inline, then really clears
+  // "Clear log" asks in-app first, then wipes battleship-devin.stats (BUG-321)
   await page.getByTestId('stats-clear').click()
-  await page.getByTestId('stats-clear-cancel').click()
-  await expect(page.getByTestId('stats-panel')).toContainText('1 / 1')
+  await page.getByTestId('stats-clear-no').click()
+  await expect(page.getByTestId('stats-totals')).toContainText('1 battle')
   await page.getByTestId('stats-clear').click()
-  await page.getByTestId('stats-clear-confirm').click()
+  await page.getByTestId('stats-clear-yes').click()
   await expect(page.getByTestId('stats-panel')).toContainText('No battles yet')
   expect(await page.evaluate(() => localStorage.getItem('battleship-devin.stats'))).toBeNull()
 })
