@@ -16,7 +16,8 @@ export interface BoardGridProps {
   /** Hex colour of the highlight cell (defaults to polished brass). */
   highlightColor?: string
   /** Show A–J / 1–10 along the edges. */
-  labels?: boolean
+  /** `true`: letters on both edges; `'far'`: letters on the far (-z) edge only, so they never run through the fleet moored in front (BUG-305). */
+  labels?: boolean | 'far'
   /** Called with the hovered cell, or null when the pointer leaves the board. */
   onCellPointerMove?: (coord: Coord | null) => void
   onCellClick?: (coord: Coord) => void
@@ -87,7 +88,7 @@ function labelQuads(items: { glyph: number; position: Vec3 }[], size: number, gl
   return g
 }
 
-function Labels({ size, cellSize, extent, labelSize, labelOffset, color }: { size: number; cellSize: number; extent: number; labelSize: number; labelOffset: number; color: string }) {
+function Labels({ size, cellSize, extent, labelSize, labelOffset, color, nearRow = true }: { size: number; cellSize: number; extent: number; labelSize: number; labelOffset: number; color: string; nearRow?: boolean }) {
   const glyphs = useMemo(() => [...Array.from({ length: size }, (_, i) => LETTERS[i]), ...Array.from({ length: size }, (_, i) => String(i + 1))], [size])
   const texture = useMemo(() => makeLabelAtlas(glyphs, color), [glyphs, color])
   const geometry = useMemo(() => {
@@ -95,11 +96,12 @@ function Labels({ size, cellSize, extent, labelSize, labelOffset, color }: { siz
     for (let i = 0; i < size; i++) {
       const o = -extent / 2 + (i + 0.5) * cellSize
       // column letters along the near (+z) and far (-z) edges, row numbers along the left and right edges
-      items.push({ glyph: i, position: [o, 0.03, extent / 2 + labelOffset] }, { glyph: i, position: [o, 0.03, -extent / 2 - labelOffset] })
+      if (nearRow) items.push({ glyph: i, position: [o, 0.03, extent / 2 + labelOffset] })
+      items.push({ glyph: i, position: [o, 0.03, -extent / 2 - labelOffset] })
       items.push({ glyph: size + i, position: [-extent / 2 - labelOffset, 0.03, o] }, { glyph: size + i, position: [extent / 2 + labelOffset, 0.03, o] })
     }
     return labelQuads(items, labelSize, glyphs.length)
-  }, [size, cellSize, extent, labelSize, labelOffset, glyphs.length])
+  }, [size, cellSize, extent, labelSize, labelOffset, glyphs.length, nearRow])
   useEffect(() => () => void (texture.dispose(), geometry.dispose()), [texture, geometry])
   return (
     <mesh geometry={geometry} renderOrder={5}>
@@ -280,7 +282,7 @@ export function BoardGrid({
           </mesh>
         </group>
       )}
-      {labels && <Labels size={size} cellSize={cellSize} extent={extent} labelSize={labelSize} labelOffset={labelOffset} color="#f6e7c6" />}
+      {labels && <Labels size={size} cellSize={cellSize} extent={extent} labelSize={labelSize} labelOffset={labelOffset} color="#f6e7c6" nearRow={labels !== 'far'} />}
     </group>
   )
 }

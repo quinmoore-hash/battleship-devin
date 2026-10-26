@@ -121,12 +121,15 @@ let eventId = 0
 
 const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false }
 
-/** Settings the player chose that survive a reload. `quality` is persisted by `src/perf/store.ts`, `reducedMotion` follows the OS. */
+/** Settings the player chose that survive a reload (one key, `battleship-devin.settings`). `reducedMotion` defaults to the OS preference. */
 export const SETTINGS_STORAGE_KEY = 'battleship-devin.settings'
-const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind']
+const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind', 'reducedMotion', 'quality']
+
+/** OS preference — only the default; the player's explicit toggle (persisted) wins afterwards (BUG-314). */
+export const prefersReducedMotion = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 export function loadSettings(storage: Pick<Storage, 'getItem'> | null = typeof localStorage === 'undefined' ? null : localStorage): Settings {
-  const out = { ...DEFAULT_SETTINGS }
+  const out = { ...DEFAULT_SETTINGS, reducedMotion: prefersReducedMotion() }
   try {
     const raw = storage?.getItem(SETTINGS_STORAGE_KEY)
     const p = raw ? (JSON.parse(raw) as Partial<Record<keyof Settings, unknown>>) : {}
@@ -134,6 +137,8 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> | null = typeof l
     if (typeof p.sfxVolume === 'number' && p.sfxVolume >= 0 && p.sfxVolume <= 1) out.sfxVolume = p.sfxVolume
     if (typeof p.musicVolume === 'number' && p.musicVolume >= 0 && p.musicVolume <= 1) out.musicVolume = p.musicVolume
     if (typeof p.colorblind === 'boolean') out.colorblind = p.colorblind
+    if (typeof p.reducedMotion === 'boolean') out.reducedMotion = p.reducedMotion
+    if (p.quality === 'auto' || p.quality === 'low' || p.quality === 'medium' || p.quality === 'high') out.quality = p.quality
   } catch {
     /* corrupt or unavailable storage: defaults */
   }

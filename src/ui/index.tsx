@@ -19,13 +19,9 @@ export function GameUI({ menuExtras }: { menuExtras?: ReactNode } = {}) {
   const phase = useGameStore((s) => s.phase)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const winner = useGameStore((s) => s.winner)
-  const updateSettings = useGameStore((s) => s.updateSettings)
   const colorblind = useGameStore((s) => s.settings.colorblind)
   const [modal, setModal] = useState<UiModal>(null)
 
-  useEffect(() => {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) updateSettings({ reducedMotion: true })
-  }, [updateSettings])
 
   useEffect(() => {
     document.body.style.cursor = ''

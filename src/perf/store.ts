@@ -1,6 +1,6 @@
 /**
  * Perf state: detected tier, player override and the resolved `PerfProfile`.
- * The override is persisted in localStorage and mirrored into `useGameStore().settings.quality`.
+ * The override lives in `useGameStore().settings.quality` (persisted with the other settings) and is mirrored here.
  */
 import { create } from 'zustand'
 import { useGameStore } from '../store/gameStore'
@@ -39,6 +39,9 @@ function readUrlQuality(): QualitySetting | null {
 function readStoredQuality(): QualitySetting {
   const fromUrl = readUrlQuality()
   if (fromUrl) return fromUrl
+  // persisted with the other settings (`battleship-devin.settings`, BUG-314); the old key is read once as a migration
+  const fromSettings = useGameStore.getState().settings.quality
+  if (fromSettings !== 'auto') return fromSettings
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(QUALITY_STORAGE_KEY) : null
     if (v === 'low' || v === 'medium' || v === 'high' || v === 'auto') return v
