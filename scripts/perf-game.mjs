@@ -39,7 +39,7 @@ const page = await browser.newPage({ viewport: { width: vw, height: vh } })
 // fast turns: cinematics off (PERF_CINEMATICS=full|fast|off), Easy, sfx muted
 await page.addInitScript((cine) => {
   localStorage.setItem('battleship-devin.settings', JSON.stringify({ cinematics: cine, sfxVolume: 0, musicVolume: 0, reducedMotion: false }))
-  localStorage.setItem('battleship-devin.ui', JSON.stringify({ state: { dismissedHints: ['placement', 'battle'] }, version: 0 }))
+  localStorage.setItem('battleship-devin.ui', JSON.stringify({ state: { hintsSeen: ['placement', 'battle'] }, version: 1 }))
 }, CINE)
 const rows = []
 page.on('console', (m) => { if (m.text().startsWith('[bake]')) console.log(m.text()) })
