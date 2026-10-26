@@ -43,6 +43,7 @@ describe('stats: recordGame', () => {
     expect(m.games).toBe(3)
     expect(m.wins).toBe(2)
     expect(m.bestShots).toBe(38)
+    expect(m.bestTurns).toBe(38)
     expect(m.bestAccuracy).toBeCloseTo(17 / 38)
     expect(m.streak).toBe(0)
     expect(m.bestStreak).toBe(2)
@@ -96,7 +97,18 @@ describe('stats: persistence', () => {
     expect(parseStats('{"version":1}')).toEqual(emptyStats())
     const partial = parseStats(JSON.stringify({ version: 1, byDifficulty: { easy: { games: 2, wins: 1, bestShots: 30, bestAccuracy: 0.5, streak: 1, bestStreak: 1, playTimeMs: 10 }, hard: { games: 'x' } } }))
     expect(partial.byDifficulty.easy.games).toBe(2)
+    expect(partial.byDifficulty.easy.bestTurns).toBeNull()
     expect(partial.byDifficulty.hard).toEqual(emptyStats().byDifficulty.hard)
+  })
+})
+
+describe('stats: salvo turns (BUG-316)', () => {
+  it('records the fewest turns separately from the fewest shots', () => {
+    let s = emptyStats()
+    s = recordGame(s, game({ shots: 60, hits: 17, turns: 15 }))
+    s = recordGame(s, game({ shots: 45, hits: 17 }))
+    expect(s.byDifficulty.medium.bestShots).toBe(45)
+    expect(s.byDifficulty.medium.bestTurns).toBe(15)
   })
 })
 
@@ -117,7 +129,7 @@ describe('stats: summarizeGame + recorder', () => {
       },
       1234,
     )
-    expect(summary).toEqual({ difficulty: 'hard', won: false, shots: 2, hits: 1, durationMs: 1234, modes: { salvo: true, storm: false } })
+    expect(summary).toEqual({ difficulty: 'hard', won: false, shots: 2, hits: 1, turns: 2, durationMs: 1234, modes: { salvo: true, storm: false } })
   })
 
   it('records a game once when the store goes battle -> gameover, timing the battle phase', () => {

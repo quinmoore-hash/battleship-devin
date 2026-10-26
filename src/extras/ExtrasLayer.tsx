@@ -6,10 +6,12 @@
  *  - a DOM shim that paints fog on hidden misses in the UI's enemy grid until `src/ui` adopts `foggedEnemyView`.
  */
 import { useEffect, useLayoutEffect, useState } from 'react'
-import { coordKey, coordLabel } from '../engine'
+import { coordKey, coordLabel, type Difficulty } from '../engine'
+import { useDirector } from '../cinematics'
+import { usePerf } from '../perf'
 import { useGameStore, type GameModes } from '../store/gameStore'
-import { PhotoMode, requestPhotoMode, usePhotoEvent, usePhotoMode } from './photo'
-import { ReplayPlayer, requestReplay, useReplay, useReplayEvent } from './replay'
+import { PhotoMode, usePhotoEvent, usePhotoMode } from './photo'
+import { ReplayPlayer, useReplay, useReplayEvent } from './replay'
 import { bindStatsRecorder } from './stats'
 import { StatsPanel } from './StatsPanel'
 import './extras.css'
@@ -22,27 +24,32 @@ export function ExtrasLayer() {
   const photo = usePhotoMode()
   const phase = useGameStore((s) => s.phase)
   const difficulty = useGameStore((s) => s.difficulty)
+  // the report owns Replay / Photo (BUG-308); the log waits for the flyover like the report does (BUG-322)
+  const flyover = useDirector((s) => s.busy)
+  // replay / photo follow the detected tier instead of always rendering full detail (BUG-317)
+  const quality = usePerf().quality
   useStormFogShim()
 
   return (
     <>
       {phase === 'battle' && <BattleStrip />}
-      {phase === 'gameover' && (
-        <aside className="xt-dock xt-dock-gameover" data-testid="extras-gameover">
-          <div className="xt-row">
-            <button type="button" className="xt-btn primary" data-testid="open-replay" onClick={() => requestReplay()}>
-              Watch replay
-            </button>
-            <button type="button" className="xt-btn" data-testid="open-photo" onClick={() => requestPhotoMode()}>
-              Photo mode
-            </button>
-          </div>
-          <StatsPanel difficulty={difficulty} />
-        </aside>
-      )}
-      {replay.snapshot && <ReplayPlayer snapshot={replay.snapshot} onClose={replay.close} />}
-      {photo.request && <PhotoMode {...photo.request} onClose={photo.close} />}
+      {phase === 'gameover' && !flyover && <GameOverLog difficulty={difficulty} />}
+      {replay.snapshot && <ReplayPlayer snapshot={replay.snapshot} onClose={replay.close} quality={quality} />}
+      {photo.request && <PhotoMode {...photo.request} onClose={photo.close} quality={quality} />}
     </>
+  )
+}
+
+/** Captain's log on the game-over screen: a corner toggle so the table never sits under the report (BUG-270). */
+function GameOverLog({ difficulty }: { difficulty: Difficulty }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <aside className={`xt-dock xt-dock-gameover${open ? ' open' : ''}`} data-testid="extras-gameover">
+      {open && <StatsPanel difficulty={difficulty} />}
+      <button type="button" className="xt-btn" data-testid="toggle-log" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? 'Hide log' : 'Captain’s log'}
+      </button>
+    </aside>
   )
 }
 

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBoard, FLEET_BY_ID, placeShip } from '../engine'
-import { useGameStore } from '../store/gameStore'
+import { useGameStore, type GameEvent } from '../store/gameStore'
 import { footprintAt } from './placementUtils'
-import { battleReport, captainRank, formatDuration } from './stats'
+import { battleReport, captainRank, countTurns, formatDuration } from './stats'
 import { bindCinematics } from './cinematicsBinding'
 import { activeDirector, aimDelay, createTurnFlow, fallbackDuration, getDirector, setDirector, Sleeper, TimerDirector } from './turnFlow'
 import { resetInteraction, useUiStore } from './uiStore'
@@ -47,11 +47,27 @@ describe('stats', () => {
     expect(r.bestStreak).toBe(2)
     expect(r.shipsSunk).toBe(1)
     expect(r.enemyShots).toBe(2)
+    expect(r.turns).toBe(2)
     expect(r.seconds).toBe(65)
     expect(formatDuration(65)).toBe('1:05')
     expect(formatDuration(3723)).toBe('1:02:03')
     expect(captainRank(r, true)).toBe('Terror of the Seas')
     expect(captainRank({ ...r, shipsSunk: 0 }, false)).toBe('Powder Monkey')
+  })
+})
+
+describe('stats: salvo turns (BUG-316)', () => {
+  it('counts one turn per volley, not per shot', () => {
+    const e = (id: number, by: 'human' | 'enemy'): GameEvent => ({ id, by, result: { coord: { x: id % 10, y: Math.floor(id / 10) }, outcome: 'miss' } })
+    const salvo = [e(1, 'human'), e(2, 'human'), e(3, 'human'), e(4, 'enemy'), e(5, 'enemy'), e(6, 'human'), e(7, 'human')]
+    expect(countTurns(salvo, 'human')).toBe(2)
+    expect(countTurns(salvo, 'enemy')).toBe(1)
+    const classic = [e(1, 'human'), e(2, 'enemy'), e(3, 'human'), e(4, 'enemy'), e(5, 'human')]
+    expect(countTurns(classic, 'human')).toBe(3)
+    expect(countTurns([], 'human')).toBe(0)
+    const r = battleReport(salvo, createBoard(), createBoard(), null)
+    expect(r.shots).toBe(5)
+    expect(r.turns).toBe(2)
   })
 })
 
@@ -140,8 +156,9 @@ describe('turnFlow integration (director, volleys, victory)', () => {
     const g = useGameStore.getState()
     g.reset()
     g.updateSettings({ cinematics: 'fast', reducedMotion: false })
-    if (modes) g.setModes(modes)
-    g.startGame('easy', modes)
+    // reset() keeps the previous game's modes (BUG-320), so pin them per test
+    g.setModes({ salvo: false, storm: false, ...modes })
+    g.startGame('easy')
     g.autoPlacePlayerFleet()
     g.confirmPlacement()
   }

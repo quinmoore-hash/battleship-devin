@@ -35,12 +35,14 @@ describe('game modes: defaults', () => {
     expect(s().events).toHaveLength(2)
   })
 
-  it('partial modes merge with the defaults and reset() restores classic rules', () => {
+  it('partial modes merge with the defaults and reset() remembers them for the next battle (BUG-320)', () => {
     s().startGame('medium', { storm: true })
     expect(s().modes).toEqual({ salvo: false, storm: true })
     s().reset()
-    expect(s().modes).toEqual(DEFAULT_MODES)
+    expect(s().modes).toEqual({ salvo: false, storm: true })
     expect(s().salvo).toEqual({ pending: [], size: 1 })
+    s().setModes({ storm: false })
+    expect(s().modes).toEqual(DEFAULT_MODES)
   })
 })
 

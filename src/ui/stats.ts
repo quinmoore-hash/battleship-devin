@@ -1,4 +1,5 @@
 import { isSunk, type Board } from '../engine'
+import type { Player } from '../engine'
 import type { GameEvent } from '../store/gameStore'
 
 export interface BattleReport {
@@ -6,6 +7,7 @@ export interface BattleReport {
   hits: number
   misses: number
   accuracy: number
+  /** Turns the player took: one per shot in classic, one per volley in salvo (BUG-316). */
   turns: number
   shipsSunk: number
   shipsLost: number
@@ -15,6 +17,20 @@ export interface BattleReport {
   bestStreak: number
   /** Elapsed battle time in seconds (0 when unknown). */
   seconds: number
+}
+
+/**
+ * Turns `by` took: the sides alternate, so a run of consecutive events by one side is one turn (a salvo volley
+ * lands as several events in a row; classic turns are single shots).
+ */
+export function countTurns(events: readonly GameEvent[], by: Player): number {
+  let turns = 0
+  let prev: Player | null = null
+  for (const e of events) {
+    if (e.by === by && prev !== by) turns++
+    prev = e.by
+  }
+  return turns
 }
 
 /** Pure summary of a finished (or running) battle for the HUD and the game-over report. */
@@ -33,7 +49,7 @@ export function battleReport(events: readonly GameEvent[], playerBoard: Board, e
     hits,
     misses: mine.length - hits,
     accuracy: mine.length ? Math.round((hits / mine.length) * 100) : 0,
-    turns: mine.length,
+    turns: countTurns(events, 'human'),
     shipsSunk: enemyBoard.ships.filter(isSunk).length,
     shipsLost: playerBoard.ships.filter(isSunk).length,
     enemyShots: theirs.length,
