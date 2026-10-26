@@ -63,7 +63,7 @@ const PALETTE: Record<Livery, Palette> = {
     deck: '#7b5f3e',
     trim: '#8c1d1d',
     accent: '#8f7035',
-    sail: '#1d1b19',
+    sail: '#8c7b66',
     rope: '#5c4a30',
     flag: 'jolly-roger',
   },

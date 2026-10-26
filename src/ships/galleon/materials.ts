@@ -69,7 +69,7 @@ export function galleonMaterials(livery: Livery): GalleonMaterials {
   const brass = std({ color: pirate ? '#9c7a3a' : '#d1a64a', roughness: 0.3, metalness: 0.9 })
   const glass = new THREE.MeshPhysicalMaterial({ color: '#b9dfe8', roughness: 0.08, metalness: 0, transmission: 0, /* transmission > 0 makes three render the whole opaque scene twice (transmission pass) */ thickness: 0.02, transparent: true, opacity: 0.85, emissive: '#ffb347', emissiveIntensity: pirate ? 0.25 : 0.15 })
   const rope = std({ color: pirate ? '#5e4a30' : '#8a7355', roughness: 1 })
-  const sailColor = pirate ? '#201c1a' : '#efe4cc'
+  const sailColor = pirate ? '#8c7b66' : '#efe4cc'
   const seam = pirate ? '#3a3330' : '#c9b793'
   const sailMap = sailTexture(sailColor, seam)
   const sailBump = sailTexture(sailColor, seam, 3, true)
