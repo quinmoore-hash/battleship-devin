@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Difficulty } from '../engine'
 import { clearStats, DIFFICULTIES, formatDuration, formatPercent, totals, useStats, winRate } from './stats'
 import './extras.css'
@@ -16,6 +17,7 @@ export interface StatsPanelProps {
 /** Captain's log: per-difficulty games, wins, best shots-to-win, best accuracy, win streak and time at sea. */
 export function StatsPanel({ difficulty, compact = false, title = 'Captain’s log', className = '' }: StatsPanelProps) {
   const stats = useStats()
+  const [confirming, setConfirming] = useState(false)
   const t = totals(stats)
   const played = DIFFICULTIES.filter((d) => stats.byDifficulty[d].games > 0)
   return (
@@ -75,9 +77,21 @@ export function StatsPanel({ difficulty, compact = false, title = 'Captain’s l
         </table>
       )}
       {t.games > 0 && (
-        <button type="button" className="xt-btn ghost tiny xt-stats-clear" data-testid="stats-clear" onClick={() => window.confirm('Clear the captain’s log?') && clearStats()}>
-          Clear log
-        </button>
+        (confirming ? (
+          <div className="xt-row xt-stats-confirm" role="alertdialog" aria-label="Clear the captain’s log?" data-testid="stats-clear-confirm">
+            <span>Clear the captain’s log? This cannot be undone.</span>
+            <button type="button" className="xt-btn tiny danger" data-testid="stats-clear-yes" onClick={() => (clearStats(), setConfirming(false))}>
+              Clear
+            </button>
+            <button type="button" className="xt-btn ghost tiny" data-testid="stats-clear-no" onClick={() => setConfirming(false)}>
+              Keep
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="xt-btn ghost tiny xt-stats-clear" data-testid="stats-clear" onClick={() => setConfirming(true)}>
+            Clear log
+          </button>
+        ))
       )}
     </section>
   )

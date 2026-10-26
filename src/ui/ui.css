@@ -702,6 +702,7 @@
   display: grid;
   grid-template-columns: repeat(10, var(--cell));
   gap: 2px;
+  padding: 0 4px; /* mirrors `.grid` padding so letters sit over the cells */
   text-align: center;
   font-family: var(--font-display);
   font-size: 0.72rem;
@@ -712,6 +713,7 @@
   display: grid;
   grid-template-rows: repeat(10, var(--cell));
   gap: 2px;
+  padding: 4px 0;
   align-items: center;
   font-family: var(--font-display);
   font-size: 0.72rem;
@@ -1119,6 +1121,17 @@
   justify-content: space-between;
   align-items: baseline;
   margin-bottom: 0.35rem;
+}
+.fleet-status header {
+  flex-wrap: wrap;
+  column-gap: 0.5rem;
+}
+.fleet-status header .count {
+  white-space: nowrap;
+}
+.fleet-status header .count.hits {
+  margin-left: auto;
+  opacity: 0.8;
 }
 .fleet-status h3,
 .shot-log h3 {
@@ -1692,9 +1705,13 @@
 
 /* touch devices: 44 px targets; the board scrolls sideways inside its panel instead of clipping (a11y e2e) */
 @media (pointer: coarse) {
+  /* every desktop `--cell` rule (incl. the [data-no3d='false'] 3D-layout ones) is beaten here so the row / column
+     labels use the same 44 px pitch as the cells (BUG-310) */
   .ui-root .grid-wrap,
   .ui-root[data-no3d='true'] .battle .grid-wrap,
-  .ui-root[data-no3d='true'] .placement .grid-wrap {
+  .ui-root[data-no3d='true'] .placement .grid-wrap,
+  .ui-root[data-no3d='false'] .battle .grid-wrap,
+  .ui-root[data-no3d='false'] .placement .grid-wrap {
     --cell: 44px;
     max-width: 100%;
     overflow-x: auto;
