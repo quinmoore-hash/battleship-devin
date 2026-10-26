@@ -87,7 +87,7 @@ export function sloopMaterials(livery: Livery): SloopMaterials {
   sparMap.repeat.set(4, 1)
   const spar = std({ map: sparMap, roughness: 0.55 })
 
-  const sailMap = pirate ? canvasTexture(seed + 7, '#1f1c1a', '#2e2825', '#0d0b0a') : canvasTexture(seed + 7, '#efe4cf', '#d8c8a6', '#b9a37e')
+  const sailMap = pirate ? canvasTexture(seed + 7, '#8c7b66', '#a08f78', '#5a4d40') : canvasTexture(seed + 7, '#efe4cf', '#d8c8a6', '#b9a37e')
   const sail = std({ map: sailMap, alphaMap: tatterAlpha(seed + 8), alphaTest: 0.001, side: THREE.DoubleSide, roughness: 0.95, shadowSide: THREE.DoubleSide })
 
   const flag = std({ map: pirate ? jollyRogerTexture() : redEnsignTexture(), side: THREE.DoubleSide, roughness: 0.9 })
