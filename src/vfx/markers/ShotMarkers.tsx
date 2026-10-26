@@ -4,10 +4,9 @@ import * as THREE from 'three'
 import type { ShotResult } from '../../engine'
 import { BOARD_LAYOUT, type Vec3 } from '../../scene/layout'
 import { sampleWaveHeight, sampleWaveNormal } from '../../scene/waves'
-import { Fire } from '../damage/Fire'
-import { Smoke } from '../damage/Smoke'
 import { useReducedMotion } from '../damage/useReducedMotion'
 import { layoutMarkers, popScale, rippleAt, wreckScatter, type MarkerPlacement } from './layout'
+import { Fires, Smokes, type FireEmitter, type SmokeEmitter } from '../damage/FireField'
 
 export interface ShotMarkersProps {
   shots: readonly ShotResult[]
@@ -30,11 +29,11 @@ const WOOD = new THREE.Color('#9a6a3a')
 let buoyGeoms: { hull: THREE.BufferGeometry; cone: THREE.BufferGeometry; band: THREE.BufferGeometry; pole: THREE.BufferGeometry; top: THREE.BufferGeometry } | null = null
 function buoyGeometry() {
   if (buoyGeoms) return buoyGeoms
-  const hull = new THREE.SphereGeometry(0.32, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62)
-  const cone = new THREE.ConeGeometry(0.2, 0.42, 14).translate(0, 0.38, 0)
-  const band = new THREE.TorusGeometry(0.33, 0.035, 8, 24).rotateX(Math.PI / 2).translate(0, 0.02, 0)
+  const hull = new THREE.SphereGeometry(0.32, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.62)
+  const cone = new THREE.ConeGeometry(0.2, 0.42, 8).translate(0, 0.38, 0)
+  const band = new THREE.TorusGeometry(0.33, 0.035, 5, 14).rotateX(Math.PI / 2).translate(0, 0.02, 0)
   const pole = new THREE.CylinderGeometry(0.02, 0.025, 0.7, 6).translate(0, 0.85, 0)
-  const top = new THREE.SphereGeometry(0.06, 8, 6).translate(0, 1.2, 0)
+  const top = new THREE.SphereGeometry(0.06, 6, 4).translate(0, 1.2, 0)
   buoyGeoms = { hull, cone, band, pole, top }
   return buoyGeoms
 }
@@ -84,6 +83,18 @@ export function ShotMarkers({ shots, boardOrigin = BOARD_LAYOUT.enemy.origin, ce
   const markers = useMemo(() => layoutMarkers(shots, boardOrigin, cellSize), [shots, boardOrigin, cellSize])
   const misses = useMemo(() => markers.filter((m) => m.kind === 'miss'), [markers])
   const wrecks = useMemo(() => markers.filter((m) => m.kind !== 'miss'), [markers])
+  const wreckFires = useMemo<FireEmitter[]>(
+    () => (fires ? wrecks.filter((m) => m.kind === 'hit').map((m) => ({ key: m.key, position: [m.position[0], m.position[1] + 0.05, m.position[2]], seed: m.seed, scale: cellSize * 0.45 })) : []),
+    [wrecks, fires, cellSize],
+  )
+  const hitSmoke = useMemo<SmokeEmitter[]>(
+    () => wrecks.filter((m) => m.kind === 'hit').map((m) => ({ key: m.key, position: [m.position[0], m.position[1] + 0.1, m.position[2]], seed: m.seed + 3, scale: cellSize * 0.5 })),
+    [wrecks, cellSize],
+  )
+  const sunkSmoke = useMemo<SmokeEmitter[]>(
+    () => wrecks.filter((m) => m.kind !== 'hit').map((m) => ({ key: m.key, position: [m.position[0], m.position[1] + 0.05, m.position[2]], seed: m.seed + 3, scale: cellSize * 0.35, intensity: 0.45 })),
+    [wrecks, cellSize],
+  )
   const scatter = useMemo(
     () => new Map(wrecks.map((m) => [m.key, wreckScatter(m.seed, PLANKS_PER, cellSize, m.kind === 'sunk' ? 0.85 : 0.35)])),
     [wrecks, cellSize],
@@ -203,12 +214,12 @@ export function ShotMarkers({ shots, boardOrigin = BOARD_LAYOUT.enemy.origin, ce
   })
 
   return (
-    <group>
+    <group name="markers">
       {/* buoy: white float dome, white cone, red waterline band, pole with a red top */}
-      <instancedMesh ref={hull} args={[geo.hull, undefined, CAP]} castShadow frustumCulled={false}>
+      <instancedMesh ref={hull} args={[geo.hull, undefined, CAP]} frustumCulled={false}>
         <meshStandardMaterial color="#f2eee4" roughness={0.45} />
       </instancedMesh>
-      <instancedMesh ref={cone} args={[geo.cone, undefined, CAP]} castShadow frustumCulled={false}>
+      <instancedMesh ref={cone} args={[geo.cone, undefined, CAP]} frustumCulled={false}>
         <meshStandardMaterial color="#f6f2ea" roughness={0.45} />
       </instancedMesh>
       <instancedMesh ref={band} args={[geo.band, undefined, CAP]} frustumCulled={false}>
@@ -225,11 +236,11 @@ export function ShotMarkers({ shots, boardOrigin = BOARD_LAYOUT.enemy.origin, ce
         <meshBasicMaterial map={foamTexture()} transparent depthWrite={false} opacity={0.75} />
       </instancedMesh>
       {/* wreckage */}
-      <instancedMesh ref={planks} args={[undefined, undefined, CAP * PLANKS_PER]} castShadow frustumCulled={false}>
+      <instancedMesh ref={planks} args={[undefined, undefined, CAP * PLANKS_PER]} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color="#ffffff" roughness={0.9} />
       </instancedMesh>
-      <instancedMesh ref={barrels} args={[undefined, undefined, CAP]} castShadow frustumCulled={false}>
+      <instancedMesh ref={barrels} args={[undefined, undefined, CAP]} frustumCulled={false}>
         <cylinderGeometry args={[0.8, 0.8, 1.6, 10]} />
         <meshStandardMaterial color="#5a3d22" roughness={0.85} />
       </instancedMesh>
@@ -237,16 +248,9 @@ export function ShotMarkers({ shots, boardOrigin = BOARD_LAYOUT.enemy.origin, ce
         <ringGeometry args={[0.82, 1, 48]} />
         <meshBasicMaterial ref={rippleMat} color="#eaf8ff" transparent opacity={0} depthWrite={false} toneMapped={false} />
       </mesh>
-      {wrecks.map((m) =>
-        m.kind === 'hit' ? (
-          <group key={m.key}>
-            {fires && <Fire position={[m.position[0], m.position[1] + 0.05, m.position[2]]} seed={m.seed} scale={cellSize * 0.45} />}
-            <Smoke position={[m.position[0], m.position[1] + 0.1, m.position[2]]} seed={m.seed + 3} scale={cellSize * 0.5} count={reduced ? 5 : 8} />
-          </group>
-        ) : (
-          <Smoke key={m.key} position={[m.position[0], m.position[1] + 0.05, m.position[2]]} seed={m.seed + 3} scale={cellSize * 0.35} count={reduced ? 3 : 5} intensity={0.45} color="#5a5651" />
-        ),
-      )}
+      <Fires emitters={wreckFires} />
+      <Smokes emitters={hitSmoke} count={reduced ? 5 : 8} />
+      <Smokes emitters={sunkSmoke} count={reduced ? 3 : 5} color="#5a5651" />
     </group>
   )
 }

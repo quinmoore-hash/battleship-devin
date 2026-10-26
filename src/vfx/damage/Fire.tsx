@@ -1,11 +1,11 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useId, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { seededRandom } from '../random'
 import { emberAt, emberSeeds, type EmberOptions } from './embers'
 import { defaultFireBudget, FireLightBudget, MAX_FIRE_LIGHTS } from './fireBudget'
-import { attachParams, makeSpriteMaterial, spriteQuad } from './sprites'
+import { attachParams, disposeParams, makeSpriteMaterial, spriteQuad } from './sprites'
 import { useReducedMotion } from './useReducedMotion'
 import { scaleCount, useParticlesScale } from '../../perf/store'
 import { WIND } from './wind'
@@ -23,7 +23,7 @@ export interface FireProps {
 
 const tmpObj = new THREE.Object3D()
 
-interface Tongue {
+export interface Tongue {
   x: number
   z: number
   w: number
@@ -32,7 +32,7 @@ interface Tongue {
   seed: number
 }
 
-function makeTongues(seed: number, count: number, scale: number): Tongue[] {
+export function makeTongues(seed: number, count: number, scale: number): Tongue[] {
   const rnd = seededRandom(seed)
   return Array.from({ length: count }, (_, i) => {
     const a = rnd() * Math.PI * 2
@@ -75,15 +75,11 @@ export function Fire({ position, scale = 1, seed = 1, intensity = 1, budget = de
     [emberCount, seed, scale, reduced],
   )
   const emberSeedArr = useMemo(() => emberSeeds(emberOpts), [emberOpts])
-  useEffect(() => () => void (flameMat.dispose(), glowMat.dispose(), emberMat.dispose()), [flameMat, glowMat, emberMat])
+  useEffect(() => () => void (flameMat.dispose(), glowMat.dispose(), emberMat.dispose(), disposeParams(flames.current), disposeParams(glow.current)), [flameMat, glowMat, emberMat])
 
   // Light budget registration. The oldest live fire renders the shared lights.
   useEffect(() => budget.register(id, position, intensity * scale), [budget, id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => budget.update(id, position, intensity * scale), [budget, id, position, intensity, scale])
-  const hostId = useSyncExternalStore(
-    (fn) => budget.subscribe(fn),
-    () => budget.hostId,
-  )
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
@@ -145,7 +141,6 @@ export function Fire({ position, scale = 1, seed = 1, intensity = 1, budget = de
       <instancedMesh ref={embers} args={[undefined, emberMat, emberCount]} frustumCulled={false} renderOrder={23}>
         <sphereGeometry args={[1, 5, 4]} />
       </instancedMesh>
-      {hostId === id && <FireLights budget={budget} />}
     </group>
   )
 }
@@ -167,12 +162,11 @@ export function FireLights({ budget = defaultFireBudget }: { budget?: FireLightB
       const l = lights.current[i]
       if (!l) continue
       const src = plan[i]
+      // never toggle `visible`: the scene's point-light count must stay constant or three recompiles every program
       if (!src) {
         l.intensity = 0
-        l.visible = false
         continue
       }
-      l.visible = true
       world.current.set(src.position[0], src.position[1] + 0.7, src.position[2])
       if (p) p.worldToLocal(world.current)
       l.position.lerp(world.current, 0.2)

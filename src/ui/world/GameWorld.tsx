@@ -15,6 +15,9 @@ import { maskPendingHit, settledWrecks, visibleShots, type PendingShot } from '.
 import { useBattleController } from '../battleController'
 import { footprintAt } from '../placementUtils'
 import { useUiStore } from '../uiStore'
+import type { Lod } from '../../ships/types'
+import { FireLights } from '../../vfx/damage/Fire'
+import { FlashLights } from '../../vfx/flashLights'
 
 const PLAYER = BOARD_LAYOUT.player
 const ENEMY = BOARD_LAYOUT.enemy
@@ -44,6 +47,21 @@ export function GameWorld() {
 }
 
 /** Flags the first rendered frame so the loading screen can lift. */
+/** Placement shares the battle budget: never lod 0 (lod 0 is reserved for the one cinematic-focused ship). */
+function usePlacementLod(): Lod {
+  return Math.max(1, usePerf().lod) as Lod
+}
+
+/** Only the sink entries that belong to ships of this fleet that are actually sunk. */
+export function sinkFor(ships: PlacedShip[], sink: Partial<Record<ShipId, number>>): Partial<Record<ShipId, number>> {
+  const out: Partial<Record<ShipId, number>> = {}
+  for (const ship of ships) {
+    const p = sink[ship.spec.id]
+    if (p !== undefined && ship.hits.length >= ship.spec.length) out[ship.spec.id] = p
+  }
+  return out
+}
+
 function ReadyProbe() {
   const setWorldReady = useUiStore((s) => s.setWorldReady)
   const done = useRef(false)
@@ -57,6 +75,7 @@ function ReadyProbe() {
 }
 
 function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
+  const placementLod = usePlacementLod()
   const playerBoard = useGameStore((s) => s.playerBoard)
   const removePlayerShip = useGameStore((s) => s.removePlayerShip)
   const placePlayerShip = useGameStore((s) => s.placePlayerShip)
@@ -147,7 +166,7 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
       />
       {playerBoard.ships.map((ship) => (
         <group key={ship.spec.id} onPointerDown={(e) => pickUp(ship, e)} onPointerOver={() => (document.body.style.cursor = 'grab')} onPointerOut={() => (document.body.style.cursor = '')}>
-          <Fleet ships={[ship]} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={quality === 'low' ? 1 : 0} />
+          <Fleet ships={[ship]} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={placementLod} />
         </group>
       ))}
       {spec && footprint && <Ghost id={spec.id} footprint={footprint} orientation={orientation} quality={quality} />}
@@ -164,6 +183,7 @@ interface GhostProps {
 
 /** The carried ship, floating above the water with a tinted footprint showing whether it can be dropped. */
 function Ghost({ id, footprint, orientation, quality }: GhostProps) {
+  const placementLod = usePlacementLod()
   const ref = useRef<THREE.Group>(null)
   const cells = footprint.cells
   const a = cellToWorld(cells[0], PLAYER.origin, PLAYER.cellSize)
@@ -187,7 +207,7 @@ function Ghost({ id, footprint, orientation, quality }: GhostProps) {
   return (
     <group>
       <group ref={ref} position={[x, PLAYER.origin[1] + LIFT, z]} rotation-y={rotationY}>
-        <Ship id={id} livery="pirate" damage={Array.from({ length: spec.length }, () => 'intact' as const)} quality={quality} lod={quality === 'low' ? 1 : 0} sails={0.4} />
+        <Ship id={id} livery="pirate" damage={Array.from({ length: spec.length }, () => 'intact' as const)} quality={quality} lod={placementLod} sails={0.4} />
       </group>
       {cells.map((c) => {
         const p = cellToWorld(c, PLAYER.origin, PLAYER.cellSize)
@@ -209,6 +229,10 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const busy = useBattleController((s) => s.busy)
   const firing = useDirector((s) => s.firing)
   const sinkProgress = useDirector((s) => s.sinkProgress)
+  // the director keys sink progress by ShipId only; give each fleet just its own sunk ships' entries so the
+  // player's man-o'-war does not go under when the enemy's does (BUG-361)
+  const playerSink = useMemo(() => sinkFor(playerShips, sinkProgress), [playerShips, sinkProgress])
+  const enemySink = useMemo(() => sinkFor(enemyShips, sinkProgress), [enemyShips, sinkProgress])
   const active = useDirector((s) => s.active)
   const impacted = useDirector((s) => s.impacted)
   const perf = usePerf()
@@ -249,10 +273,13 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
           if (canAim && !hasBeenShot(enemyBoard, c)) requestFire(c, lastPointerType)
         }}
       />
-      <Fleet ships={playerShips} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={lod} firing={firing} sinkProgress={sinkProgress} />
-      <Fleet ships={enemyShips} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={lod} firing={firing} sinkProgress={sinkProgress} />
+      <Fleet ships={playerShips} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={lod} firing={firing} sinkProgress={playerSink} />
+      <Fleet ships={enemyShips} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={lod} firing={firing} sinkProgress={enemySink} />
       <ShotMarkers shots={theirShots} boardOrigin={PLAYER.origin} fires={false} />
       <ShotMarkers shots={myShots} boardOrigin={ENEMY.origin} fires={!over} />
+      {/* permanent light slots: fires + muzzle/impact flashes borrow these so the scene's light count never changes (no shader recompiles mid-battle) */}
+      <FireLights />
+      <FlashLights />
       <DamageLayer ships={playerShips} boardOrigin={PLAYER.origin} fires smoke breachSide="both" />
       <DamageLayer ships={over ? enemyShips : sunkEnemy} boardOrigin={ENEMY.origin} fires={false} smoke breachSide={null} />
       {playerWrecks.map((s) => (

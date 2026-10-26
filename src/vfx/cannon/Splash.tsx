@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef , useEffect} from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { easeInCubic, easeOutCubic } from '../math'
@@ -165,7 +165,10 @@ export function Splash({ position, seed = 1, scale = 1, delay = 0, wind = DEFAUL
       }),
     [seed, scale],
   )
+  useEffect(() => () => column.dispose(), [column])
+
   const columnGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, 40, 24, true).translate(0, 0.5, 0), [])
+  useEffect(() => () => columnGeometry.dispose(), [columnGeometry])
 
   const columnMesh = useRef<THREE.Mesh>(null)
   const sprayCloud = useRef<SpriteCloudHandle>(null)
@@ -252,7 +255,7 @@ export function Splash({ position, seed = 1, scale = 1, delay = 0, wind = DEFAUL
       <mesh ref={columnMesh} geometry={columnGeometry} material={column} position={position} renderOrder={8} visible={false} frustumCulled={false} />
       <SpriteCloud ref={sprayCloud} count={spray.length} map={sprayTexture()} colorA="#cfe6f2" colorB="#ffffff" shading={0.4} renderOrder={13} />
       <SpriteCloud ref={mistCloud} count={mist.length} map={smokeTexture()} colorA="#bfd9e6" colorB="#f4fbff" shading={0.3} renderOrder={12} floorY={position[1] + 0.1} floorFade={0.7} />
-      <instancedMesh ref={dropMesh} args={[DROPLET_GEOMETRY, getDropletMaterial(), droplets.length]} frustumCulled={false} castShadow />
+      <instancedMesh ref={dropMesh} args={[DROPLET_GEOMETRY, getDropletMaterial(), droplets.length]} frustumCulled={false} />
       <FoamRing position={position} radius={2.4 * scale} delay={delay + 0.05} seed={seed} />
       <WaterRipple position={position} radius={3.6 * scale} delay={delay + 0.1} />
     </group>

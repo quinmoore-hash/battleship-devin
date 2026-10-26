@@ -65,7 +65,7 @@ camera: the rig stops writing position/target/fov and disables orbit, then damps
 `usePerf()`): `<Lighting shadowSize?>` (0 = no shadow pass), `<Water waves?>`, `<Effects enabled?>` (lazy chunk).
 
 ### perf (`src/perf`)
-`usePerf()` → `{ tier, dpr, shadows, particlesScale, postprocessing, lod, quality, waves }` resolved from GPU
+`usePerf()` → `{ tier, dpr, shadows, particlesScale, postprocessing, lod, quality, waves, waterSegments }` resolved from GPU
 detection (`WEBGL_debug_renderer_info`, dpr × screen, cores, 2 s startup FPS probe via `<PerfBootstrap>`) and the
 persisted override `settings.quality: 'auto' | 'low' | 'medium' | 'high'` (`?quality=` wins). `medium` is the default
 and the tuned target (MacBook Air M4 / Iris Xe at native res, dpr ≤ 1.5, 1k shadows, no post, lod ≥ 1); Apple GPUs
@@ -78,6 +78,35 @@ uses it. `useParticlesScale()` / `scaleCount(n, scale)` for VFX counts. `?perf` 
 `<A11yBootstrap>` (prefers-reduced-motion → `reducedMotion` + `cinematics:'fast'`, `<html data-colorblind|
 data-reduced-motion|data-quality>`, Space → `SKIP_CINEMATIC_EVENT`), `announce()`/`<Announcer>` live regions,
 `a11y.css` (focus rings, HUD text halo, colour-blind marker shapes behind `settings.colorblind`, ≥ 44 px cells on touch).
+
+**Budgets (hard, measured with `?perf` / `renderer.info` at the battle overview; `npm run perf:game` plays a game and prints
+them per checkpoint):** Medium ≤ 350 draw calls / ≤ 250k triangles, Low ≤ 200 / ≤ 120k, placement same as battle, and *flat
+over a whole game* — markers, damage, fires, smoke and flotsam may add ~1 draw call per *type*, never per shot. Geometries,
+textures, programs and heap must be flat (±5 %) after 60 shots and across Rematch / Play Again / menu round-trips. JS per
+frame (useFrame work, `frameStats.jsMs`) < 4 ms. Rules that keep it so:
+- **Ships are baked.** `<Ship lod ≥ 1>` renders the shared bake from `src/ships/bake.tsx`: `<ShipBakery>` (mounted once in
+  `<OceanScene>`) keeps ONE hidden live copy per (shipId, livery, lod, quality) and `bakeObject()` merges its static meshes per
+  material (`materialKey()`: parameter signature for stock materials, identity for custom shaders) into a few `Mesh`es; every
+  instance renders a `clone()` sharing geometry + materials. Baked ships never rebuild on damage / sinkProgress / firing — only
+  lod 0 (the one cinematic-focused ship) and a ship mid-sink (`0 < sinkProgress < 1`) are live. Placement uses
+  `max(1, perf.lod)`. The cache lives for the page (bounded by keys), so rematches allocate nothing. `<BakedGroup>` does the
+  same for static dressing (buoy corners, cove props, flotsam pieces, floaters).
+- **Per-cell VFX are shared systems.** `<Fires>` / `<Smokes>` (`src/vfx/damage/FireField.tsx`, `EMITTER_CAP` 200 emitters,
+  buffers allocated once, `count` set per frame) replace one `<Fire>`/`<Smoke>` per hit in `<DamageLayer>` and
+  `<ShotMarkers>`; hull breaches are capped to the newest `BREACH_CAP` cells. Never mount a component per shot that owns
+  materials or geometry.
+- **Light count is constant.** three recompiles every program when the number of visible lights changes, so `<FireLights>`
+  (4 slots, never toggled `visible`) and `<FlashLights>` (`src/vfx/flashLights.tsx`, 2 slots borrowed by `MuzzleFlash` /
+  `ImpactFlash` via `useFlashSlot`) are mounted permanently in `<BattleWorld>`. Do not add `<pointLight>`s to transient VFX.
+- **Only ships cast shadows.** No `castShadow` on water, islands, dressing, markers, VFX. Shadow map ≤ 1024 on Medium.
+- **Water / terrain density follows the tier**, not the look: `TIER_PROFILES[tier].waterSegments` (96 / 128 / 224) and
+  `IslandTerrain` segments; Medium keeps high-quality shading on the coarse mesh. `resolveDpr()` caps Medium at 1.25 when
+  `screen.width × dpr > 2500` (Retina MacBooks), else 1.5.
+- **No per-frame allocation**: hoist `Vector3`/`Color`/`Matrix4`/`Object3D` scratch objects to module scope; drive
+  animation through refs / uniforms, never React state. Sprite systems get their `aParam` attribute once via `attachParams`
+  (capacity, not count) and free it with `disposeParams` on unmount.
+- Debug: `window.__perf.dump()` lists visible meshes by named group / geometry / material; `window.__perf.programs()` groups
+  live shader programs by cache key (a growing list = light-count or define churn).
 
 
 ### ships (`src/ships`)

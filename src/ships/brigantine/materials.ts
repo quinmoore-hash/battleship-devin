@@ -230,7 +230,7 @@ export function brigMaterials(livery: Livery): BrigMaterials {
     brass.roughnessMap = brassTex.roughnessMap
   } else brass.color.set('#c19a46')
 
-  const glass = new THREE.MeshPhysicalMaterial({ color: '#bfe3f2', roughness: 0.05, metalness: 0, transmission: 0.6, thickness: 0.02, transparent: true, opacity: 0.75 })
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#bfe3f2', roughness: 0.05, metalness: 0, transmission: 0, /* no transmission pass: it doubles every draw call in the scene */ thickness: 0.02, transparent: true, opacity: 0.75 })
 
   const flagTex = flagTexture(p.flag)
   const flag = std('#ffffff', { side: THREE.DoubleSide, roughness: 0.9 })

@@ -80,7 +80,7 @@ export function DebrisMesh({ kind, livery }: { kind: DebrisKind; livery: Livery 
     case 'plank':
       return (
         <group position-y={-0.01}>
-          <mesh geometry={G.plank} material={m.wood} castShadow receiveShadow />
+          <mesh geometry={G.plank} material={m.wood} receiveShadow />
           <mesh geometry={G.plankEnd} material={m.wood} position={[0.3, 0, 0.02]} rotation={[0.4, 0.3, 0.9]} scale={[1.2, 0.5, 0.9]} />
           <mesh geometry={G.plankEnd} material={m.wood} position={[-0.29, 0, -0.03]} rotation={[1.1, 0.8, 0.2]} scale={[1, 0.5, 1]} />
           {[-0.18, 0.02, 0.2].map((x) => (
@@ -91,7 +91,7 @@ export function DebrisMesh({ kind, livery }: { kind: DebrisKind; livery: Livery 
     case 'barrel':
       return (
         <group rotation-z={Math.PI / 2} position-y={0.02}>
-          <mesh geometry={G.barrel} material={m.wood} castShadow receiveShadow />
+          <mesh geometry={G.barrel} material={m.wood} receiveShadow />
           <mesh geometry={G.barrelLid} material={m.darkWood} position-y={0.171} rotation-x={-Math.PI / 2} />
           <mesh geometry={G.barrelLid} material={m.darkWood} position-y={-0.171} rotation-x={Math.PI / 2} />
           {[-0.12, 0, 0.12].map((y) => (
@@ -102,7 +102,7 @@ export function DebrisMesh({ kind, livery }: { kind: DebrisKind; livery: Livery 
     case 'crate':
       return (
         <group position-y={-0.06} rotation={[0.15, 0, -0.1]}>
-          <mesh geometry={G.crate} material={m.wood} castShadow receiveShadow />
+          <mesh geometry={G.crate} material={m.wood} receiveShadow />
           {[0.12, -0.12].map((y) =>
             [0.125, -0.125].map((z) => (
               <mesh key={`${y}${z}`} geometry={G.slat} material={m.darkWood} position={[0, y, z]} />
@@ -116,7 +116,7 @@ export function DebrisMesh({ kind, livery }: { kind: DebrisKind; livery: Livery 
     case 'hat':
       return (
         <group rotation={[0.08, 0, 0.06]}>
-          <mesh geometry={G.brim} material={m.felt} castShadow />
+          <mesh geometry={G.brim} material={m.felt} />
           <mesh geometry={G.crown} material={m.felt} />
           <mesh geometry={G.band} material={m.gold} position-y={0.025} rotation-x={Math.PI / 2} />
           {/* turned-up tricorn sides */}
@@ -128,7 +128,7 @@ export function DebrisMesh({ kind, livery }: { kind: DebrisKind; livery: Livery 
     case 'spar':
       return (
         <group position-y={0.01}>
-          <mesh geometry={G.spar} material={m.wood} rotation-z={Math.PI / 2} castShadow />
+          <mesh geometry={G.spar} material={m.wood} rotation-z={Math.PI / 2} />
           <mesh geometry={G.scrap} material={m.cloth} position={[0.1, 0.01, 0.17]} rotation={[-Math.PI / 2 + 0.15, 0, 0.3]} />
           <mesh geometry={G.hoop} material={m.iron} position-x={0.3} rotation-y={Math.PI / 2} scale={0.3} />
         </group>
@@ -136,7 +136,7 @@ export function DebrisMesh({ kind, livery }: { kind: DebrisKind; livery: Livery 
     case 'wheel':
       return (
         <group rotation={[-Math.PI / 2 + 0.25, 0, 0]} position-y={0.02}>
-          <mesh geometry={G.rim} material={m.darkWood} castShadow />
+          <mesh geometry={G.rim} material={m.darkWood} />
           <mesh geometry={G.hub} material={m.gold} rotation-x={Math.PI / 2} />
           {Array.from({ length: 8 }, (_, i) => (
             <group key={i} rotation-z={(i / 8) * Math.PI * 2}>

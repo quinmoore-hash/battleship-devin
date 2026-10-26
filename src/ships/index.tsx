@@ -7,8 +7,10 @@
  *   SHIPS[id] -> ShipDefinition               model component + anchors (cannons, masts, impact points)
  *   shipWorldTransform(placed, boardOrigin)   position / rotationY of a placed ship
  */
+import { useMemo } from 'react'
 import type { PlacedShip, ShipId } from '../engine'
 import { LodGroup } from '../perf/LodShip'
+import { BakedShip, bakeKey, bakeryActive } from './bake'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
 import { BRIGANTINE } from './brigantine'
 import { FRIGATE } from './frigate'
@@ -33,9 +35,21 @@ export interface ShipProps extends ShipModelProps {
   id: ShipId
 }
 
+/**
+ * A ship model. lod 0 (and a ship mid-sink) renders the live procedural model; lod ≥ 1 renders the
+ * shared baked copy from `./bake` (one merged mesh per material) when a `<ShipBakery>` is mounted.
+ */
 export function Ship({ id, ...rest }: ShipProps) {
   const Model = SHIPS[id].Model
-  return <Model {...rest} />
+  const lod = rest.lod ?? 0
+  const sink = rest.sinkProgress ?? 0
+  const live = lod === 0 || (sink > 0 && sink < 1) || !bakeryActive()
+  const quality = rest.quality ?? 'high'
+  const cells = rest.damage.length
+  const intact = useMemo<CellDamage[]>(() => Array.from({ length: cells }, () => 'intact'), [cells])
+  const element = useMemo(() => <Model livery={rest.livery} damage={intact} lod={lod} quality={quality} />, [Model, rest.livery, intact, lod, quality])
+  if (live) return <Model {...rest} />
+  return <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality)} element={element} />
 }
 
 /** Ships are modelled along +x (bow forward). Horizontal ships point toward +x; vertical ships point toward +z. */
@@ -75,18 +89,21 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
       {ships.map((ship) => {
         const sunk = ship.hits.length >= ship.spec.length
         if (!revealed && !sunk) return null
+        // Low tier (fixed lod 2): a finished wreck sits under the surface and its flotsam marks the cells — skip the hull
+        if (sunk && lod === 2 && (sinkProgress?.[ship.spec.id] ?? 1) >= 1) return null
         const { position, rotationY } = shipWorldTransform(ship, boardOrigin, cellSize)
+        // a wreck that has finished sinking sits under the surface: always the lod-2 silhouette
         const sink = sinkProgress?.[ship.spec.id] ?? (sunk ? 1 : 0)
         const pose = sinkPose(sink, { seed: placedShipSeed(ship), hull: SHIPS[ship.spec.id].anchors.hull, damage: damageOf(ship), lastHit: lastHitIndex(ship) })
         return (
           <group key={ship.spec.id} position={[position[0], position[1] - pose.depth, position[2]]} rotation-y={rotationY + pose.yaw}>
             <group rotation={[pose.roll, 0, pose.pitch]}>
-              {lod === 'auto' ? (
+              {lod === 'auto' && sink < 1 ? (
                 <LodGroup position={position} hullLength={ship.spec.length}>
                   {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={autoLod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />}
                 </LodGroup>
               ) : (
-                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod === 'auto' ? 2 : lod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
           </group>

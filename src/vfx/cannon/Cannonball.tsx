@@ -164,7 +164,7 @@ export const Cannonball = forwardRef<CannonballHandle, CannonballProps>(function
 
   return (
     <group>
-      <mesh ref={mesh} geometry={BALL_GEOMETRY} material={getBallMaterial()} scale={radius} castShadow visible={false} frustumCulled={false} />
+      <mesh ref={mesh} geometry={BALL_GEOMETRY} material={getBallMaterial()} scale={radius} visible={false} frustumCulled={false} />
       {trailCount > 0 && <SpriteCloud ref={cloud} count={trailCount} map={smokeTexture()} colorA="#8a8680" colorB="#ddd9d0" shading={0.5} renderOrder={11} />}
       <SpriteCloud ref={glow} count={1} map={glowTexture()} blending="additive" colorA="#ff5a00" colorB="#ffd27a" renderOrder={21} />
     </group>

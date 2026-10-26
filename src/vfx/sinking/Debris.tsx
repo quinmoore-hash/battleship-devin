@@ -8,6 +8,7 @@ import type { Livery } from '../../ships/types'
 import { useGameStore } from '../../store/gameStore'
 import { bobAt, debrisState, flotsamLayout, type DebrisPiece, type FlotsamPiece } from './debris'
 import { DebrisMesh } from './pieces'
+import { BakedGroup } from '../../ships/bake'
 
 /** Water surface under a floating object. The water mesh is at y = 0 plus the Gerstner displacement. */
 /** Absolute world y of the water under (x, z) at scene time t. */
@@ -40,7 +41,7 @@ export function Debris({ pieces, progress, livery, timeScale = 1 }: DebrisProps)
     }
   })
   return (
-    <group>
+    <group name="flotsam">
       {pieces.map((p, i) => (
         <group
           key={i}
@@ -75,31 +76,36 @@ export function Flotsam({ cells, boardOrigin = BOARD_LAYOUT.player.origin, cellS
 }
 
 export function FlotsamPieces({ pieces, livery }: { pieces: FlotsamPiece[]; livery: Livery }) {
-  const refs = useRef<(THREE.Group | null)[]>([])
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime
-    for (let i = 0; i < pieces.length; i++) {
-      const g = refs.current[i]
-      if (!g) continue
-      const p = pieces[i]
-      const bob = bobAt(t, p.phase)
-      g.position.set(p.x, waterLevelAt(p.x, p.z, t) + bob.y, p.z)
-      g.rotation.set(bob.rx, p.rotY, bob.rz)
+  // One bake per wreck field (a few draw calls per sunk ship instead of ~3 per piece); the field
+  // rides the swell as a whole, sampled at its centre.
+  const root = useRef<THREE.Group>(null)
+  const centre = useMemo(() => {
+    if (pieces.length === 0) return { x: 0, z: 0, phase: 0 }
+    let x = 0
+    let z = 0
+    for (const p of pieces) {
+      x += p.x
+      z += p.z
     }
+    return { x: x / pieces.length, z: z / pieces.length, phase: pieces[0].phase }
+  }, [pieces])
+  useFrame(({ clock }) => {
+    const g = root.current
+    if (!g) return
+    const t = clock.elapsedTime
+    const bob = bobAt(t, centre.phase)
+    g.position.y = waterLevelAt(centre.x, centre.z, t) + bob.y
+    g.rotation.set(bob.rx * 0.5, 0, bob.rz * 0.5)
   })
   return (
-    <group>
-      {pieces.map((p, i) => (
-        <group
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el
-          }}
-          scale={p.scale}
-        >
-          <DebrisMesh kind={p.kind} livery={livery} />
-        </group>
-      ))}
+    <group ref={root} name="flotsam">
+      <BakedGroup>
+        {pieces.map((p, i) => (
+          <group key={i} position={[p.x, 0, p.z]} rotation-y={p.rotY} scale={p.scale}>
+            <DebrisMesh kind={p.kind} livery={livery} />
+          </group>
+        ))}
+      </BakedGroup>
     </group>
   )
 }

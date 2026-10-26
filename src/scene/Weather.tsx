@@ -232,7 +232,7 @@ export function Dolphins({ storm = 0 }: { storm?: number }) {
     <group ref={group}>
       {pod.map((_, i) => (
         <group key={i}>
-          <mesh geometry={bodyGeo} material={skin} castShadow />
+          <mesh geometry={bodyGeo} material={skin} />
           <mesh material={belly} position={[0.1, -0.12, 0]} scale={[0.8, 0.5, 0.7]}>
             <capsuleGeometry args={[0.26, 1.3, 4, 8]} />
           </mesh>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  resolveDpr,
   classifyGpu,
   classifyRenderer,
   fpsSamples,
@@ -134,5 +135,14 @@ describe('median / fpsSamples', () => {
     const s = fpsSamples(times, 500)
     expect(s.length).toBeGreaterThanOrEqual(3)
     for (const v of s) expect(v).toBeCloseTo(60, 0)
+  })
+})
+
+describe('resolveDpr', () => {
+  it('caps Medium at 1.25 on wide Retina panels and leaves other tiers alone', () => {
+    expect(resolveDpr(TIER_PROFILES.medium, 2560, 2)).toEqual([1, 1.25])
+    expect(resolveDpr(TIER_PROFILES.medium, 1440, 1)).toEqual([1, 1.5])
+    expect(resolveDpr(TIER_PROFILES.high, 2560, 2)).toEqual([1, 1.75])
+    expect(resolveDpr(TIER_PROFILES.low, 2560, 2)).toEqual([1, 1])
   })
 })
