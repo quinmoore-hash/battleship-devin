@@ -14,11 +14,12 @@ import { useFrame, type RootState } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GOLDEN_HOUR, OceanScene, type Weather } from '../scene'
 import { useGameStore } from '../store/gameStore'
+import { usePerf } from '../perf'
 import { Battlefield } from './Battlefield'
 import { DEFAULT_PHOTO_ORBIT, type OrbitState } from './camera'
 import { FreeCamera } from './FreeCamera'
 import { createOverlayStore, useOverlay, useWindowEvent } from './overlay'
-import type { ReplayBoards } from './replayModel'
+import { battlefieldLod, type ReplayBoards } from './replayModel'
 import './extras.css'
 
 export const PHOTO_EVENT = 'battleship:photo'
@@ -126,10 +127,12 @@ export function PhotoMode({ boards, onClose, timeOfDay = GOLDEN_HOUR, weather: i
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const perf = usePerf()
+  const q = quality ?? perf.quality
   return (
     <div className={`xt-overlay xt-photo${hud ? '' : ' hud-hidden'}`} data-testid="photo-mode" data-hud={hud} data-tod={tod.toFixed(2)}>
       <OceanScene view="gameover" interactive={false} timeOfDay={tod} weather={weather} quality={quality}>
-        <Battlefield boards={boards} lod={quality === 'low' ? 2 : 0} quality={quality} />
+        <Battlefield boards={boards} lod={battlefieldLod('photo', perf.lod, q)} quality={q} />
         <FreeCamera initial={camera} />
         {capturing && <CaptureFrame onCapture={captured} />}
       </OceanScene>

@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber'
-import { Component, useMemo, type ReactNode } from 'react'
+import { Component, useEffect, useMemo, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/gameStore'
 import { CameraRig, type CameraView } from './CameraRig'
@@ -16,7 +16,7 @@ import { Rain, useLightning, type LightningStrike } from './Weather'
 import { usePerf, usePerfStore } from '../perf/store'
 import { PerfStats } from '../perf/PerfStats'
 import { perfOverlayRequested } from '../perf/PerfBootstrap'
-import { ShipBakery } from '../ships/bake'
+import { clearBakeCache, ShipBakery } from '../ships/bake'
 import { resolveDpr } from '../perf/tier'
 
 // BUG-006: @react-three/fiber still constructs `THREE.Clock` for its root store, which three
@@ -141,6 +141,10 @@ function SceneContents({
   const activeView = view ?? PHASE_VIEW[phase] ?? 'menu'
   const atmosphere = useMemo(() => computeAtmosphere(timeOfDay, weather), [timeOfDay, weather])
   const lightning = useLightning(atmosphere.storm, onLightning)
+  // back at the menu nothing baked is on screen: free the baked ships so the renderer returns to its menu baseline
+  useEffect(() => {
+    if (phase === 'menu') clearBakeCache()
+  }, [phase])
   return (
     <>
       <SkyDome atmosphere={atmosphere} clouds={quality === 'high' ? 1 : 0.7} lightning={lightning} />

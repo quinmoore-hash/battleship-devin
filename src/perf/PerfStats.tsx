@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import type * as THREE from 'three'
-import { frameStats, perfRefs, recordFrame } from './stats'
+import { frameStats, perfRefs, recordFrame, traceGeometries } from './stats'
 
 interface PerfMemory {
   usedJSHeapSize: number
@@ -16,6 +16,7 @@ interface PerfMemory {
 const WARMUP_FRAMES = 10
 
 let frameStart = 0
+const traceRequested = () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('trace')
 
 export interface DumpRow {
   path: string
@@ -77,6 +78,7 @@ export function PerfStats() {
       gl.render = render
     }
   }, [gl])
+  const trace = traceRequested()
   useFrame((_, delta) => {
     frameStart = performance.now()
     const r = gl.info.render
@@ -91,6 +93,7 @@ export function PerfStats() {
     const mem = (performance as Performance & { memory?: PerfMemory }).memory
     if (mem) frameStats.heapMb = mem.usedJSHeapSize / 1048576
     frameStats.frames++
+    if (trace) traceGeometries(scene)
     if (frameStats.frames > WARMUP_FRAMES) recordFrame(frameStats.fps, r.calls)
     gl.info.reset()
   }, -1000)

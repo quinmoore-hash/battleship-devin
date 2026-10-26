@@ -11,9 +11,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { GOLDEN_HOUR, OceanScene } from '../scene'
 import { useGameStore } from '../store/gameStore'
+import { usePerf } from '../perf'
 import { Battlefield } from './Battlefield'
 import { createOverlayStore, useOverlay, useWindowEvent } from './overlay'
-import { buildFrames, clampStep, describeEvent, REPLAY_SPEEDS, shotCounts, snapshotFromState, stepIntervalMs, type ReplaySnapshot, type ReplaySpeed } from './replayModel'
+import { REPLAY_SPEEDS, battlefieldLod, buildFrames, clampStep, describeEvent, shotCounts, snapshotFromState, stepIntervalMs, type ReplaySnapshot, type ReplaySpeed } from './replayModel'
 import './extras.css'
 
 export const REPLAY_EVENT = 'battleship:replay'
@@ -102,6 +103,10 @@ export function ReplayPlayer({ snapshot, onClose, autoPlay = true, initialSpeed 
   }, [toggle, setStep, step, total, onClose])
 
   const boards = frames[step]
+  // Same budget as the live battle (BUG-317): the tier's quality and lod, never below the baked lod 1
+  const perf = usePerf()
+  const q = quality ?? perf.quality
+  const lod = battlefieldLod('replay', perf.lod, q)
   const event = step > 0 ? snapshot.events[step - 1] : null
   const counts = shotCounts(snapshot.events, step)
   const outcome = snapshot.winner === 'human' ? 'Victory' : snapshot.winner === 'enemy' ? 'Defeat' : 'Unfinished'
@@ -109,7 +114,7 @@ export function ReplayPlayer({ snapshot, onClose, autoPlay = true, initialSpeed 
   return (
     <div className="xt-overlay" data-testid="replay-player" data-step={step} data-total={total} data-playing={playing}>
       <OceanScene view="battle" interactive weather={snapshot.modes?.storm ? 'stormy' : 'calm'} timeOfDay={GOLDEN_HOUR} quality={quality}>
-        <Battlefield boards={boards} lod={quality === 'low' ? 2 : 1} quality={quality} />
+        <Battlefield boards={boards} lod={lod} quality={q} />
       </OceanScene>
 
       <header className="xt-topbar">

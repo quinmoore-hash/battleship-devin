@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { seededRandom } from '../random'
@@ -106,6 +106,13 @@ export function HullBreach({ position, normal, seed = 1, radius = 0.17, glowing 
     })
     return { hole, char, shards, hanging, emberSpots }
   }, [seed, radius])
+  useEffect(
+    () => () => {
+      built.hole.dispose()
+      built.char.dispose()
+    },
+    [built],
+  )
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime

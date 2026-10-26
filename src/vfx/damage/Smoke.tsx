@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { smokePuffAt, smokeSeeds, type SmokePlumeOptions } from './smoke'
@@ -29,7 +29,8 @@ export function Smoke({ position, scale = 1, seed = 2, intensity = 1, color = '#
   const n = count ?? scaleCount(reduced ? 8 : 14, particles)
   const mesh = useRef<THREE.InstancedMesh>(null)
   const mat = useMemo(() => makeSpriteMaterial('smoke', { color, opacity: 0.75 }), [color])
-  useEffect(() => () => void (mat.dispose(), disposeParams(mesh.current)), [mat])
+  // layout cleanup: runs before React detaches the child refs, so the meshes (and their aParam geometry clones) are still reachable
+  useLayoutEffect(() => () => void (mat.dispose(), disposeParams(mesh.current)), [mat])
   const opts = useMemo<SmokePlumeOptions>(
     () => ({ count: n, seed, life: reduced ? 3.2 : 4.6, height: 3.4 * scale, wind, radius: [0.16 * scale, 0.75 * scale], wander: 0.14 * scale }),
     [n, seed, scale, wind, reduced],

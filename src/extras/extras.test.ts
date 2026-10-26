@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { enemyView, isFleetSunk, type Board } from '../engine'
 import { clampOrbit, DEFAULT_PHOTO_ORBIT, dollyOrbit, flyOrbit, orbitFromLookAt, orbitPosition, panOrbit, PHOTO_LIMITS, rotateOrbit } from './camera'
 import { simulateGame } from './demoGame'
-import { boardsAt, buildFrames, clampStep, describeEvent, pristine, shotCounts, snapshotFromState, stepIntervalMs } from './replayModel'
+import { battlefieldLod, boardsAt, buildFrames, clampStep, describeEvent, pristine, shotCounts, snapshotFromState, stepIntervalMs } from './replayModel'
 
 describe('demoGame.simulateGame', () => {
   it('is deterministic for a seed and ends with exactly one fleet sunk', () => {
@@ -125,5 +125,19 @@ describe('camera', () => {
     expect(p[1]).toBeCloseTo(6, 4)
     expect(p[2]).toBeCloseTo(9, 4)
     expect(clampOrbit(s)).toEqual(s)
+  })
+})
+
+describe('battlefieldLod (BUG-317: replay / photo follow the perf tier)', () => {
+  it('uses the tier lod but never the live lod 0', () => {
+    for (const mode of ['replay', 'photo'] as const) {
+      expect(battlefieldLod(mode, 0, 'high')).toBe(1)
+      expect(battlefieldLod(mode, 1, 'high')).toBe(1)
+      expect(battlefieldLod(mode, 2, 'high')).toBe(2)
+    }
+  })
+  it('low quality is always the lod-2 silhouette', () => {
+    expect(battlefieldLod('replay', 0, 'low')).toBe(2)
+    expect(battlefieldLod('photo', 0, 'low')).toBe(2)
   })
 })
