@@ -21,7 +21,7 @@
 }
 /* HUD panels that sit over the boards (replay caption, photo controls, titles) use a solid ink so projected 3D labels never show through (BUG-318 / BUG-319) */
 .xt-overlay {
-  --xt-ink: rgba(12, 18, 26, 0.88);
+  --xt-ink: #0c121a;
 }
 .xt-panel {
   color: var(--parchment, #ead9b4);
@@ -296,7 +296,8 @@
   right: 18px;
   bottom: 18px;
   justify-items: end;
-  z-index: 6;
+  /* above .ui-root (z 10) so it opens over the report, below the replay / photo overlays (z 20) */
+  z-index: 15;
 }
 .xt-dock-gameover > .xt-stats {
   width: min(440px, calc(100vw - 36px));
