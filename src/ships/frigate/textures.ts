@@ -276,8 +276,8 @@ export function sailTexture(livery: Livery, size = 512): TexturePair {
   if (hit) return hit
   const rnd = seededRandom(livery === 'pirate' ? 21 : 22)
   const [c, ctx] = canvas(size)
-  const base = livery === 'pirate' ? '#232120' : '#e6dcc4'
-  const seam = livery === 'pirate' ? '#3a3633' : '#b9ad92'
+  const base = livery === 'pirate' ? '#8c7b66' : '#e6dcc4'
+  const seam = livery === 'pirate' ? '#5a4d40' : '#b9ad92'
   ctx.fillStyle = base
   ctx.fillRect(0, 0, size, size)
   // weave
