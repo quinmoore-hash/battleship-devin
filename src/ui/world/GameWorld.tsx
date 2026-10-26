@@ -1,7 +1,7 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { FLEET_BY_ID, hasBeenShot, isSunk, type Coord, type PlacedShip } from '../../engine'
+import { FLEET_BY_ID, hasBeenShot, isSunk, type Coord, type PlacedShip, type ShipId } from '../../engine'
 import { useDirector } from '../../cinematics'
 import { usePerf } from '../../perf/store'
 import { BoardGrid } from '../../scene/BoardGrid'
@@ -229,10 +229,6 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const busy = useBattleController((s) => s.busy)
   const firing = useDirector((s) => s.firing)
   const sinkProgress = useDirector((s) => s.sinkProgress)
-  // the director keys sink progress by ShipId only; give each fleet just its own sunk ships' entries so the
-  // player's man-o'-war does not go under when the enemy's does (BUG-361)
-  const playerSink = useMemo(() => sinkFor(playerShips, sinkProgress), [playerShips, sinkProgress])
-  const enemySink = useMemo(() => sinkFor(enemyShips, sinkProgress), [enemyShips, sinkProgress])
   const active = useDirector((s) => s.active)
   const impacted = useDirector((s) => s.impacted)
   const perf = usePerf()
@@ -247,6 +243,10 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const enemyShips = useMemo(() => maskPendingHit(enemyBoard.ships, inFlight?.by === 'human' ? inFlight.target : null), [enemyBoard, pendingKey])
   /* eslint-enable react-hooks/exhaustive-deps */
   const sunkEnemy = useMemo(() => enemyShips.filter(isSunk), [enemyShips])
+  // the director keys sink progress by ShipId only; give each fleet just its own sunk ships' entries so the
+  // player's man-o'-war does not go under when the enemy's does (BUG-361)
+  const playerSink = useMemo(() => sinkFor(playerShips, sinkProgress), [playerShips, sinkProgress])
+  const enemySink = useMemo(() => sinkFor(enemyShips, sinkProgress), [enemyShips, sinkProgress])
   const playerWrecks = useMemo(() => settledWrecks(playerShips, sinkProgress), [playerShips, sinkProgress])
   const enemyWrecks = useMemo(() => settledWrecks(enemyShips, sinkProgress), [enemyShips, sinkProgress])
   // distance LOD, capped by the perf tier (medium shows at most one lod-0 ship per board unless the camera is close)
