@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef , useEffect} from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { easeInCubic, easeOutCubic } from '../math'
@@ -164,8 +164,10 @@ export function Splash({ position, seed = 1, scale = 1, delay = 0, wind = DEFAUL
         side: THREE.DoubleSide,
       }),
     [seed, scale],
-  )
+  )  useEffect(() => () => column.dispose(), [column])
+
   const columnGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, 40, 24, true).translate(0, 0.5, 0), [])
+  useEffect(() => () => columnGeometry.dispose(), [columnGeometry])
 
   const columnMesh = useRef<THREE.Mesh>(null)
   const sprayCloud = useRef<SpriteCloudHandle>(null)

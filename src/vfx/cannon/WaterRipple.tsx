@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef , useEffect} from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { useReducedMotion } from './motion'
@@ -60,7 +60,8 @@ export function WaterRipple({ position, radius = 3, duration = 3, delay = 0, rin
         side: THREE.DoubleSide,
       }),
     [rings],
-  )
+  )  useEffect(() => () => material.dispose(), [material])
+
   const mesh = useRef<THREE.Mesh>(null)
   useFrame(() => {
     const t = (tl.t - delay) / total

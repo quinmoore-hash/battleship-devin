@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo } from 'react'
+import { forwardRef, useImperativeHandle, useMemo , useEffect} from 'react'
 import * as THREE from 'three'
 
 /**
@@ -104,6 +104,7 @@ export const SpriteCloud = forwardRef<SpriteCloudHandle, SpriteCloudProps>(funct
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Infinity)
     return g
   }, [count])
+  useEffect(() => () => geometry.dispose(), [geometry])
 
   const material = useMemo(
     () =>
@@ -127,7 +128,8 @@ export const SpriteCloud = forwardRef<SpriteCloudHandle, SpriteCloudProps>(funct
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [map, blending, depthTest],
-  )
+  )  useEffect(() => () => material.dispose(), [material])
+
   material.uniforms.uColorA.value.set(colorA)
   material.uniforms.uColorB.value.set(colorB)
   material.uniforms.uShading.value = shading
