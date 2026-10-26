@@ -15,6 +15,6 @@ export { PhotoMode, usePhotoMode, usePhotoEvent, requestPhotoMode, openPhotoMode
 export * from './camera'
 export { FreeCamera, type FreeCameraProps } from './FreeCamera'
 export { Battlefield, type BattlefieldProps } from './Battlefield'
-export { ExtrasLayer, ModesPicker } from './ExtrasLayer'
+export { ExtrasLayer, MenuExtras, ModesPicker } from './ExtrasLayer'
 export { simulateGame, type SimulateOptions } from './demoGame'
 export { useGameWeather } from './weather'

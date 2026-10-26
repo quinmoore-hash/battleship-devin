@@ -386,12 +386,11 @@
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
+  grid-template-rows: auto auto auto auto auto;
   justify-items: center;
   align-content: start;
   gap: clamp(10px, 2vh, 22px);
-  /* bottom room for the extras dock (game modes / salvo), which is fixed at bottom: 18px */
-  padding: clamp(12px, 3vh, 32px) 16px 190px;
+  padding: clamp(12px, 3vh, 32px) 16px;
   overflow: auto;
   background: radial-gradient(ellipse at 50% 35%, rgba(5, 20, 30, 0) 30%, rgba(5, 15, 25, 0.55) 100%);
 }
@@ -541,17 +540,21 @@
 .poster-bounty {
   margin-top: 0.3rem;
   font-family: var(--font-display);
-  font-size: 0.9rem;
+  font-size: clamp(0.78rem, 1vw, 0.9rem);
   letter-spacing: 0.05em;
+  text-wrap: balance;
 }
 .poster-bounty strong {
   font-size: 1.15rem;
 }
 .poster-seal {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
+  /* in flow below the bounty line so it never covers the text, however narrow the poster */
+  justify-self: end;
+  margin: -0.2rem -0.1rem -0.5rem 0;
   font-size: 1rem;
+}
+.menu-dock {
+  width: min(100%, 960px);
 }
 .menu-actions {
   display: flex;
@@ -1572,8 +1575,10 @@
     display: none;
   }
   .poster-seal {
-    right: 8px;
-    bottom: 6px;
+    grid-area: bounty;
+    justify-self: end;
+    align-self: center;
+    margin: 0;
   }
   .menu-foot span {
     display: none;

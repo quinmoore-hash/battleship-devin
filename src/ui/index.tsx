@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { is3dDisabled } from '../scene/flags'
@@ -14,7 +15,7 @@ import './ui.css'
 export { GameWorld } from './world/GameWorld'
 export { setDirector, getDirector } from './turnFlow'
 
-export function GameUI() {
+export function GameUI({ menuExtras }: { menuExtras?: ReactNode } = {}) {
   const phase = useGameStore((s) => s.phase)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const winner = useGameStore((s) => s.winner)
@@ -51,7 +52,7 @@ export function GameUI() {
           </nav>
         )}
         <div className="phase" key={phase}>
-          {phase === 'menu' && <MainMenu />}
+          {phase === 'menu' && <MainMenu extras={menuExtras} />}
           {phase === 'placement' && <PlacementScreen />}
           {phase === 'battle' && <BattleScreen />}
           {phase === 'gameover' && <GameOverScreen />}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useProgress } from '@react-three/drei'
 import { useEffect, useState } from 'react'
@@ -22,7 +23,7 @@ export const LOADING_TIPS = [
 
 const BOUNTY: Record<string, string> = { easy: '500', medium: '2,000', hard: '10,000' }
 
-export function MainMenu() {
+export function MainMenu({ extras }: { extras?: ReactNode } = {}) {
   const startGame = useGameStore((s) => s.startGame)
   const { openModal } = useUi()
   const pick = (d: (typeof DIFFICULTIES)[number]['id']) => {
@@ -74,6 +75,11 @@ export function MainMenu() {
           Settings
         </button>
       </nav>
+      {extras && (
+        <div className="menu-dock ink-in" style={{ animationDelay: '520ms' }}>
+          {extras}
+        </div>
+      )}
       <footer className="menu-foot">
         <CompassRose size={56} spinning />
         <span>Built procedurally in three.js — no stock assets aboard.</span>
