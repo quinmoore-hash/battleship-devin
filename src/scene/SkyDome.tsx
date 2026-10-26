@@ -210,7 +210,10 @@ export function SkyDome({ atmosphere, clouds = 1, lightning }: SkyDomeProps) {
 export function Lighting({ atmosphere, quality, lightning, shadowSize }: { atmosphere: Atmosphere; quality: 'low' | 'high'; lightning?: LightningState; shadowSize?: number }) {
   const sun = useRef<THREE.DirectionalLight>(null)
   const bolt = useRef<THREE.DirectionalLight>(null)
-  useFrame(() => {
+  const fill = useRef<THREE.DirectionalLight>(null)
+  useFrame((state) => {
+    // camera-following fill so close-ups from the far side of the bay never read as silhouettes
+    if (fill.current) fill.current.position.copy(state.camera.position)
     if (!bolt.current) return
     const f = lightning?.flash ?? 0
     bolt.current.intensity = f * 4
@@ -242,6 +245,7 @@ export function Lighting({ atmosphere, quality, lightning, shadowSize }: { atmos
         shadow-camera-bottom={-22}
       />
       <directionalLight position={moonPos} color="#9fb4ff" intensity={atmosphere.moonIntensity} />
+      <directionalLight ref={fill} color="#fff1dc" intensity={0.55 * (0.4 + 0.6 * atmosphere.daylight)} />
       {/* lightning: a cold flash from above */}
       <directionalLight ref={bolt} position={[20, 80, -60]} color="#dfe8ff" intensity={0} />
       <hemisphereLight color={atmosphere.skyZenith} groundColor={atmosphere.waterDeep} intensity={0.6 + 0.6 * atmosphere.daylight} />
