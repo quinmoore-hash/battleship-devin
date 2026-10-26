@@ -1,5 +1,5 @@
 import { createStore, useStore, type StoreApi } from 'zustand'
-import { duckMusic, playSfx } from '../audio'
+import { duckMusic, playCinematicAudio, playSfx } from '../audio'
 import type { PlacedShip, Player, ShipId } from '../engine'
 import { defaultQuality } from '../scene'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
@@ -25,6 +25,8 @@ export interface ActiveCinematic {
   shipId?: ShipId
   fleets: Fleets
   beat: BeatName | null
+  /** The shot's fire → whistle → impact audio timeline, cancelled if the shot is skipped before it lands. */
+  audio?: { cancel(): void } | null
 }
 
 export interface DirectorState {
@@ -128,6 +130,13 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     p?.resolve()
   }
 
+  /** Milliseconds from the fire beat to the impact beat of a shot sequence (the audio whistle length). */
+  const shotFlightMs = (seq: Sequence): number | undefined => {
+    const fire = seq.beats.find((b) => b.name === 'fire')
+    const impact = seq.beats.find((b) => b.name === 'impact')
+    return fire && impact ? Math.max(150, Math.round((impact.start - fire.start) * 1000)) : undefined
+  }
+
   const enterBeat = (a: ActiveCinematic, beat: BeatName | null) => {
     a.beat = beat
     const patch: Partial<DirectorState> = {}
@@ -135,7 +144,8 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       const { plan } = a
       if (beat === 'fire') {
         if (plan.battery) patch.firing = { [plan.battery.shipId]: plan.battery.cells.map((cell) => ({ cell, side: plan.battery!.side })) }
-        if (audio) playSfx('fire')
+        // one audio timeline per shot, its impact cue timed to land with the ball (fire beat → impact beat)
+        if (audio) a.audio = playCinematicAudio(a.event, { flightMs: shotFlightMs(a.seq), fast: a.seq.level !== 'full' })
       }
       if (beat === 'impact' || beat === 'return') {
         if (!store.getState().impacted) {
@@ -143,13 +153,18 @@ export function createDirector(opts: DirectorOptions = {}): Director {
           // a killing blow reveals the ship afloat; its `sink` sequence then takes the progress 0 → 1
           if (plan.result.outcome === 'sunk' && plan.result.shipId) patch.sinkProgress = { ...store.getState().sinkProgress, [plan.result.shipId]: 0 }
           if (allowShake(a.seq)) patch.shake = SHAKE[plan.result.outcome] ?? 0.1
-          if (audio) playSfx(plan.result.outcome === 'miss' ? 'miss' : plan.result.outcome === 'sunk' ? 'sunk' : 'hit')
+          if (audio && (beat === 'return' || a.clock.skipped)) {
+            // skipped before the ball landed: drop the scheduled cues and land the impact now
+            a.audio?.cancel()
+            a.audio = null
+            playSfx(plan.result.outcome === 'miss' ? 'miss' : plan.result.outcome === 'sunk' ? 'sunk' : 'hit')
+          }
         }
         if (beat === 'return') patch.firing = {}
       }
     }
     if (a.event.type === 'sink' && beat === 'sink' && audio) {
-      playSfx('sunk')
+      // the killing shot's timeline already played mast snap → groan → bubbles; just keep the music down
       duckMusic(a.seq.duration * 1000)
     }
     if (a.event.type === 'victory' && beat === 'flyover' && audio) playSfx(a.event.winner === 'human' ? 'victory' : 'defeat')

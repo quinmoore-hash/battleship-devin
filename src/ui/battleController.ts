@@ -37,11 +37,13 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
         const patch: Partial<BattleControllerState> = { beat }
         if (beat.phase === 'player-shot' && beat.result) patch.last = { by: 'human', result: beat.result }
         if (beat.phase === 'enemy-shot' && beat.result) patch.last = { by: 'enemy', result: beat.result }
+        if (beat.phase === 'intro') patch.busy = true
         if (beat.phase === 'done') patch.busy = false
         set(patch)
       },
     })
     set({ flow, beat: { phase: 'idle' }, last: null, busy: false })
+    void flow.intro()
   },
 
   stop: () => {
@@ -50,9 +52,10 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
   },
 
   fire: async (coord) => {
-    const { flow, busy } = get()
+    const { flow, busy, beat } = get()
     const game = useGameStore.getState()
-    if (!flow || busy || game.phase !== 'battle' || game.turn !== 'human') return
+    // a shot during the battle-start flyover skips it (the flow handles that); any other busy state ignores the click
+    if (!flow || (busy && beat.phase !== 'intro') || game.phase !== 'battle' || game.turn !== 'human') return
     useUiStore.getState().setPendingTarget(null)
     set({ busy: true })
     try {

@@ -119,7 +119,36 @@ export interface GameState {
 
 let eventId = 0
 
-const initialSettings: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false }
+const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false }
+
+/** Settings the player chose that survive a reload. `quality` is persisted by `src/perf/store.ts`, `reducedMotion` follows the OS. */
+export const SETTINGS_STORAGE_KEY = 'battleship-devin.settings'
+const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind']
+
+export function loadSettings(storage: Pick<Storage, 'getItem'> | null = typeof localStorage === 'undefined' ? null : localStorage): Settings {
+  const out = { ...DEFAULT_SETTINGS }
+  try {
+    const raw = storage?.getItem(SETTINGS_STORAGE_KEY)
+    const p = raw ? (JSON.parse(raw) as Partial<Record<keyof Settings, unknown>>) : {}
+    if (p.cinematics === 'full' || p.cinematics === 'fast' || p.cinematics === 'off') out.cinematics = p.cinematics
+    if (typeof p.sfxVolume === 'number' && p.sfxVolume >= 0 && p.sfxVolume <= 1) out.sfxVolume = p.sfxVolume
+    if (typeof p.musicVolume === 'number' && p.musicVolume >= 0 && p.musicVolume <= 1) out.musicVolume = p.musicVolume
+    if (typeof p.colorblind === 'boolean') out.colorblind = p.colorblind
+  } catch {
+    /* corrupt or unavailable storage: defaults */
+  }
+  return out
+}
+
+export function saveSettings(settings: Settings, storage: Pick<Storage, 'setItem'> | null = typeof localStorage === 'undefined' ? null : localStorage): void {
+  try {
+    storage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(Object.fromEntries(PERSISTED.map((k) => [k, settings[k]]))))
+  } catch {
+    /* private mode / quota: not persisted */
+  }
+}
+
+const initialSettings: Settings = loadSettings()
 
 /** Shots per volley for the side that owns `board`: one per surviving ship, never less than one. */
 export const salvoSize = (board: Board): number => Math.max(1, board.ships.filter((s) => !isSunk(s)).length)
@@ -262,7 +291,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   setModes: (modes) => set((s) => (s.phase === 'menu' || s.phase === 'placement' ? { modes: { ...s.modes, ...modes } } : {})),
-  updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+  updateSettings: (patch) =>
+    set((s) => {
+      const settings = { ...s.settings, ...patch }
+      if (PERSISTED.some((k) => k in patch)) saveSettings(settings)
+      return { settings }
+    }),
 
   reset: () =>
     set({

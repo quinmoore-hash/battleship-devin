@@ -31,7 +31,6 @@ export function GameUI() {
   }, [phase])
 
   useEffect(() => {
-    if (phase === 'gameover') playSfx(winner === 'human' ? 'victory' : 'defeat')
   }, [phase, winner])
 
   const openModal = useCallback((m: UiModal) => setModal(m), [])

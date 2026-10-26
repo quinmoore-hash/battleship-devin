@@ -1,13 +1,17 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { FLEET_BY_ID, hasBeenShot, isSunk, type Coord, type PlacedShip, type ShotResult } from '../../engine'
+import { FLEET_BY_ID, hasBeenShot, isSunk, type Coord, type PlacedShip } from '../../engine'
+import { useDirector } from '../../cinematics'
+import { usePerf } from '../../perf/store'
 import { BoardGrid } from '../../scene/BoardGrid'
 import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
 import { Fleet, Ship } from '../../ships'
 import { useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
 import { ShotMarkers } from '../../vfx/markers'
+import { Flotsam, placedShipSeed } from '../../vfx/sinking'
+import { maskPendingHit, settledWrecks, visibleShots, type PendingShot } from './pending'
 import { useBattleController } from '../battleController'
 import { footprintAt } from '../placementUtils'
 import { useUiStore } from '../uiStore'
@@ -203,10 +207,26 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const setHover = useUiStore((s) => s.setHover)
   const requestFire = useBattleController((s) => s.requestFire)
   const busy = useBattleController((s) => s.busy)
+  const firing = useDirector((s) => s.firing)
+  const sinkProgress = useDirector((s) => s.sinkProgress)
+  const active = useDirector((s) => s.active)
+  const impacted = useDirector((s) => s.impacted)
+  const perf = usePerf()
 
-  const myShots = useMemo(() => events.filter((e) => e.by === 'human').map((e) => e.result), [events]) as ShotResult[]
-  const theirShots = useMemo(() => events.filter((e) => e.by === 'enemy').map((e) => e.result), [events]) as ShotResult[]
-  const sunkEnemy = useMemo(() => enemyBoard.ships.filter(isSunk), [enemyBoard])
+  // while the director flies a ball, the world shows the board as it was before that shot
+  const inFlight: PendingShot | null = active?.event.type === 'shot' && !impacted ? { by: active.event.by, target: active.event.target } : null
+  const pendingKey = inFlight ? `${inFlight.by}:${inFlight.target.x},${inFlight.target.y}` : ''
+  /* eslint-disable react-hooks/exhaustive-deps -- pendingKey stands in for the pending object */
+  const myShots = useMemo(() => visibleShots(events, 'human', inFlight), [events, pendingKey])
+  const theirShots = useMemo(() => visibleShots(events, 'enemy', inFlight), [events, pendingKey])
+  const playerShips = useMemo(() => maskPendingHit(playerBoard.ships, inFlight?.by === 'enemy' ? inFlight.target : null), [playerBoard, pendingKey])
+  const enemyShips = useMemo(() => maskPendingHit(enemyBoard.ships, inFlight?.by === 'human' ? inFlight.target : null), [enemyBoard, pendingKey])
+  /* eslint-enable react-hooks/exhaustive-deps */
+  const sunkEnemy = useMemo(() => enemyShips.filter(isSunk), [enemyShips])
+  const playerWrecks = useMemo(() => settledWrecks(playerShips, sinkProgress), [playerShips, sinkProgress])
+  const enemyWrecks = useMemo(() => settledWrecks(enemyShips, sinkProgress), [enemyShips, sinkProgress])
+  // distance LOD, capped by the perf tier (medium shows at most one lod-0 ship per board unless the camera is close)
+  const lod = perf.lod === 2 ? 2 : 'auto'
   const canAim = !over && turn === 'human' && !busy
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
   const targetShot = target ? hasBeenShot(enemyBoard, target) : false
@@ -229,12 +249,18 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
           if (canAim && !hasBeenShot(enemyBoard, c)) requestFire(c, lastPointerType)
         }}
       />
-      <Fleet ships={playerBoard.ships} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={quality === 'low' ? 1 : 0} />
-      <Fleet ships={enemyBoard.ships} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={quality === 'low' ? 1 : 0} />
+      <Fleet ships={playerShips} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={lod} firing={firing} sinkProgress={sinkProgress} />
+      <Fleet ships={enemyShips} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={lod} firing={firing} sinkProgress={sinkProgress} />
       <ShotMarkers shots={theirShots} boardOrigin={PLAYER.origin} fires={false} />
       <ShotMarkers shots={myShots} boardOrigin={ENEMY.origin} fires={!over} />
-      <DamageLayer ships={playerBoard.ships} boardOrigin={PLAYER.origin} fires smoke breachSide="both" />
-      <DamageLayer ships={over ? enemyBoard.ships : sunkEnemy} boardOrigin={ENEMY.origin} fires={false} smoke breachSide={null} />
+      <DamageLayer ships={playerShips} boardOrigin={PLAYER.origin} fires smoke breachSide="both" />
+      <DamageLayer ships={over ? enemyShips : sunkEnemy} boardOrigin={ENEMY.origin} fires={false} smoke breachSide={null} />
+      {playerWrecks.map((s) => (
+        <Flotsam key={`p-${s.spec.id}`} cells={s.cells} boardOrigin={PLAYER.origin} seed={placedShipSeed(s)} livery="pirate" />
+      ))}
+      {enemyWrecks.map((s) => (
+        <Flotsam key={`e-${s.spec.id}`} cells={s.cells} boardOrigin={ENEMY.origin} seed={placedShipSeed(s)} livery="navy" />
+      ))}
     </group>
   )
 }

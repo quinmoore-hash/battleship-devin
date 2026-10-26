@@ -1,7 +1,11 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
+import { bindGameAudio } from './audio'
+import { CinematicCamera, CinematicLayer, Letterbox, useDirector } from './cinematics'
 import { ExtrasLayer, useGameWeather } from './extras'
 import { OceanScene } from './scene'
+import { useGameStore } from './store/gameStore'
 import { GameUI } from './ui'
+import { bindCinematics, directorPlaysAudio } from './ui/cinematicsBinding'
 import { GameWorld } from './ui/world/GameWorld'
 import { A11yBootstrap } from './perf/a11y/A11yBootstrap'
 import { PerfBootstrap, perfOverlayRequested } from './perf/PerfBootstrap'
@@ -48,7 +52,6 @@ function demoRoute() {
 
 export default function App() {
   const Demo = demoRoute()
-  const weather = useGameWeather()
   if (Demo) {
     return (
       <Suspense fallback={null}>
@@ -57,16 +60,40 @@ export default function App() {
       </Suspense>
     )
   }
+  return <Game />
+}
+
+/**
+ * The real game: the shared ocean with the game world and the cinematics director's layer/camera inside it,
+ * the HTML HUD, extras and perf plumbing on top. The director paces every turn (see `src/ui/turnFlow.ts`)
+ * and owns shot / sink / victory SFX while it plays; `bindGameAudio` keeps music, ambience and placement cues.
+ */
+function Game() {
+  const weather = useGameWeather()
+  const phase = useGameStore((s) => s.phase)
+  const cinematic = useDirector((s) => s.busy)
+  const inBattle = phase === 'battle' || phase === 'gameover'
+  useEffect(() => {
+    const unbindCinematics = bindCinematics()
+    const unbindAudio = bindGameAudio({ director: directorPlaysAudio })
+    return () => {
+      unbindAudio()
+      unbindCinematics()
+    }
+  }, [])
   return (
     <>
       <PerfBootstrap />
       <FpsWatchdog />
       <A11yBootstrap />
-      <OceanScene weather={weather}>
+      <OceanScene weather={weather} cameraOverride={cinematic}>
         <GameWorld />
+        {inBattle && <CinematicLayer />}
+        {inBattle && <CinematicCamera />}
       </OceanScene>
       <GameUI />
       <ExtrasLayer />
+      <Letterbox hint={false} />
       <QualityToast />
       {perfOverlayRequested() && <PerfOverlay />}
     </>

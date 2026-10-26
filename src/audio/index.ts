@@ -678,7 +678,15 @@ export function playCinematicAudio(event: CinematicEvent, options: { flightMs?: 
  *  - gameover: bell + cheer or defeat drums, music back to the menu variant
  * Returns an unsubscribe function. Cue timing follows `settings.reducedMotion` / `settings.cinematics`.
  */
-export function bindGameAudio(): () => void {
+export interface BindGameAudioOptions {
+  /**
+   * Return true while a cinematic director plays shot / sink / victory SFX on its own beats (the real game with the 3D
+   * world on and cinematics not `off`); the binding then only handles music, ambience and placement cues. Default: never.
+   */
+  director?: () => boolean
+}
+
+export function bindGameAudio({ director = () => false }: BindGameAudioOptions = {}): () => void {
   if (!hasDom) return () => {}
   initAudio()
   let prev = useGameStore.getState()
@@ -703,7 +711,7 @@ export function bindGameAudio(): () => void {
       if (state.phase === 'battle') timelines.add(playCinematicAudio({ type: 'battle-start' }))
       if (state.phase === 'gameover') {
         const winner = state.winner ?? 'enemy'
-        later(fastCues() ? 900 : 2600, () => timelines.add(playCinematicAudio({ type: 'victory', winner })))
+        if (!director()) later(fastCues() ? 900 : 2600, () => timelines.add(playCinematicAudio({ type: 'victory', winner })))
         later(fastCues() ? 4000 : 9000, () => startMusic('menu'))
       }
       if (state.phase === 'menu') {
@@ -713,7 +721,7 @@ export function bindGameAudio(): () => void {
     if (state.phase === 'placement' && state.playerBoard.ships.length > before.playerBoard.ships.length) {
       playSfx('place-ship')
     }
-    if (state.events.length > before.events.length) {
+    if (state.events.length > before.events.length && !director()) {
       const event = state.events[state.events.length - 1]
       timelines.add(
         playCinematicAudio({ type: 'shot', by: event.by, target: event.result.coord, result: event.result }),

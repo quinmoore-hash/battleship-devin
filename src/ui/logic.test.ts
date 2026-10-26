@@ -4,7 +4,8 @@ import { createBoard, FLEET_BY_ID, placeShip } from '../engine'
 import { useGameStore } from '../store/gameStore'
 import { footprintAt } from './placementUtils'
 import { battleReport, captainRank, formatDuration } from './stats'
-import { aimDelay, createTurnFlow, fallbackDuration, setDirector, Sleeper, TimerDirector } from './turnFlow'
+import { bindCinematics } from './cinematicsBinding'
+import { activeDirector, aimDelay, createTurnFlow, fallbackDuration, getDirector, setDirector, Sleeper, TimerDirector } from './turnFlow'
 import { resetInteraction, useUiStore } from './uiStore'
 
 describe('footprintAt', () => {
@@ -131,5 +132,135 @@ describe('uiStore', () => {
     after.dismissHint('battle')
     after.dismissHint('battle')
     expect(useUiStore.getState().hintsSeen).toEqual(['battle'])
+  })
+})
+
+describe('turnFlow integration (director, volleys, victory)', () => {
+  const startBattle = (modes?: { salvo?: boolean }) => {
+    const g = useGameStore.getState()
+    g.reset()
+    g.updateSettings({ cinematics: 'fast', reducedMotion: false })
+    if (modes) g.setModes(modes)
+    g.startGame('easy', modes)
+    g.autoPlacePlayerFleet()
+    g.confirmPlacement()
+  }
+  const recordingDirector = (played: string[]) => ({
+    busy: false,
+    play: async (e: { type: string; by?: string }) => void played.push(e.type + (e.type === 'shot' ? `:${e.by}` : '')),
+    skip: () => {},
+  })
+  beforeEach(() => {
+    setDirector(null)
+    resetInteraction()
+  })
+
+  it('uses the real director only when the 3D world is on screen', () => {
+    const timers = new TimerDirector()
+    expect(activeDirector(timers)).toBe(timers)
+    const d = recordingDirector([])
+    setDirector(d)
+    expect(activeDirector(timers, false)).toBe(d)
+    expect(activeDirector(timers, true)).toBe(timers)
+  })
+
+  it('plays the battle-start flyover with a director, and skips it when a shot comes in', async () => {
+    startBattle()
+    const played: string[] = []
+    let skipped = 0
+    let release: () => void = () => {}
+    const d = {
+      busy: false,
+      play: (e: { type: string; by?: string }) => {
+        played.push(e.type + (e.type === 'shot' ? `:${e.by}` : ''))
+        return e.type === 'battle-start' ? new Promise<void>((r) => (release = r)) : Promise.resolve()
+      },
+      skip: () => {
+        skipped++
+        release()
+      },
+    }
+    setDirector(d)
+    const beats: string[] = []
+    const flow = createTurnFlow({ onBeat: (b) => beats.push(b.phase), rng: () => 0 })
+    void flow.intro()
+    expect(beats).toEqual(['intro'])
+    expect(flow.busy).toBe(true)
+    const result = await flow.fire({ x: 0, y: 0 })
+    expect(skipped).toBe(1)
+    expect(result).toBeDefined()
+    expect(played[0]).toBe('battle-start')
+    expect(played[1]).toBe('shot:human')
+    flow.dispose()
+  })
+
+  it('does not play an intro with the timer fallback (nothing to watch)', async () => {
+    startBattle()
+    const beats: string[] = []
+    const flow = createTurnFlow({ onBeat: (b) => beats.push(b.phase) })
+    await flow.intro()
+    expect(beats).toEqual([])
+    expect(flow.busy).toBe(false)
+    flow.dispose()
+  })
+
+  it('plays every shot of a salvo volley, for both sides', async () => {
+    startBattle({ salvo: true })
+    const played: string[] = []
+    setDirector(recordingDirector(played))
+    const flow = createTurnFlow({ rng: () => 0 })
+    const size = useGameStore.getState().salvo.size
+    expect(size).toBe(5)
+    for (let i = 0; i < size - 1; i++) expect(await flow.fire({ x: i, y: 0 })).toBeUndefined()
+    expect(played).toEqual([])
+    const result = await flow.fire({ x: size - 1, y: 0 })
+    expect(result).toBeDefined()
+    const human = played.filter((p) => p === 'shot:human').length
+    const enemy = played.filter((p) => p === 'shot:enemy').length
+    expect(human).toBe(size)
+    expect(enemy).toBe(useGameStore.getState().events.filter((e) => e.by === 'enemy').length)
+    expect(enemy).toBeGreaterThanOrEqual(1)
+    flow.dispose()
+  })
+
+  it('plays the victory flyover when the shot ends the game and dispose() lets it finish', async () => {
+    startBattle()
+    const g = useGameStore.getState()
+    // sink everything but one cell of the enemy fleet
+    const cells = g.enemyBoard.ships.flatMap((s) => s.cells)
+    for (const c of cells.slice(0, -1)) {
+      g.fireAt(c)
+      useGameStore.setState({ turn: 'human' })
+    }
+    const played: string[] = []
+    let skipped = 0
+    setDirector({ ...recordingDirector(played), skip: () => skipped++ })
+    const beats: string[] = []
+    const flow = createTurnFlow({ onBeat: (b) => beats.push(b.phase) })
+    await flow.fire(cells[cells.length - 1])
+    expect(useGameStore.getState().phase).toBe('gameover')
+    expect(played).toEqual(['shot:human', 'sink', 'victory'])
+    expect(beats).toEqual(['player-shot', 'player-sink', 'victory', 'done'])
+    flow.dispose()
+    expect(skipped).toBe(0)
+  })
+})
+
+describe('bindCinematics', () => {
+  it('registers the director and cuts it when the player leaves the battle', () => {
+    let skipped = 0
+    const d = { busy: true, skip: () => skipped++, play: () => Promise.resolve() }
+    const unbind = bindCinematics(d as never)
+    expect(getDirector()).toBe(d)
+    const g = useGameStore.getState()
+    g.startGame('easy')
+    expect(skipped).toBe(1) // menu → placement
+    g.autoPlacePlayerFleet()
+    g.confirmPlacement()
+    expect(skipped).toBe(1) // → battle does not cut
+    g.reset()
+    expect(skipped).toBe(2)
+    unbind()
+    expect(getDirector()).toBeNull()
   })
 })
