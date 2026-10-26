@@ -8,6 +8,7 @@ import { dragDistance, perpendicularBasis, useReducedMotion } from './motion'
 import { SpriteCloud, type SpriteCloudHandle } from './SpriteCloud'
 import { glowTexture } from './textures'
 import { useEffectTimeline } from './timeline'
+import { useFlashSlot } from '../flashLights'
 
 export interface MuzzleFlashProps {
   /** World position of the muzzle. */
@@ -56,7 +57,8 @@ export function MuzzleFlash({ position, direction, seed = 1, delay = 0, scale = 
 
   const tl = useEffectTimeline(delay + Math.max(life, 0.5), { onDone })
   const cloud = useRef<SpriteCloudHandle>(null)
-  const light = useRef<THREE.PointLight>(null)
+  const light = useFlashSlot('#ffb050', 11 * scale)
+  const root = useRef<THREE.Group>(null)
   const cone = useRef<THREE.Mesh>(null)
   const quat = useMemo(() => tmpQ.setFromUnitVectors(Z, tmpV.set(dir[0], dir[1], dir[2])).clone(), [dir])
 
@@ -89,7 +91,8 @@ export function MuzzleFlash({ position, direction, seed = 1, delay = 0, scale = 
       c.write(j, position[0] + s.vx * d, position[1] + s.vy * d + fall, position[2] + s.vz * d, s.size * scale * (1 + age * 2), alpha, 0, s.tint)
     }
     c.commit()
-    if (light.current) light.current.intensity = env * (reduced ? 40 : 90) * scale
+    light.intensity = env * (reduced ? 40 : 90) * scale
+    if (root.current) root.current.localToWorld(light.position.set(position[0], position[1], position[2]))
     if (cone.current) {
       const m = cone.current.material as THREE.MeshBasicMaterial
       m.opacity = env * 0.55
@@ -99,9 +102,8 @@ export function MuzzleFlash({ position, direction, seed = 1, delay = 0, scale = 
   })
 
   return (
-    <group>
+    <group ref={root}>
       <SpriteCloud ref={cloud} count={TONGUES + sparks.length} map={glowTexture()} blending="additive" colorA="#fff6d6" colorB="#ff7a1a" renderOrder={20} />
-      <pointLight ref={light} position={position} color="#ffb050" intensity={0} distance={11 * scale} decay={2} />
       <group position={position} quaternion={quat}>
         <mesh ref={cone} rotation-x={-Math.PI / 2} position={[0, 0, 0.55 * scale]} visible={false}>
           <coneGeometry args={[0.22 * scale, 1.1 * scale, 14, 1, true]} />

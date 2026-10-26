@@ -26,12 +26,6 @@ export function ExtrasLayer() {
 
   return (
     <>
-      {phase === 'menu' && (
-        <aside className="xt-dock xt-dock-menu" data-testid="extras-menu">
-          <ModesPicker />
-          <StatsPanel compact />
-        </aside>
-      )}
       {phase === 'battle' && <BattleStrip />}
       {phase === 'gameover' && (
         <aside className="xt-dock xt-dock-gameover" data-testid="extras-gameover">
@@ -54,6 +48,16 @@ export function ExtrasLayer() {
 
 /** Salvo / stormy-seas toggles. Uses `setModes`, so the UI's own `startGame(difficulty)` picks them up. */
 /** Mode checkboxes. Defaults to `setModes` (menu/placement); pass `onChange` to restart a running sandbox instead. */
+/** Menu-screen extras (mode picker + compact stats). Rendered by `<GameUI menuExtras>` so it flows below the posters instead of floating over them. */
+export function MenuExtras() {
+  return (
+    <aside className="menu-extras" data-testid="extras-menu" aria-label="Game modes and statistics">
+      <ModesPicker />
+      <StatsPanel compact />
+    </aside>
+  )
+}
+
 export function ModesPicker({ className = '', onChange }: { className?: string; onChange?: (modes: Partial<GameModes>) => void }) {
   const modes = useGameStore((s) => s.modes)
   const storeSetModes = useGameStore((s) => s.setModes)

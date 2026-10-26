@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { bindGameAudio } from './audio'
 import { CinematicCamera, CinematicLayer, Letterbox, useDirector } from './cinematics'
-import { ExtrasLayer, useGameWeather } from './extras'
+import { ExtrasLayer, MenuExtras, useGameWeather } from './extras'
 import { OceanScene } from './scene'
 import { useGameStore } from './store/gameStore'
 import { GameUI } from './ui'
@@ -91,7 +91,7 @@ function Game() {
         {inBattle && <CinematicLayer />}
         {inBattle && <CinematicCamera />}
       </OceanScene>
-      <GameUI />
+      <GameUI menuExtras={<MenuExtras />} />
       <ExtrasLayer />
       <Letterbox hint={false} />
       <QualityToast />

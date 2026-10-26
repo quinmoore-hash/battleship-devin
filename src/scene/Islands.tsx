@@ -8,6 +8,7 @@ import { ISLANDS, LANDMARKS, scatterOnLand, terrainHeight, terrainNormal, type I
 import type { Vec3 } from './layout'
 import { frondTexture, groundTexture, jollyRogerTexture, plankTexture, signTexture, stoneTexture, tornSailTexture } from './textures'
 import { sampleWaveHeight } from './waves'
+import { usePerf } from '../perf/store'
 
 type Quality = 'low' | 'high'
 
@@ -84,21 +85,23 @@ function islandTerrainGeometry(isl: Island, segments: number): THREE.BufferGeome
   return g
 }
 
-export function IslandTerrain({ quality }: { quality: Quality }) {
+export function IslandTerrain(_props: { quality: Quality }) {
+  // terrain density follows the perf tier, not the look: Medium keeps the high-quality shading on the coarse mesh
+  const rich = usePerf().tier === 'high'
   const geos = useMemo(
     () =>
       ISLANDS.filter((i) => i.peak > 0 || i.id === 'reef').map((isl) => ({
         isl,
-        geo: islandTerrainGeometry(isl, Math.min(quality === 'high' ? 96 : 56, Math.round(isl.rx * (quality === 'high' ? 3.4 : 2)))),
+        geo: islandTerrainGeometry(isl, Math.min(rich ? 96 : 56, Math.round(isl.rx * (rich ? 3.4 : 2)))),
       })),
-    [quality],
+    [rich],
   )
   useEffect(() => () => geos.forEach((g) => g.geo.dispose()), [geos])
   const map = useMemo(() => groundTexture(), [])
   return (
-    <group>
+    <group name="islands">
       {geos.map(({ isl, geo }) => (
-        <mesh key={isl.id} geometry={geo} receiveShadow castShadow={isl.peak > 3}>
+        <mesh key={isl.id} geometry={geo} receiveShadow>
           <meshStandardMaterial vertexColors map={map} roughness={1} metalness={0} />
         </mesh>
       ))}
@@ -233,8 +236,8 @@ export function Palms({ quality }: { quality: Quality }) {
     <group>
       {groups.map((_, v) => (
         <group key={v}>
-          <instancedMesh ref={(el) => void (refs.current[v * 2] = el)} args={[trunks[v], trunkMat, max]} castShadow receiveShadow frustumCulled={false} />
-          <instancedMesh ref={(el) => void (refs.current[v * 2 + 1] = el)} args={[crowns[v], crownMat, max]} castShadow frustumCulled={false} />
+          <instancedMesh ref={(el) => void (refs.current[v * 2] = el)} args={[trunks[v], trunkMat, max]} receiveShadow frustumCulled={false} />
+          <instancedMesh ref={(el) => void (refs.current[v * 2 + 1] = el)} args={[crowns[v], crownMat, max]} frustumCulled={false} />
         </group>
       ))}
       <instancedMesh ref={nutRef} args={[nutGeo, nutMat, points.length * 3 + 3]} frustumCulled={false} />
@@ -278,7 +281,6 @@ function InstancedScatter({
   yOffset = 0,
   scale = 1,
   flatten = 1,
-  castShadow = true,
 }: {
   points: ScatterPoint[]
   geometry: THREE.BufferGeometry
@@ -286,7 +288,6 @@ function InstancedScatter({
   yOffset?: number
   scale?: number
   flatten?: number
-  castShadow?: boolean
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const dummy = useMemo(() => new THREE.Object3D(), [])
@@ -303,7 +304,7 @@ function InstancedScatter({
     m.count = points.length
     m.instanceMatrix.needsUpdate = true
   }, [points, dummy, yOffset, scale, flatten])
-  return <instancedMesh ref={ref} args={[geometry, material, Math.max(1, points.length)]} castShadow={castShadow} receiveShadow frustumCulled={false} />
+  return <instancedMesh ref={ref} args={[geometry, material, Math.max(1, points.length)]} receiveShadow frustumCulled={false} />
 }
 
 export function Rocks({ quality }: { quality: Quality }) {
@@ -338,7 +339,7 @@ export function Foliage({ quality }: { quality: Quality }) {
   return (
     <group>
       <InstancedScatter points={bushes} geometry={bushGeo} material={bushMat} />
-      <InstancedScatter points={ferns} geometry={fernGeo} material={fernMat} scale={0.4} yOffset={0.5} castShadow={false} />
+      <InstancedScatter points={ferns} geometry={fernGeo} material={fernMat} scale={0.4} yOffset={0.5} />
     </group>
   )
 }
@@ -365,7 +366,7 @@ function WavingFlag({ texture, position, width = 2.2, height = 1.4 }: { texture:
     return m
   }, [texture])
   return (
-    <mesh position={[position[0] + width / 2, position[1], position[2]]} material={mat} castShadow>
+    <mesh position={[position[0] + width / 2, position[1], position[2]]} material={mat}>
       <planeGeometry args={[width, height, 12, 6]} />
     </mesh>
   )
@@ -403,10 +404,10 @@ export function Fort({ night }: { night: number }) {
   return (
     <group position={[x, y, z]} rotation={[0, rotationY, 0]}>
       {/* sea-wall foundation sunk into the headland, then the platform & curtain walls */}
-      <mesh material={stone} position={[0, -3.4, 0]} receiveShadow castShadow>
+      <mesh material={stone} position={[0, -3.4, 0]} receiveShadow>
         <boxGeometry args={[17, 7, 14]} />
       </mesh>
-      <mesh material={stone} position={[0, 0.4, 0]} receiveShadow castShadow>
+      <mesh material={stone} position={[0, 0.4, 0]} receiveShadow>
         <boxGeometry args={[16, 1.6, 13]} />
       </mesh>
       {[
@@ -415,11 +416,11 @@ export function Fort({ night }: { night: number }) {
         [-7.2, 0, 0.9, 11],
         [7.2, 0, 0.9, 11],
       ].map(([px, pz, w, d], i) => (
-        <mesh key={i} material={stone} position={[px, 2.2, pz]} castShadow receiveShadow>
+        <mesh key={i} material={stone} position={[px, 2.2, pz]} receiveShadow>
           <boxGeometry args={[w, 2.6, d]} />
         </mesh>
       ))}
-      <instancedMesh ref={merlonRef} args={[merlonGeo, stone, merlons.length]} castShadow />
+      <instancedMesh ref={merlonRef} args={[merlonGeo, stone, merlons.length]} />
       {/* round corner towers with slate roofs */}
       {[
         [-7.2, -5.5],
@@ -428,10 +429,10 @@ export function Fort({ night }: { night: number }) {
         [-7.2, 5.5],
       ].map(([px, pz], i) => (
         <group key={i} position={[px, 0, pz]}>
-          <mesh material={stone} position={[0, 2.8, 0]} castShadow receiveShadow>
+          <mesh material={stone} position={[0, 2.8, 0]} receiveShadow>
             <cylinderGeometry args={[1.7, 1.9, 5.2, 12]} />
           </mesh>
-          <mesh position={[0, 6.1, 0]} castShadow>
+          <mesh position={[0, 6.1, 0]}>
             <coneGeometry args={[2.1, 1.6, 12]} />
             <meshStandardMaterial color="#4a4e58" roughness={0.8} />
           </mesh>
@@ -443,7 +444,7 @@ export function Fort({ night }: { night: number }) {
         </group>
       ))}
       {/* keep + gate */}
-      <mesh material={stone} position={[0, 3.2, 0.5]} castShadow receiveShadow>
+      <mesh material={stone} position={[0, 3.2, 0.5]} receiveShadow>
         <boxGeometry args={[5, 4, 4]} />
       </mesh>
       <mesh position={[0, 1.9, 5.96]}>
@@ -455,7 +456,7 @@ export function Fort({ night }: { night: number }) {
         <Cannon key={px} position={[px, 3.4, -5.1]} rotationY={Math.PI} livery="navy" scale={2.1} />
       ))}
       {/* flagpole with the Jolly Roger, lantern-lit after dark */}
-      <mesh position={[0, 7.8, 0.5]} castShadow>
+      <mesh position={[0, 7.8, 0.5]}>
         <cylinderGeometry args={[0.05, 0.07, 5.2, 6]} />
         <meshStandardMaterial color="#3a2a1a" />
       </mesh>
@@ -480,17 +481,17 @@ export function Lighthouse({ night }: { night: number }) {
   const lampIntensity = 0.5 + night * 6
   return (
     <group position={[x, y, z]}>
-      <mesh material={stone} position={[0, 0.6, 0]} castShadow receiveShadow>
+      <mesh material={stone} position={[0, 0.6, 0]} receiveShadow>
         <cylinderGeometry args={[2.6, 3.1, 1.4, 8]} />
       </mesh>
       {[0, 1, 2, 3].map((i) => (
-        <mesh key={i} position={[0, 2.4 + i * 2.2, 0]} castShadow>
+        <mesh key={i} position={[0, 2.4 + i * 2.2, 0]}>
           <cylinderGeometry args={[1.25 - i * 0.14, 1.4 - i * 0.14, 2.2, 14]} />
           <meshStandardMaterial color={i % 2 === 0 ? '#f3f0e8' : '#c8352f'} roughness={0.6} />
         </mesh>
       ))}
       {/* gallery with railing posts */}
-      <mesh position={[0, 11.3, 0]} castShadow>
+      <mesh position={[0, 11.3, 0]}>
         <cylinderGeometry args={[1.45, 1.1, 0.35, 14]} />
         <meshStandardMaterial color="#2b2b2b" roughness={0.7} />
       </mesh>
@@ -526,7 +527,7 @@ export function Lighthouse({ night }: { night: number }) {
         )
       })}
       <pointLight position={[0, 12.3, 0]} color="#ffd27a" intensity={night * 12} distance={30} decay={2} />
-      <mesh position={[0, 13.4, 0]} castShadow>
+      <mesh position={[0, 13.4, 0]}>
         <coneGeometry args={[1.15, 1.0, 10]} />
         <meshStandardMaterial color="#9b2a26" roughness={0.6} />
       </mesh>
@@ -569,14 +570,14 @@ export function Dock({ night }: { night: number }) {
   t.repeat.set(4, 1)
   return (
     <group position={[x, 0.2, z]} rotation={[0, rotationY, 0]}>
-      <mesh material={planks} position={[0, 0.85, 0]} castShadow receiveShadow>
+      <mesh material={planks} position={[0, 0.85, 0]} receiveShadow>
         <boxGeometry args={[13, 0.18, 2.6]} />
       </mesh>
-      <instancedMesh ref={pileRef} args={[pileGeo, pile, piles.length]} castShadow />
+      <instancedMesh ref={pileRef} args={[pileGeo, pile, piles.length]} />
       {/* lantern posts at the sea end */}
       {[-1.1, 1.1].map((pz) => (
         <group key={pz} position={[-6.2, 0.95, pz]}>
-          <mesh position={[0, 1.1, 0]} castShadow>
+          <mesh position={[0, 1.1, 0]}>
             <boxGeometry args={[0.14, 2.2, 0.14]} />
             <meshStandardMaterial color="#3a2a1a" />
           </mesh>
@@ -614,11 +615,11 @@ export function Tavern({ night }: { night: number }) {
   const windowMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffd27a', emissive: '#ffb347', emissiveIntensity: 0.2 + night * 2.5, toneMapped: false }), [night])
   return (
     <group position={[x, y, z]} rotation={[0, rotationY, 0]}>
-      <mesh material={planks} position={[0, 1.7, 0]} castShadow receiveShadow>
+      <mesh material={planks} position={[0, 1.7, 0]} receiveShadow>
         <boxGeometry args={[6.4, 3.4, 5.6]} />
       </mesh>
-      <mesh geometry={roofGeo} material={roof} position={[0, 3.4, 0]} castShadow receiveShadow />
-      <mesh position={[1.8, 4.8, -1.2]} castShadow>
+      <mesh geometry={roofGeo} material={roof} position={[0, 3.4, 0]} receiveShadow />
+      <mesh position={[1.8, 4.8, -1.2]}>
         <boxGeometry args={[0.6, 1.6, 0.6]} />
         <meshStandardMaterial color="#6d6a66" roughness={1} />
       </mesh>
@@ -642,7 +643,7 @@ export function Tavern({ night }: { night: number }) {
         <boxGeometry args={[0.08, 0.08, 1.2]} />
         <meshStandardMaterial color="#2a2a2a" metalness={0.6} roughness={0.5} />
       </mesh>
-      <mesh position={[1.4, 2.4, 3.9]} castShadow>
+      <mesh position={[1.4, 2.4, 3.9]}>
         <boxGeometry args={[0.9, 0.9, 0.06]} />
         <meshStandardMaterial map={sign} roughness={0.9} />
       </mesh>
@@ -680,20 +681,20 @@ export function Shipwreck() {
   return (
     <group position={[x, -0.6, z]} rotation={[0, rotationY, 0]}>
       <group ref={group} rotation={[0.08, 0, -0.42]}>
-        <mesh geometry={hull} material={wood} castShadow receiveShadow />
+        <mesh geometry={hull} material={wood} receiveShadow />
         {/* exposed ribs where the planking has gone */}
         {[-1.2, -0.6, 0, 0.6].map((rx) => (
-          <mesh key={rx} position={[rx, 0.4, 1.3]} rotation={[0.3, 0, 0]} castShadow>
+          <mesh key={rx} position={[rx, 0.4, 1.3]} rotation={[0.3, 0, 0]}>
             <boxGeometry args={[0.12, 1.6, 0.1]} />
             <meshStandardMaterial color="#3a3028" roughness={1} />
           </mesh>
         ))}
         {/* snapped mast and tattered sail */}
-        <mesh position={[0.6, 2.4, 0]} rotation={[0, 0, 0.35]} castShadow>
+        <mesh position={[0.6, 2.4, 0]} rotation={[0, 0, 0.35]}>
           <cylinderGeometry args={[0.1, 0.16, 5.5, 8]} />
           <meshStandardMaterial color="#4a3a2a" roughness={1} />
         </mesh>
-        <mesh position={[0.1, 3.4, 0.05]} rotation={[0, 0, 0.35]} material={sail} castShadow>
+        <mesh position={[0.1, 3.4, 0.05]} rotation={[0, 0, 0.35]} material={sail}>
           <planeGeometry args={[2.6, 2.2, 1, 1]} />
         </mesh>
         <mesh position={[1.6, 4.6, 0]} rotation={[0, 0, 0.35 + Math.PI / 2]}>

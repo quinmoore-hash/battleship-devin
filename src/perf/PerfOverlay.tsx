@@ -20,7 +20,7 @@ export function PerfOverlay() {
       const s = frameStats
       if (ref.current) {
         ref.current.textContent =
-          `fps ${s.fps.toFixed(0).padStart(3)}  frame ${s.frameMs.toFixed(1).padStart(5)} ms\n` +
+          `fps ${s.fps.toFixed(0).padStart(3)}  frame ${s.frameMs.toFixed(1).padStart(5)} ms  js ${s.jsMs.toFixed(1)} ms  gl ${s.renderMs.toFixed(1)} ms\n` +
           `draw calls ${s.drawCalls}  tris ${(s.triangles / 1000).toFixed(1)}k\n` +
           `geometries ${s.geometries}  textures ${s.textures}  programs ${s.programs}` +
           (s.heapMb ? `\nheap ${s.heapMb.toFixed(0)} MB` : '')

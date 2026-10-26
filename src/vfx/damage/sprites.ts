@@ -169,11 +169,18 @@ export function spriteQuad(): THREE.PlaneGeometry {
  */
 export function attachParams(mesh: THREE.InstancedMesh, count: number): THREE.InstancedBufferAttribute {
   const existing = mesh.geometry.getAttribute('aParam') as THREE.InstancedBufferAttribute | undefined
-  if (existing && existing.count === count) return existing
+  if (existing && existing.count >= count) return existing
+  const prev = existing ? mesh.geometry : null
   const geom = mesh.geometry.clone()
   const attr = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4)
   attr.setUsage(THREE.DynamicDrawUsage)
   geom.setAttribute('aParam', attr)
   mesh.geometry = geom
+  prev?.dispose()
   return attr
+}
+
+/** Unmount cleanup for a mesh that used `attachParams`: frees the per-mesh geometry clone (never the shared quad). */
+export function disposeParams(mesh: THREE.InstancedMesh | null) {
+  if (mesh && mesh.geometry !== quad && mesh.geometry.getAttribute('aParam')) mesh.geometry.dispose()
 }

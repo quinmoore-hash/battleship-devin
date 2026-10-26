@@ -5,6 +5,7 @@ import type { Vec3 } from '../../scene/layout'
 import { easeOutCubic } from '../math'
 import { attachParams, makeSpriteMaterial, spriteQuad } from './sprites'
 import { useReducedMotion } from './useReducedMotion'
+import { useFlashSlot } from '../flashLights'
 
 export interface ImpactFlashProps {
   position: Vec3
@@ -23,7 +24,8 @@ export function ImpactFlash({ position, normal = [0, 0, 1], scale = 1, onDone }:
   const reduced = useReducedMotion()
   const flash = useRef<THREE.InstancedMesh>(null)
   const ring = useRef<THREE.Mesh>(null)
-  const light = useRef<THREE.PointLight>(null)
+  const light = useFlashSlot('#ffa040', 7)
+  const root = useRef<THREE.Group>(null)
   const start = useRef<number | null>(null)
   const done = useRef(false)
   const mat = useMemo(() => makeSpriteMaterial('glow', { color: '#ff8a2a', upright: 0, intensity: 2.5 }), [])
@@ -66,8 +68,8 @@ export function ImpactFlash({ position, normal = [0, 0, 1], scale = 1, onDone }:
       ringMat.opacity = (1 - k) * 0.85
       r.visible = k < 1
     }
-    const l = light.current
-    if (l) l.intensity = reduced ? 0 : Math.max(0, 1 - t / 0.28) * 40 * scale
+    light.intensity = reduced ? 0 : Math.max(0, 1 - t / 0.28) * 40 * scale
+    if (root.current) root.current.getWorldPosition(light.position)
     if (t > Math.max(FLASH_T, dur)) {
       done.current = true
       onDone?.()
@@ -75,12 +77,11 @@ export function ImpactFlash({ position, normal = [0, 0, 1], scale = 1, onDone }:
   })
 
   return (
-    <group position={position}>
+    <group ref={root} position={position}>
       <instancedMesh ref={flash} args={[spriteQuad(), mat, 2]} frustumCulled={false} renderOrder={30} />
       <mesh ref={ring} quaternion={quat} material={ringMat} renderOrder={29}>
         <ringGeometry args={[0.78, 1, 40]} />
       </mesh>
-      {!reduced && <pointLight ref={light} color="#ffa040" intensity={0} distance={7} decay={2} />}
     </group>
   )
 }

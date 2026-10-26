@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { seededRandom } from '../random'
+import { BakedGroup } from '../../ships/bake'
 
 export interface HullBreachProps {
   /** Point on the hull surface (model or world space, whatever the parent group is). */
@@ -126,12 +127,7 @@ export function HullBreach({ position, normal, seed = 1, radius = 0.17, glowing 
       m.userData.set = true
     }
     const g = planks.current
-    if (g) {
-      g.children.forEach((c, i) => {
-        const h = built.hanging[i]
-        if (h) c.rotation.z = Math.sin(t * 1.3 + h.swing) * 0.05
-      })
-    }
+    if (g && built.hanging[0]) g.rotation.z = Math.sin(t * 1.3 + built.hanging[0].swing) * 0.05
     const e = embers.current
     if (e) {
       built.emberSpots.forEach((s, i) => {
@@ -147,7 +143,7 @@ export function HullBreach({ position, normal, seed = 1, radius = 0.17, glowing 
   })
 
   return (
-    <group position={position} quaternion={quat}>
+    <group name="breach" position={position} quaternion={quat}>
       <mesh position={[0, radius * 0.5, 0.006]} renderOrder={6}>
         <planeGeometry args={[radius * 4.2, radius * 4.8]} />
         <meshBasicMaterial map={scorchTexture()} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
@@ -159,13 +155,14 @@ export function HullBreach({ position, normal, seed = 1, radius = 0.17, glowing 
           <circleGeometry args={[1, 8]} />
         </instancedMesh>
       )}
-      <instancedMesh ref={rim} args={[undefined, SHARD_MAT, built.shards.length]} castShadow>
+      <instancedMesh ref={rim} args={[undefined, SHARD_MAT, built.shards.length]}>
         <boxGeometry args={[1, 1, 1]} />
       </instancedMesh>
       <group ref={planks}>
+        <BakedGroup>
         {built.hanging.map((h, i) => (
           <group key={i} position={[h.x, -radius * 0.85, radius * 0.06]} rotation={[h.tilt, 0, 0]}>
-            <mesh position={[0, -h.len / 2, 0]} castShadow>
+            <mesh position={[0, -h.len / 2, 0]}>
               <boxGeometry args={[h.w, h.len, radius * 0.1]} />
               <meshStandardMaterial color={WOOD[h.tint]} roughness={0.9} />
             </mesh>
@@ -175,6 +172,7 @@ export function HullBreach({ position, normal, seed = 1, radius = 0.17, glowing 
             </mesh>
           </group>
         ))}
+        </BakedGroup>
       </group>
     </group>
   )

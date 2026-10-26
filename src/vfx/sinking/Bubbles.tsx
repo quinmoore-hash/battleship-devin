@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../../store/gameStore'
 import { scaleCount, useParticlesScale } from '../../perf/store'
@@ -31,6 +31,7 @@ export function Bubbles({ progress, length, beam, seed = 1, count = 64, timeScal
   const opts = useMemo<BubbleOptions>(() => ({ count: n, seed, length, beam, period: 2.4, depth: 0.7 }), [n, seed, length, beam])
   const t = useRef(0)
   const ringGeom = useMemo(() => new THREE.RingGeometry(0.55, 1, 20), [])
+  useEffect(() => () => ringGeom.dispose(), [ringGeom])
 
   useFrame((_, delta) => {
     const b = bubbles.current
@@ -68,7 +69,7 @@ export function Bubbles({ progress, length, beam, seed = 1, count = 64, timeScal
     <group>
       <instancedMesh ref={bubbles} args={[undefined, undefined, n]} frustumCulled={false} renderOrder={3}>
         <sphereGeometry args={[1, 10, 8]} />
-        <meshPhysicalMaterial color="#dff3ff" roughness={0.08} metalness={0} transmission={0.55} thickness={0.2} transparent opacity={0.85} />
+        <meshPhysicalMaterial color="#dff3ff" roughness={0.08} metalness={0} transmission={0} thickness={0.2} transparent opacity={0.85} />
       </instancedMesh>
       <instancedMesh ref={rings} args={[ringGeom, undefined, n]} frustumCulled={false} renderOrder={3}>
         <meshBasicMaterial color="#f4fbff" transparent opacity={0.38} depthWrite={false} side={THREE.DoubleSide} />

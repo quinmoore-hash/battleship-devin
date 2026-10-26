@@ -5,7 +5,7 @@ import type { Vec3 } from './layout'
  * [0, 1]: 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset, 1 = midnight again.
  * The default (`GOLDEN_HOUR`) is a warm late-afternoon look.
  */
-export const GOLDEN_HOUR = 0.72
+export const GOLDEN_HOUR = 0.68
 
 export type Weather = 'calm' | 'stormy'
 
@@ -165,8 +165,9 @@ export function computeAtmosphere(timeOfDay: number, weather: Weather = 'calm'):
   const storm = weather === 'stormy' ? 1 : 0
   const angle = (t - 0.25) * Math.PI * 2 // 0 at sunrise, PI/2 at noon, PI at sunset
   const elevation = Math.sin(angle)
-  // sun travels east -> west across the bay, arcing over the far shoreline (-z)
-  const sunDir: Vec3 = [Math.cos(angle) * 0.9, elevation, -0.45 - 0.25 * Math.max(0, elevation)]
+  // sun travels east -> west across the bay, arcing over the near shore (+z) so the fleets are front-lit from
+  // the player's camera instead of backlit into silhouettes
+  const sunDir: Vec3 = [Math.cos(angle) * 0.9, elevation, 0.55 + 0.25 * Math.max(0, elevation)]
   const len = Math.hypot(...sunDir)
   const dir: Vec3 = [sunDir[0] / len, sunDir[1] / len, sunDir[2] / len]
 

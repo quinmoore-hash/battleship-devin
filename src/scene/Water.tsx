@@ -202,6 +202,8 @@ export interface WaterProps {
   quality: Quality
   /** Gerstner wave count override (perf tier); defaults to `WAVE_COUNT[quality]`. */
   waves?: number
+  /** Near-sheet subdivisions per side; overrides the per-quality default (perf tier `waterSegments`). */
+  segments?: number
   atmosphere: Atmosphere
   /** Live lightning state (from `useLightning`); brightens the sky reflection on a flash. */
   lightning?: LightningState
@@ -259,8 +261,8 @@ function farRingGeometry(inner: number, outer: number): THREE.BufferGeometry {
  * path, crest/shore foam and — in a storm — grey-green swell with wind streaks and rain rings.
  * Colours come from the time-of-day atmosphere. A flat far sheet extends the water to the horizon.
  */
-export function Water({ quality, atmosphere, lightning, waves }: WaterProps) {
-  const segments = SEGMENTS[quality]
+export function Water({ quality, atmosphere, lightning, waves, segments: segmentsProp }: WaterProps) {
+  const segments = segmentsProp ?? SEGMENTS[quality]
   const waveCount = Math.max(1, Math.min(WAVE_COUNT.high, waves ?? WAVE_COUNT[quality]))
 
   const heightMap = useMemo(() => {
