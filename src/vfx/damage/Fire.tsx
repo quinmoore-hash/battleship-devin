@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useId, useMemo, useRef } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { seededRandom } from '../random'
@@ -75,7 +75,8 @@ export function Fire({ position, scale = 1, seed = 1, intensity = 1, budget = de
     [emberCount, seed, scale, reduced],
   )
   const emberSeedArr = useMemo(() => emberSeeds(emberOpts), [emberOpts])
-  useEffect(() => () => void (flameMat.dispose(), glowMat.dispose(), emberMat.dispose(), disposeParams(flames.current), disposeParams(glow.current)), [flameMat, glowMat, emberMat])
+  // layout cleanup: runs before React detaches the child refs, so the meshes (and their aParam geometry clones) are still reachable
+  useLayoutEffect(() => () => void (flameMat.dispose(), glowMat.dispose(), emberMat.dispose(), disposeParams(flames.current), disposeParams(glow.current)), [flameMat, glowMat, emberMat])
 
   // Light budget registration. The oldest live fire renders the shared lights.
   useEffect(() => budget.register(id, position, intensity * scale), [budget, id]) // eslint-disable-line react-hooks/exhaustive-deps

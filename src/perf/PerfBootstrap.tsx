@@ -4,7 +4,7 @@ import { usePerfStore } from './store'
 import { frameStats, resetHistory, summarize } from './stats'
 import type * as THREE from 'three'
 import { dumpScene } from './PerfStats'
-import { perfRefs, programSummary } from './stats'
+import { geometryLeaks, perfRefs, programSummary, textureLeaks } from './stats'
 
 export function perfOverlayRequested(): boolean {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('perf')
@@ -26,6 +26,8 @@ export function PerfBootstrap() {
       scene: () => perfRefs.scene,
       gl: () => perfRefs.gl,
       camera: () => perfRefs.camera,
+      leaks: geometryLeaks,
+      textureLeaks,
     }
     return () => {
       delete window.__perf

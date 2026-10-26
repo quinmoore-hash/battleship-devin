@@ -89,7 +89,7 @@ frame (useFrame work, `frameStats.jsMs`) < 4 ms. Rules that keep it so:
   material (`materialKey()`: parameter signature for stock materials, identity for custom shaders) into a few `Mesh`es; every
   instance renders a `clone()` sharing geometry + materials. Baked ships never rebuild on damage / sinkProgress / firing — only
   lod 0 (the one cinematic-focused ship) and a ship mid-sink (`0 < sinkProgress < 1`) are live. Placement uses
-  `max(1, perf.lod)`. The cache lives for the page (bounded by keys), so rematches allocate nothing. `<BakedGroup>` does the
+  `max(1, perf.lod)`. The cache is bounded by keys, shared by placement → battle → Rematch, and dropped on the way back to the menu (`clearBakeCache()` in `<OceanScene>`) so `renderer.info.memory` returns to the menu baseline. `<BakedGroup>` does the
   same for static dressing (buoy corners, cove props, flotsam pieces, floaters).
 - **Per-cell VFX are shared systems.** `<Fires>` / `<Smokes>` (`src/vfx/damage/FireField.tsx`, `EMITTER_CAP` 200 emitters,
   buffers allocated once, `count` set per frame) replace one `<Fire>`/`<Smoke>` per hit in `<DamageLayer>` and

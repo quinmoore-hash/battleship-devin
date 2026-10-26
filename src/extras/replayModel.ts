@@ -84,3 +84,13 @@ export function shotCounts(events: readonly GameEvent[], step: number): { human:
   else enemy++
   return { human, enemy }
 }
+
+/**
+ * Ship detail for the replay / photo battlefield from the active perf tier (BUG-317): the tier's `lod`, but
+ * never the live lod 0 — both views are static and show all ten ships at once, so they always use the baked
+ * copies (lod ≥ 1) the battle overview uses; `quality: 'low'` is always the lod-2 silhouette.
+ */
+export function battlefieldLod(_mode: 'replay' | 'photo', tierLod: 0 | 1 | 2, quality: 'low' | 'high'): 1 | 2 {
+  if (quality === 'low') return 2
+  return Math.max(1, tierLod) as 1 | 2
+}

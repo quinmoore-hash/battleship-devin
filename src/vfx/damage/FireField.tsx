@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useId, useMemo, useRef } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { scaleCount, useParticlesScale } from '../../perf/store'
@@ -65,7 +65,7 @@ export function Fires({ emitters, budget = defaultFireBudget }: { emitters: read
     [],
   )
   const emberGeo = useMemo(() => new THREE.SphereGeometry(1, 5, 4), [])
-  useEffect(
+  useLayoutEffect(
     () => () => {
       flameMat.dispose()
       glowMat.dispose()
@@ -201,7 +201,8 @@ export function Smokes({ emitters, color = '#2f2b28', count }: SmokesProps) {
   const n = count ?? scaleCount(reduced ? 8 : 14, particles)
   const mesh = useRef<THREE.InstancedMesh>(null)
   const mat = useMemo(() => makeSpriteMaterial('smoke', { color, opacity: 0.75 }), [color])
-  useEffect(() => () => void (mat.dispose(), disposeParams(mesh.current)), [mat])
+  // layout cleanup: runs before React detaches the child refs, so the meshes (and their aParam geometry clones) are still reachable
+  useLayoutEffect(() => () => void (mat.dispose(), disposeParams(mesh.current)), [mat])
   const slots = useMemo<SmokeSlot[]>(
     () =>
       emitters.slice(0, EMITTER_CAP).map((e) => {

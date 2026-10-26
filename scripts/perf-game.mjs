@@ -13,6 +13,9 @@ const SHOTS = Number(process.env.PERF_SHOTS ?? 60)
 const [vw, vh] = (process.env.PERF_VIEWPORT ?? '1440x900').split('x').map(Number)
 const base = process.env.PERF_URL ?? 'http://localhost:4173'
 const SHOT_DIR = process.env.PERF_SHOT_DIR ?? ''
+const CINE = process.env.PERF_CINEMATICS ?? 'off'
+const TRACE = process.env.PERF_TRACE === '1'
+const REMATCH_SHOTS = Number(process.env.PERF_REMATCH_SHOTS ?? 5)
 
 let preview
 if (!process.env.PERF_URL) {
@@ -33,11 +36,11 @@ const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info'],
 })
 const page = await browser.newPage({ viewport: { width: vw, height: vh } })
-// fast turns: cinematics off, Easy, sfx muted
-await page.addInitScript(() => {
-  localStorage.setItem('battleship-devin.settings', JSON.stringify({ cinematics: 'off', sfxVolume: 0, musicVolume: 0, reducedMotion: false }))
+// fast turns: cinematics off (PERF_CINEMATICS=full|fast|off), Easy, sfx muted
+await page.addInitScript((cine) => {
+  localStorage.setItem('battleship-devin.settings', JSON.stringify({ cinematics: cine, sfxVolume: 0, musicVolume: 0, reducedMotion: false }))
   localStorage.setItem('battleship-devin.ui', JSON.stringify({ state: { dismissedHints: ['placement', 'battle'] }, version: 0 }))
-})
+}, CINE)
 const rows = []
 page.on('console', (m) => { if (m.text().startsWith('[bake]')) console.log(m.text()) })
 const snap = async (label) => {
@@ -58,13 +61,19 @@ const snap = async (label) => {
     const progs = await page.evaluate(() => window.__perf.programs().slice(0, 12))
     for (const p of progs) console.log(`  prog x${p.programs} used ${p.usedTimes} ${p.key.slice(0, 160)}`)
   }
+  if (TRACE) {
+    const leaks = await page.evaluate(() => window.__perf.leaks().filter((r) => r.leaked > 0).slice(0, 40))
+    for (const l of leaks) console.log(`  leak ${String(l.leaked).padStart(5)} (alive ${l.alive}, in scene ${l.inScene}) ${l.key}`)
+    const tex = await page.evaluate(() => window.__perf.textureLeaks().slice(0, 30))
+    for (const l of tex) console.log(`  tex  ${String(l.alive).padStart(5)} (in scene ${l.inScene}) ${l.key}`)
+  }
   if (SHOT_DIR) await page.screenshot({ path: `${SHOT_DIR}/${tier}-${label.replace(/\W+/g, '_')}.png` })
 }
 const yourTurn = async () => {
   await page.getByTestId('status').filter({ hasText: /your turn/i }).waitFor({ timeout: 120_000 })
 }
 try {
-  await page.goto(`${base}/?perf&quality=${tier}&gpu=${tier}`)
+  await page.goto(`${base}/?perf${TRACE ? '&trace' : ''}&quality=${tier}&gpu=${tier}`)
   await page.getByTestId('main-menu').waitFor({ timeout: 60_000 })
   await page.waitForFunction(() => (window.__perf?.stats.frames ?? 0) > 15, null, { timeout: 120_000 })
   await snap('menu')
@@ -92,7 +101,7 @@ try {
     const confirm = page.getByTestId('fire-confirm-yes')
     if (await confirm.isVisible().catch(() => false)) await confirm.click()
     await Promise.race([yourTurn(), page.getByTestId('gameover').waitFor({ timeout: 120_000 })])
-    if (fired === 30) await snap('after-30-shots')
+    if (fired % 10 === 0 && fired < SHOTS) await snap(`after-${fired}-shots`)
   }
   await snap(`after-${fired}-shots`)
   if ((await page.getByTestId('ui-root').getAttribute('data-phase')) === 'battle') await page.getByTestId('quit').click().catch(() => {})
@@ -112,6 +121,18 @@ try {
   await page.getByTestId('battle').waitFor({ timeout: 60_000 })
   await yourTurn()
   await snap('rematch-battle-start')
+  // a short second game, then quit to the menu: the menu must come back to the same plateau as after game 1
+  for (let i = 0; i < REMATCH_SHOTS; i++) {
+    if ((await page.getByTestId('ui-root').getAttribute('data-phase')) !== 'battle') break
+    await page.getByTestId(`enemy-grid-${i}-9`).click({ force: true })
+    const confirm = page.getByTestId('fire-confirm-yes')
+    if (await confirm.isVisible().catch(() => false)) await confirm.click()
+    await Promise.race([yourTurn(), page.getByTestId('gameover').waitFor({ timeout: 120_000 })])
+  }
+  if ((await page.getByTestId('ui-root').getAttribute('data-phase')) === 'battle') await page.getByTestId('quit').click().catch(() => {})
+  if (await quitConfirm.isVisible().catch(() => false)) await quitConfirm.click()
+  await page.getByTestId('main-menu').waitFor({ timeout: 60_000 })
+  await snap('menu-after-rematch')
 } finally {
   if (process.env.PERF_OUT) writeFileSync(process.env.PERF_OUT, JSON.stringify(rows, null, 2))
   console.log('| checkpoint | tier | draw calls | triangles | geometries | textures | programs | heap MB | JS ms/frame | gl ms |\n|---|---|---|---|---|---|---|---|---|---|')

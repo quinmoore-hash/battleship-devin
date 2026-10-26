@@ -7,10 +7,12 @@
  *   SHIPS[id] -> ShipDefinition               model component + anchors (cannons, masts, impact points)
  *   shipWorldTransform(placed, boardOrigin)   position / rotationY of a placed ship
  */
-import { useMemo } from 'react'
+import { useThree } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import type * as THREE from 'three'
 import type { PlacedShip, ShipId } from '../engine'
 import { LodGroup } from '../perf/LodShip'
-import { BakedShip, bakeKey, bakeryActive } from './bake'
+import { BakedShip, bakeKey, useBakeryActive } from './bake'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
 import { BRIGANTINE } from './brigantine'
 import { FRIGATE } from './frigate'
@@ -33,23 +35,63 @@ export const SHIPS: Record<ShipId, ShipDefinition> = {
 
 export interface ShipProps extends ShipModelProps {
   id: ShipId
+  /** A wreck frozen at a fixed `sinkProgress` (replay / photo): render the baked copy instead of the live sinking model. */
+  staticWreck?: boolean
 }
 
 /**
  * A ship model. lod 0 (and a ship mid-sink) renders the live procedural model; lod ≥ 1 renders the
  * shared baked copy from `./bake` (one merged mesh per material) when a `<ShipBakery>` is mounted.
  */
-export function Ship({ id, ...rest }: ShipProps) {
+export function Ship({ id, staticWreck = false, ...rest }: ShipProps) {
   const Model = SHIPS[id].Model
   const lod = rest.lod ?? 0
   const sink = rest.sinkProgress ?? 0
-  const live = lod === 0 || (sink > 0 && sink < 1) || !bakeryActive()
+  const bakery = useBakeryActive()
+  const live = lod === 0 || (sink > 0 && sink < 1 && !staticWreck) || !bakery
   const quality = rest.quality ?? 'high'
   const cells = rest.damage.length
   const intact = useMemo<CellDamage[]>(() => Array.from({ length: cells }, () => 'intact'), [cells])
   const element = useMemo(() => <Model livery={rest.livery} damage={intact} lod={lod} quality={quality} />, [Model, rest.livery, intact, lod, quality])
-  if (live) return <Model {...rest} />
+  if (live)
+    return (
+      <LiveShip>
+        <Model {...rest} />
+      </LiveShip>
+    )
   return <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality)} element={element} />
+}
+
+/**
+ * Wraps a live procedural model and disposes every geometry its subtree ever held when it unmounts
+ * (lod 0 → baked, end of a sink, quit), unless another object in the scene still uses it — module-level
+ * shared geometry is simply re-uploaded the next time a live model needs it. The ship models build their
+ * geometry in `useMemo` (and rebuild some of it while sinking), so without this each live mount leaks
+ * ~100–400 `renderer.info.memory.geometries` (BUG-323 / BUG-300).
+ */
+function LiveShip({ children }: { children: ReactNode }) {
+  const group = useRef<THREE.Group>(null)
+  const scene = useThree((s) => s.scene)
+  const seen = useRef(new Set<THREE.BufferGeometry>())
+  useLayoutEffect(() => {
+    group.current?.traverse((o) => {
+      const g = (o as THREE.Mesh).geometry
+      if (g) seen.current.add(g)
+    })
+  })
+  useEffect(() => {
+    const geometries = seen.current
+    return () => {
+      const inUse = new Set<THREE.BufferGeometry>()
+      scene.traverse((o) => {
+        const g = (o as THREE.Mesh).geometry
+        if (g) inUse.add(g)
+      })
+      for (const g of geometries) if (!inUse.has(g)) g.dispose()
+      geometries.clear()
+    }
+  }, [scene])
+  return <group ref={group}>{children}</group>
 }
 
 /** Ships are modelled along +x (bow forward). Horizontal ships point toward +x; vertical ships point toward +z. */
@@ -81,9 +123,11 @@ export interface FleetProps {
   /** Fixed detail level, or `'auto'` to pick per ship from camera distance each frame (`src/perf`). */
   lod?: ShipModelProps['lod'] | 'auto'
   quality?: ShipModelProps['quality']
+  /** Wrecks are frozen (replay / photo): bake them like any other lod ≥ 1 ship instead of rendering the live sinking model. */
+  staticWrecks?: boolean
 }
 
-export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality }: FleetProps) {
+export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality, staticWrecks }: FleetProps) {
   return (
     <group>
       {ships.map((ship) => {
@@ -100,10 +144,10 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
             <group rotation={[pose.roll, 0, pose.pitch]}>
               {lod === 'auto' && sink < 1 ? (
                 <LodGroup position={position} hullLength={ship.spec.length}>
-                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={autoLod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />}
+                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={autoLod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />}
                 </LodGroup>
               ) : (
-                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod === 'auto' ? 2 : lod} quality={quality} phase={ship.origin.x * 1.7 + ship.origin.y} />
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
           </group>

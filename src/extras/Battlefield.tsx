@@ -31,8 +31,8 @@ export function Battlefield({ boards, revealEnemy = true, lod = 0, quality, fire
     <>
       {grids && <BoardGrid origin={E.origin} />}
       {grids && <BoardGrid origin={P.origin} color="#e6cfa3" />}
-      <Fleet ships={boards.playerBoard.ships} livery="pirate" boardOrigin={P.origin} sinkProgress={wrecks(boards.playerBoard)} lod={lod} quality={quality} />
-      <Fleet ships={boards.enemyBoard.ships} livery="navy" revealed={revealEnemy} boardOrigin={E.origin} sinkProgress={wrecks(boards.enemyBoard)} lod={lod} quality={quality} />
+      <Fleet ships={boards.playerBoard.ships} livery="pirate" boardOrigin={P.origin} sinkProgress={wrecks(boards.playerBoard)} lod={lod} quality={quality} staticWrecks />
+      <Fleet ships={boards.enemyBoard.ships} livery="navy" revealed={revealEnemy} boardOrigin={E.origin} sinkProgress={wrecks(boards.enemyBoard)} lod={lod} quality={quality} staticWrecks />
       <ShotMarkers shots={boards.enemyBoard.shots} boardOrigin={E.origin} fires={fires} />
       <ShotMarkers shots={boards.playerBoard.shots} boardOrigin={P.origin} fires={fires} />
       {flotsam &&

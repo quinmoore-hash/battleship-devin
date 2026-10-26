@@ -23,8 +23,9 @@ export { bakeObject, bakeStats, materialKey, geometrySignature, type BakeStats }
  *   lod-0 (camera-focused, cinematic) ship is rendered live, so those effects still show close up.
  * - Materials are grouped by `materialKey()` — parameter signature for stock materials, identity
  *   for anything with a custom shader hook — so two parts with identical-looking materials merge.
- * - The cache is bounded by the number of keys (≤ ships × liveries × lods × qualities) and lives
- *   for the page: rematches / Play Again re-use it, nothing grows per game.
+ * - The cache is bounded by the number of keys (≤ ships × liveries × lods × qualities), is shared
+ *   by placement → battle → report → Rematch, and is dropped when the game returns to the menu
+ *   (`clearBakeCache()` from `OceanScene`) so `renderer.info.memory` comes back to the menu baseline.
  */
 
 export type BakeKey = string
@@ -57,6 +58,11 @@ const getVersion = () => version
 
 /** True while a `<ShipBakery>` is mounted; without one `<Ship>` renders live models. */
 export const bakeryActive = () => bakeries > 0
+/** Reactive `bakeryActive()`: re-renders the caller when a `<ShipBakery>` mounts in the same commit (replay / photo mode). */
+export function useBakeryActive(): boolean {
+  useSyncExternalStore(subscribe, getVersion)
+  return bakeryActive()
+}
 
 export function requestBake(key: BakeKey, element: ReactElement) {
   if (entries.has(key)) return
@@ -70,7 +76,7 @@ export const getBaked = (key: BakeKey): THREE.Group | null => entries.get(key)?.
 export const bakeCacheSize = () => entries.size
 export const bakeReport = (): Record<BakeKey, BakeStats | null> => Object.fromEntries([...entries.values()].map((e) => [e.key, (e.object?.userData.bakeStats as BakeStats | undefined) ?? null]))
 
-/** Drops everything (tests only — the live app keeps the cache for the page lifetime). */
+/** Drops and disposes every baked ship (menu return, tests). */
 export function clearBakeCache() {
   for (const e of entries.values()) e.object?.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.())
   entries.clear()

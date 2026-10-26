@@ -86,6 +86,90 @@ export function summarize(): PerfSummary {
 
 declare global {
   interface Window {
-    __perf?: { stats: FrameStats; summary: () => PerfSummary; reset: () => void; tier: () => string; autoLower: () => boolean; dump: () => unknown[]; programs: () => unknown[]; scene: () => unknown; gl: () => unknown; camera: () => unknown }
+    __perf?: { stats: FrameStats; summary: () => PerfSummary; reset: () => void; tier: () => string; autoLower: () => boolean; dump: () => unknown[]; programs: () => unknown[]; scene: () => unknown; gl: () => unknown; camera: () => unknown; leaks: () => GeometryLeakRow[]; textureLeaks: () => GeometryLeakRow[] }
   }
 }
+
+interface TracedObject {
+  uuid: string
+  type: string
+  addEventListener: (type: 'dispose', fn: () => void) => void
+}
+interface TracedMaterial {
+  type: string
+  uniforms?: Record<string, { value: unknown }>
+  [slot: string]: unknown
+}
+interface TracedNode {
+  type: string
+  name: string
+  parent: TracedNode | null
+  geometry?: TracedObject
+  material?: TracedMaterial | TracedMaterial[]
+  traverse: (fn: (o: TracedNode) => void) => void
+}
+
+const tracedGeometries = new Map<string, string>()
+const geometriesInScene = new Set<string>()
+const tracedTextures = new Map<string, string>()
+const texturesInScene = new Set<string>()
+
+const isTexture = (v: unknown): v is TracedObject => !!v && typeof v === 'object' && (v as { isTexture?: boolean }).isTexture === true
+
+function traceTexture(tex: TracedObject, path: string, mat: TracedMaterial, slot: string) {
+  texturesInScene.add(tex.uuid)
+  if (tracedTextures.has(tex.uuid)) return
+  tracedTextures.set(tex.uuid, `${path}|${mat.type}.${slot}`)
+  tex.addEventListener('dispose', () => tracedTextures.delete(tex.uuid))
+}
+
+/**
+ * `?perf&trace`: remembers every geometry the scene has ever held, keyed by (ancestor names, mesh type,
+ * geometry type), and forgets it when it is disposed. `geometryLeaks()` then lists the groups whose
+ * geometries are no longer in the scene but were never disposed — i.e. what `renderer.info.memory.geometries` keeps.
+ */
+export function traceGeometries(scene: unknown): void {
+  geometriesInScene.clear()
+  texturesInScene.clear()
+  ;(scene as TracedNode).traverse((o) => {
+    const g = o.geometry
+    if (!g) return
+    const names: string[] = []
+    for (let p: TracedNode | null = o; p; p = p.parent) if (p.name) names.unshift(p.name)
+    const path = names.join('/') || '(root)'
+    for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+      for (const slot of Object.keys(m)) if (isTexture(m[slot])) traceTexture(m[slot] as TracedObject, path, m, slot)
+      for (const [name, u] of Object.entries(m.uniforms ?? {})) if (isTexture(u.value)) traceTexture(u.value, path, m, `u.${name}`)
+    }
+    geometriesInScene.add(g.uuid)
+    if (tracedGeometries.has(g.uuid)) return
+    tracedGeometries.set(g.uuid, `${path}|${o.type}:${g.type}`)
+    g.addEventListener('dispose', () => tracedGeometries.delete(g.uuid))
+  })
+}
+
+export interface GeometryLeakRow {
+  key: string
+  /** Geometries seen in the scene at some point and not disposed since. */
+  alive: number
+  /** Of those, how many are still in the scene. */
+  inScene: number
+  /** alive − inScene: detached but undisposed. */
+  leaked: number
+}
+
+function leakRows(traced: Map<string, string>, inScene: Set<string>): GeometryLeakRow[] {
+  const rows = new Map<string, GeometryLeakRow>()
+  for (const [uuid, key] of traced) {
+    const r = rows.get(key) ?? { key, alive: 0, inScene: 0, leaked: 0 }
+    r.alive++
+    if (inScene.has(uuid)) r.inScene++
+    r.leaked = r.alive - r.inScene
+    rows.set(key, r)
+  }
+  return [...rows.values()].sort((a, b) => b.leaked - a.leaked)
+}
+
+export const geometryLeaks = (): GeometryLeakRow[] => leakRows(tracedGeometries, geometriesInScene)
+/** Same for textures referenced by scene materials (map slots and ShaderMaterial uniforms). */
+export const textureLeaks = (): GeometryLeakRow[] => leakRows(tracedTextures, texturesInScene)
