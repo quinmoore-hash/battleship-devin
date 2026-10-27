@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test'
 // Black Flag rules toggle: fleet picker, Broadside / Spyglass power shots and hidden treasure (BUG-540+).
 test.describe('Black Flag', () => {
   test('a Black Flag game to victory under ?no3d: pick a fleet, spy, broadside, find treasure', async ({ page }) => {
-    test.setTimeout(120_000)
+    // a 7-ship Wolf pack game can take ~100 shots; CI runners pace turns ~3× slower than local
+    test.setTimeout(300_000)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/?no3d')
     await expect(page.getByTestId('main-menu')).toBeVisible()
