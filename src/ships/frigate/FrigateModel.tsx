@@ -12,7 +12,7 @@ import { seededRandom } from '../../vfx/random'
 import { Anchor, Barrel, Cannon, Crate, HullHole, RopeCoil, Wheel } from '../kit'
 import type { CannonRef, CellDamage, Lod, ShipModelProps } from '../types'
 import { CANNON_SCALE, FRIGATE_ANCHORS, GUN_AXIS_Y, MUZZLE_OUT } from './anchors'
-import { FRIGATE as F, GUN_PORT_W, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, railY, sectionHalfWidth } from './form'
+import { FIT, FRIGATE as F, GUN_PORT_W, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, railY, sectionHalfWidth } from './form'
 import { PROP_SPOTS, buildFurniture } from './furniture'
 import { box, breachGeometry, mergeGeometries } from './geometry'
 import { PORT_LINTEL, PORT_SILL, buildHullParts, capRailTop, type PartKey } from './hull'
@@ -135,7 +135,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
 
   return (
     <ClothTime.Provider value={time}>
-      <group>
+      <group scale={FIT.scale} position-x={FIT.dx}>
         <StaticParts parts={hull} mats={mats} />
         <StaticParts parts={furniture} mats={mats} />
 

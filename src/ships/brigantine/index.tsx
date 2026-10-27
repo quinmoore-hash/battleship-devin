@@ -24,6 +24,7 @@ import {
   FOREMAST_X,
   MAINMAST_HEIGHT,
   MAINMAST_X,
+  FIT,
   STEM_X,
   TRANSOM_X,
   buildDeckGeometry,
@@ -102,8 +103,8 @@ function sharedGeometry(): SharedGeometry {
 /** Bowsprit geometry constants (ship frame). */
 const BOWSPRIT_BASE: Vec3 = [1.38, 0.6, 0]
 const BOWSPRIT_ANGLE = 0.38
-const BOWSPRIT_LEN = 0.62
-const JIBBOOM_EXTRA = 0.16
+const BOWSPRIT_LEN = 0.55
+const JIBBOOM_EXTRA = 0.08
 const bowspritPoint = (t: number): Vec3 => [BOWSPRIT_BASE[0] + Math.cos(BOWSPRIT_ANGLE) * BOWSPRIT_LEN * t, BOWSPRIT_BASE[1] + Math.sin(BOWSPRIT_ANGLE) * BOWSPRIT_LEN * t, 0]
 const BOWSPRIT_TIP = bowspritPoint(1)
 const JIBBOOM_TIP = bowspritPoint(1 + JIBBOOM_EXTRA / BOWSPRIT_LEN)
@@ -209,7 +210,7 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
   const mainLines = useMemo(() => mainRopes(lod, Math.round(sailsSet * 20) / 20), [lod, sailsSet])
 
   return (
-    <group>
+    <group scale={FIT.scale} position-x={FIT.dx}>
       {/* ---------- hull ---------- */}
       <mesh geometry={lod === 2 ? geo.hullSolid : geo.hull} material={hullMaterials} castShadow receiveShadow />
       <mesh geometry={geo.deck} material={mats.deck} receiveShadow />
@@ -401,9 +402,9 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
       {/* ---------- rigging ---------- */}
       {lod < 2 && (
         <>
-          <RopeSet lines={hullLines} mats={mats} visible={bowspritSnap < 0.3} />
-          <RopeSet lines={foreLines} mats={mats} visible={foreSnap < 0.15} />
-          <RopeSet lines={mainLines} mats={mats} visible={mainSnap < 0.15} />
+          <RopeSet lines={hullLines} mats={mats} lod={lod} visible={bowspritSnap < 0.3} />
+          <RopeSet lines={foreLines} mats={mats} lod={lod} visible={foreSnap < 0.15} />
+          <RopeSet lines={mainLines} mats={mats} lod={lod} visible={mainSnap < 0.15} />
         </>
       )}
 

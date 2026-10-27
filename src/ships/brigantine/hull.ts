@@ -18,6 +18,8 @@ export const DECK_Y = 0.35
 export const DRAFT = 0.32
 export const BULWARK_THICKNESS = 0.035
 export const STEM_X = 1.46
+/** Root fit (scale about the origin, then shift aft) so the bowsprit stays inside the 3 cells; applied to the model and its anchors. */
+export const FIT = { scale: 0.84, dx: -0.18 } as const
 export const TRANSOM_X = -1.42
 /** Gun ports: all at the same height band above the deck, one per cannon. */
 export const PORT_BOTTOM = DECK_Y + 0.04

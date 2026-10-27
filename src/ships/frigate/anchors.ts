@@ -1,6 +1,7 @@
 import type { Vec3 } from '../../scene/layout'
 import type { ShipAnchors } from '../types'
-import { BOWSPRIT, FRIGATE, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, sectionHalfWidth } from './form'
+import { fitAnchors } from '../kit/fit'
+import { BOWSPRIT, FIT, FRIGATE, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, sectionHalfWidth } from './form'
 
 /** Scale of the kit cannon and the resulting height of its bore above the deck. */
 export const CANNON_SCALE = 0.4
@@ -46,4 +47,7 @@ export function buildAnchors(): ShipAnchors {
   }
 }
 
-export const FRIGATE_ANCHORS: ShipAnchors = buildAnchors()
+/** Anchors in the unscaled model frame (what the geometry code uses). */
+export const FRIGATE_MODEL_ANCHORS: ShipAnchors = buildAnchors()
+/** Anchors in the ship frame the game sees, after the root FIT scale/shift. */
+export const FRIGATE_ANCHORS: ShipAnchors = fitAnchors(FRIGATE_MODEL_ANCHORS, FIT.scale, FIT.dx)

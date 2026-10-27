@@ -150,7 +150,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
       [[0.03, 1.5, 0.02], [0.1 - 0.15, 0.1, 0.24], 0.006], // topping lift fall to the pin rail
       [hounds, [0.0, 0.12, 0.0], 0.006], // main halyard fall along the mast
     ]
-    return ropesGeometry(segs)
+    return ropesGeometry(segs, 5, 0, lod)
   }, [lod, boomEnd, throat, peak])
 
   const blocks = useMemo(() => {
@@ -188,9 +188,10 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
         const d = deadeyePos(x, s)
         segs.push([[d[0], d[1] - 0.03, d[2]], [d[0], d[1] + 0.03, d[2]], 0.006])
       }
-      if (lod < 2) segs.push(...ratlineSegments(shrouds, 0.62, lod === 0 ? 1.36 : 1.0, lod === 0 ? 0.065 : 0.13))
+      // ratline rungs are the finest lines: LOD 0 only (they alias into dots from the game camera)
+      if (lod === 0) segs.push(...ratlineSegments(shrouds, 0.62, 1.36, 0.065))
     }
-    return ropesGeometry(segs)
+    return ropesGeometry(segs, 5, 0, lod)
   }, [lod])
 
   // sheets for the headsails (ship frame, hidden with the mast)
@@ -206,7 +207,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
       [world(jibClew), [0.45, 0.33, 0.215], 0.006],
       [world(stayClew), [0.45, 0.33, 0.2], 0.006],
       [[-1.07, 0.75, 0.125], [-1.07, 0.49, 0.0], 0.007],
-    ])
+    ], 5, 0, lod)
   }, [lod])
 
   const topSet = clamp01((set - 0.45) / 0.55)
@@ -312,8 +313,8 @@ function Bowsprit({ m, lod, sink }: { m: SloopMaterials; lod: number; sink: numb
         [[BOWSPRIT_TIP[0] - 0.08, BOWSPRIT_TIP[1] - 0.01, 0.0], [0.86, 0.33, 0.14], 0.007], // bowsprit shrouds
         [[BOWSPRIT_TIP[0] - 0.08, BOWSPRIT_TIP[1] - 0.01, 0.0], [0.86, 0.33, -0.14], 0.007],
         [[0.84, 0.36, -0.2], [0.655, 0.45, -0.07], 0.008], // anchor cable to the bitts
-      ]),
-    [],
+      ], 5, 0, lod),
+    [lod],
   )
   const droop = clamp01((sink - 0.7) / 0.3)
   return (

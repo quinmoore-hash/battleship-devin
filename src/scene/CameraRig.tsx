@@ -12,17 +12,28 @@ const enemyCenter = boardCenter(BOARD_LAYOUT.enemy)
 const midZ = (playerCenter[2] + enemyCenter[2]) / 2
 
 /** Fixed shots. `menu` orbits slowly around its target instead of using `position`. */
+/**
+ * Shots are framed for landscape. On a portrait viewport (phones) the horizontal field would be too narrow for
+ * the 10-wide boards, so widen the vertical fov until the horizontal one matches the landscape design value.
+ */
+export function fitFov(fov: number, aspect: number): number {
+  if (!(aspect < 1)) return fov
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) / aspect)
+  return Math.min(THREE.MathUtils.radToDeg(half) * 2, 80)
+}
+
 export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target: THREE.Vector3; fov: number }> = {
   menu: { position: new THREE.Vector3(0, 11, 36), target: new THREE.Vector3(0, 0.5, midZ), fov: 42 },
   placement: {
-    position: new THREE.Vector3(playerCenter[0], 17, playerCenter[2] + 11),
-    target: new THREE.Vector3(playerCenter[0], 0, playerCenter[2] - 1),
+    position: new THREE.Vector3(playerCenter[0], 15.5, playerCenter[2] + 10),
+    target: new THREE.Vector3(playerCenter[0], 0, playerCenter[2] - 0.5),
     fov: 42,
   },
   battle: {
-    position: new THREE.Vector3(0, 19, playerCenter[2] + 27),
-    target: new THREE.Vector3(0, 0, midZ - 5),
-    fov: 40,
+    // low and close enough that the hulls read (BUG-530); target/fov come from battleFraming() per viewport
+    position: new THREE.Vector3(0, 16.5, playerCenter[2] + 21.5),
+    target: new THREE.Vector3(0, 0.3, midZ - 5),
+    fov: 42,
   },
   gameover: {
     position: new THREE.Vector3(-21, 6, enemyCenter[2] + 17),
@@ -32,6 +43,37 @@ export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target:
 }
 
 const MENU_ORBIT = { radius: 36, height: 11, speed: 0.045 }
+
+/** Width of the side HUD (fleet panel + enemy-waters column, gaps, padding) the boards must clear — mirrors ui.css `.battle-body`. */
+function hudSidePx(width: number): number {
+  return width <= 900 ? 0 : width <= 1100 ? 580 : 600
+}
+/** Half-width of the player board including its row labels, and the z of its near label row. */
+const NEAR_HALF_WIDTH = 6.2
+const NEAR_LABEL_Z = playerCenter[2] + 5.7
+
+/**
+ * Battle overview framing for a viewport (BUG-530): the camera position is fixed, the vertical fov is the
+ * narrowest (30°–46°) at which the near board still clears the side HUD, and the pitch keeps the near label
+ * row at ~92% of the half-height so the whole player board stays on screen. `fov` is the landscape design
+ * value — callers run it through `fitFov` like every other shot.
+ */
+export function battleFraming(aspect: number, width: number, out: { target: THREE.Vector3; fov: number }) {
+  const pos = CAMERA_SHOTS.battle.position
+  const dNear = pos.z - NEAR_LABEL_Z
+  const slant = Math.hypot(dNear, pos.y)
+  let design = 46
+  if (aspect >= 1) {
+    const free = Math.max(0.3, (width - hudSidePx(width)) / width)
+    const hHalf = Math.atan(NEAR_HALF_WIDTH / slant) / free
+    design = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalf) / aspect)), 30, 46)
+  }
+  const half = THREE.MathUtils.degToRad(fitFov(design, aspect) / 2)
+  const centre = Math.atan(pos.y / dNear) - 0.88 * half
+  out.target.set(0, 0.3, pos.z - (pos.y - 0.3) / Math.tan(centre))
+  out.fov = design
+  return out
+}
 
 export interface CameraRigProps {
   view: CameraView
@@ -57,6 +99,7 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
   const settled = useRef(false)
   const prevView = useRef<CameraView | null>(null)
   const tmpPos = useRef(new THREE.Vector3())
+  const framing = useRef({ target: new THREE.Vector3(), fov: 42 })
 
   useEffect(() => {
     if (prevView.current === view) return
@@ -85,6 +128,7 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
     const dt = Math.min(delta, 0.1)
     const camera = state.camera as THREE.PerspectiveCamera
     const shot = CAMERA_SHOTS[view]
+    const aim = view === 'battle' ? battleFraming(camera.aspect, state.size.width, framing.current) : shot
     const wanted = tmpPos.current
     if (view === 'menu') {
       const a = state.clock.elapsedTime * MENU_ORBIT.speed
@@ -103,9 +147,9 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
       camera.position.x = THREE.MathUtils.damp(camera.position.x, wanted.x, lambda, dt)
       camera.position.y = THREE.MathUtils.damp(camera.position.y, wanted.y, lambda, dt)
       camera.position.z = THREE.MathUtils.damp(camera.position.z, wanted.z, lambda, dt)
-      target.current.x = THREE.MathUtils.damp(target.current.x, shot.target.x, lambda, dt)
-      target.current.y = THREE.MathUtils.damp(target.current.y, shot.target.y, lambda, dt)
-      target.current.z = THREE.MathUtils.damp(target.current.z, shot.target.z, lambda, dt)
+      target.current.x = THREE.MathUtils.damp(target.current.x, aim.target.x, lambda, dt)
+      target.current.y = THREE.MathUtils.damp(target.current.y, aim.target.y, lambda, dt)
+      target.current.z = THREE.MathUtils.damp(target.current.z, aim.target.z, lambda, dt)
       camera.lookAt(target.current)
       if (controls.current) controls.current.target.copy(target.current)
       if (!settled.current && view !== 'menu' && camera.position.distanceTo(wanted) < 0.05) {
@@ -115,7 +159,7 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
       controls.current.update()
     }
 
-    const fov = THREE.MathUtils.damp(camera.fov, shot.fov, 2, dt)
+    const fov = THREE.MathUtils.damp(camera.fov, fitFov(aim.fov, camera.aspect), 2, dt)
     if (Math.abs(fov - camera.fov) > 1e-3) {
       camera.fov = fov
       camera.updateProjectionMatrix()
@@ -132,7 +176,7 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
       enablePan={false}
       enableDamping
       dampingFactor={0.08}
-      minDistance={12}
+      minDistance={9}
       maxDistance={48}
       minPolarAngle={0.15}
       maxPolarAngle={Math.PI / 2 - 0.2}

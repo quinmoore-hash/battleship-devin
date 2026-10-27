@@ -89,7 +89,14 @@ export const MASTS: readonly MastSpec[] = [
 ]
 
 /** Bowsprit: root on the stem head, pointing forward and up; the jibboom extends it. */
-export const BOWSPRIT = { root: [1.3, 0.6, 0] as const, angle: 0.3, length: 0.85, jibboom: 0.5 }
+export const BOWSPRIT = { root: [1.3, 0.6, 0] as const, angle: 0.3, length: 0.65, jibboom: 0.28 }
+
+/**
+ * Root fit applied to the whole model (and its anchors): the hull + bowsprit span [xStern, bowsprit tip] = ~3.7
+ * units, more than the 3 cells the frigate occupies, so the model is scaled down and shifted aft to keep the
+ * footprint inside its cells (BUG-110b spar overhang). Keep stern >= -1.5 and bowsprit tip <= 1.5 after fitting.
+ */
+export const FIT = { scale: 0.74, dx: -0.16 } as const
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 

@@ -851,12 +851,13 @@ export function mastRigging(i: number, rungs: boolean): RopeSeg[] {
 }
 
 const riggingGeo = cached((key: string) => {
-  const [i, rungs] = key.split(',')
-  return ropeTubes(mastRigging(Number(i), rungs === '1'), rungs === '1' ? 5 : 4)
+  const [i, lodKey] = key.split(',')
+  const lod = Number(lodKey) as Lod
+  return ropeTubes(mastRigging(Number(i), lod === 0), lod === 0 ? 5 : 4, lod)
 })
 
 /** Bowsprit gear: bobstay, gammoning-to-stem, beakhead rails and the anchor cables. */
-const bowRiggingGeo = once(() =>
+const bowRiggingGeo = cached((lodKey: string) =>
   ropeTubes(
     [
       { a: bowspritPoint(0.6, -0.03), b: [X_BOW + 0.02, 0.1, 0], r: 0.011 },
@@ -869,15 +870,15 @@ const bowRiggingGeo = once(() =>
       ]),
     ],
     5,
+    Number(lodKey) as Lod,
   ),
 )
 
 export function Rigging({ m, lod, snaps }: PartProps & { snaps: number[] }) {
-  const rungs = lod === 0 ? '1' : '0'
   return (
     <group>
-      {MASTS.map((_, i) => (snaps[i] > 0.05 ? null : <mesh key={i} geometry={riggingGeo(`${i},${rungs}`)} material={m.rope} />))}
-      <mesh geometry={bowRiggingGeo()} material={lod === 0 ? m.rope : m.rope} />
+      {MASTS.map((_, i) => (snaps[i] > 0.05 ? null : <mesh key={i} geometry={riggingGeo(`${i},${lod}`)} material={m.rope} />))}
+      <mesh geometry={bowRiggingGeo(String(lod))} material={m.rope} />
       <Channels m={m} lod={lod} />
     </group>
   )

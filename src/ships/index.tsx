@@ -7,13 +7,14 @@
  *   SHIPS[id] -> ShipDefinition               model component + anchors (cannons, masts, impact points)
  *   shipWorldTransform(placed, boardOrigin)   position / rotationY of a placed ship
  */
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import type { PlacedShip, ShipId } from '../engine'
 import { LodGroup } from '../perf/LodShip'
 import { BakedShip, bakeKey, useBakeryActive } from './bake'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
+import { sampleWaveHeight } from '../scene/waves'
 import { BRIGANTINE } from './brigantine'
 import { FRIGATE } from './frigate'
 import { GALLEON } from './galleon'
@@ -127,6 +128,23 @@ export interface FleetProps {
   staticWrecks?: boolean
 }
 
+/**
+ * Ship root: rests with its waterline (model y = 0) on the board surface and rides the same wave bank as the
+ * water and the grid floats; sinking lowers it by `depth` (BUG-110b: hulls used to hover 0.2 above the sea).
+ */
+function Afloat({ position, depth, rotationY, children }: { position: Vec3; depth: number; rotationY: number; children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null)
+  useFrame(({ clock }) => {
+    const g = ref.current
+    if (g) g.position.y = position[1] - depth + sampleWaveHeight(position[0], position[2], clock.elapsedTime)
+  })
+  return (
+    <group ref={ref} position={[position[0], position[1] - depth, position[2]]} rotation-y={rotationY}>
+      {children}
+    </group>
+  )
+}
+
 export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality, staticWrecks }: FleetProps) {
   return (
     <group>
@@ -140,7 +158,7 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
         const sink = sinkProgress?.[ship.uid] ?? (sunk ? 1 : 0)
         const pose = sinkPose(sink, { seed: placedShipSeed(ship), hull: SHIPS[ship.spec.id].anchors.hull, damage: damageOf(ship), lastHit: lastHitIndex(ship) })
         return (
-          <group key={ship.uid} position={[position[0], position[1] - pose.depth, position[2]]} rotation-y={rotationY + pose.yaw}>
+          <Afloat key={ship.uid} position={position} depth={pose.depth} rotationY={rotationY + pose.yaw}>
             <group rotation={[pose.roll, 0, pose.pitch]}>
               {lod === 'auto' && sink < 1 ? (
                 <LodGroup position={position} hullLength={ship.spec.length}>
@@ -150,7 +168,7 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
                 <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
-          </group>
+          </Afloat>
         )
       })}
     </group>

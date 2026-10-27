@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import type { Livery, Lod } from '../types'
 import { ClothTime } from './clothTime'
+import { ropeRadiusAtLod } from '../kit/Rope'
 import { MASTS, deckY } from './form'
 import { sailGeometry } from './geometry'
 import { applyClothUniforms, clothTextures, makeClothDepthMaterial, makeClothMaterial, makeClothUniforms, type FrigateMaterials } from './materials'
@@ -17,7 +18,7 @@ const UNIT_CYL = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true)
 const UP = new THREE.Vector3(0, 1, 0)
 
 /** Every rope of a rig in one draw call: an InstancedMesh of unit cylinders. */
-export function RopeBundle({ segments, material, visible = true }: { segments: Segment[]; material: THREE.Material; visible?: boolean }) {
+export function RopeBundle({ segments, material, visible = true, lod = 0 }: { segments: Segment[]; material: THREE.Material; visible?: boolean; lod?: Lod }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   useLayoutEffect(() => {
     const mesh = ref.current
@@ -32,7 +33,7 @@ export function RopeBundle({ segments, material, visible = true }: { segments: S
       const len = dir.length()
       o.position.copy(a).add(b).multiplyScalar(0.5)
       o.quaternion.setFromUnitVectors(UP, dir.normalize())
-      const r = s.r ?? 0.008
+      const r = ropeRadiusAtLod(s.r ?? 0.008, lod)
       o.scale.set(r, len, r)
       o.updateMatrix()
       mesh.setMatrixAt(i, o.matrix)
@@ -125,7 +126,7 @@ export function FrigateMast({ index, mats, livery, sails, snapped, torn, phase, 
           {flag && <group position={[0.07, m.height - breakY, 0]}>{flag}</group>}
         </group>
       </group>
-      <RopeBundle segments={rigging} material={mats.rope} visible={snapped < 0.15} />
+      <RopeBundle segments={rigging} material={mats.rope} visible={snapped < 0.15} lod={lod} />
     </group>
   )
 }
@@ -137,7 +138,7 @@ export function Bowsprit({ mats, livery, sails, torn, phase, lod, snapped }: { m
     <group>
       <mesh geometry={g.oak} material={mats.oak} castShadow />
       <mesh geometry={g.black} material={mats.black} />
-      <RopeBundle segments={g.ropes} material={mats.rope} />
+      <RopeBundle segments={g.ropes} material={mats.rope} lod={lod} />
       {g.jibs.map((j) => (
         <ClothMesh key={j.index} geometry={j.geometry} map={map} shape={1} set={sailSet(sails, j.index, 3) * (1 - snapped)} torn={Math.max(torn, snapped * 1.2)} phase={phase + 3 + j.index} belly={0.13 + j.index * 0.03} seed={50 + j.index} />
       ))}

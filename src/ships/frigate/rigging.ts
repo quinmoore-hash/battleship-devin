@@ -125,6 +125,9 @@ export function buildMastGeoms(m: MastSpec, lod: Lod, spanker: boolean): MastGeo
 const rigCache = new Map<string, Segment[]>()
 
 /** Standing rigging of mast `index` in the ship frame: shrouds + ratlines, topmast shrouds, stays, backstays, lifts. */
+/** Distance along the bowsprit to the jibboom tip; the stays and jibs are placed as fractions of it. */
+const BOWSPRIT_TIP_T = BOWSPRIT.length + BOWSPRIT.jibboom
+
 export function mastRigging(index: number, lod: Lod): Segment[] {
   const key = `${index}:${lod}`
   const hit = rigCache.get(key)
@@ -135,7 +138,7 @@ export function mastRigging(index: number, lod: Lod): Segment[] {
   if (lod === 2) return segs
   const chanY = deckY(m.x) + 0.15
   const hounds = mastPoint(m, h * 0.52)
-  const rungStep = lod === 0 ? 0.045 : 0.11
+  const rungStep = 0.045
   for (const side of [1, -1] as const) {
     const hw = bulwarkHalfWidth(m.x, chanY)
     const dead: Vec3[] = []
@@ -143,8 +146,11 @@ export function mastRigging(index: number, lod: Lod): Segment[] {
     const top: Vec3 = [hounds[0], hounds[1], side * 0.04]
     for (const d of dead) segs.push({ a: d, b: top, r: 0.009 })
     const at = (d: Vec3, t: number): Vec3 => [d[0] + (top[0] - d[0]) * t, d[1] + (top[1] - d[1]) * t, d[2] + (top[2] - d[2]) * t]
-    for (let t = 0.1; t < 0.84; t += rungStep) {
-      for (let i = 0; i < 3; i++) segs.push({ a: at(dead[i], t), b: at(dead[i + 1], t), r: 0.004 })
+    // ratline rungs are the finest lines: LOD 0 only (they alias into dots from the game camera)
+    if (lod === 0) {
+      for (let t = 0.1; t < 0.84; t += rungStep) {
+        for (let i = 0; i < 3; i++) segs.push({ a: at(dead[i], t), b: at(dead[i + 1], t), r: 0.004 })
+      }
     }
     // topmast shrouds from the top platform to the crosstrees
     const platform = mastPoint(m, h * 0.55)
@@ -175,9 +181,9 @@ export function mastRigging(index: number, lod: Lod): Segment[] {
   }
   // stays forward
   if (index === 0) {
-    segs.push({ a: mastPoint(m, h * 0.55), b: bowspritPoint(0.5), r: 0.011 })
-    segs.push({ a: mastPoint(m, h * 0.84), b: bowspritPoint(0.95), r: 0.008 })
-    segs.push({ a: mastPoint(m, h * 0.98), b: bowspritPoint(1.3), r: 0.006 })
+    segs.push({ a: mastPoint(m, h * 0.55), b: bowspritPoint(BOWSPRIT_TIP_T * 0.37), r: 0.011 })
+    segs.push({ a: mastPoint(m, h * 0.84), b: bowspritPoint(BOWSPRIT_TIP_T * 0.7), r: 0.008 })
+    segs.push({ a: mastPoint(m, h * 0.98), b: bowspritPoint(BOWSPRIT_TIP_T * 0.96), r: 0.006 })
   } else {
     const fwd = MASTS[index - 1]
     segs.push({ a: mastPoint(m, h * 0.55), b: [fwd.x - 0.12, deckY(fwd.x) + 0.3, 0], r: 0.011 })
@@ -229,9 +235,9 @@ export function buildBowsprit(lod: Lod): BowspritGeoms {
     }
   }
   const stays: [Vec3, Vec3][] = [
-    [bowspritPoint(0.5), mastPoint(fore, fore.height * 0.55)],
-    [bowspritPoint(0.95), mastPoint(fore, fore.height * 0.84)],
-    [bowspritPoint(1.3), mastPoint(fore, fore.height * 0.98)],
+    [bowspritPoint(BOWSPRIT_TIP_T * 0.37), mastPoint(fore, fore.height * 0.55)],
+    [bowspritPoint(BOWSPRIT_TIP_T * 0.7), mastPoint(fore, fore.height * 0.84)],
+    [bowspritPoint(BOWSPRIT_TIP_T * 0.96), mastPoint(fore, fore.height * 0.98)],
   ]
   const jibs: BowspritGeoms['jibs'] = []
   stays.forEach(([T, H], i) => {
