@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { FLEET, isFleetSunk, type Coord } from '../engine'
+import { FLEET, hasBeenShot, isFleetSunk, type Board, type Coord } from '../engine'
 import { FLEET_PRESETS } from '../engine'
-import { isHotSeat, placementBoard, useGameStore } from './gameStore'
+import { isHotSeat, lostShots, placementBoard, useGameStore } from './gameStore'
 
 const s = () => useGameStore.getState()
 
@@ -179,17 +179,28 @@ describe('hot-seat (Two captains)', () => {
     expect(s().turn).toBe('human')
   })
 
-  it('hot-seat + stormy seas: fogged misses hide the first captain’s misses and the game still ends', () => {
+  it('hot-seat + stormy seas: both captains lose ~30% of their shots to the storm; a lost cell stays unshot and the game still ends', () => {
     startHotSeat({ salvo: false, storm: true }, 11)
-    const human = sweep()
-    const enemy = sweep()
+    // fire at the first unshot cell of the target board each turn, so a lost cell is simply fired at again
+    const firstUnshot = (board: Board): Coord => {
+      for (let y = 0; y < board.size; y++) for (let x = 0; x < board.size; x++) if (!hasBeenShot(board, { x, y })) return { x, y }
+      throw new Error('board full')
+    }
     let guard = 0
-    while (s().phase === 'battle' && guard++ < 220) volley(s().turn, s().turn === 'human' ? human : enemy)
+    while (s().phase === 'battle' && guard++ < 600) {
+      const by = s().turn
+      const r = s().fireAt(firstUnshot(by === 'human' ? s().enemyBoard : s().playerBoard), by)
+      expect(r).not.toBeUndefined()
+      if (r?.outcome === 'lost') expect(s().turn).toBe(by === 'human' ? 'enemy' : 'human') // a lost shot still ends the turn
+    }
     expect(s().phase).toBe('gameover')
-    expect(s().modes.storm).toBe(true)
-    const humanMisses = s().events.filter((e) => e.by === 'human' && e.result.outcome === 'miss').length
-    expect(s().fogged.length).toBeGreaterThan(0)
-    expect(s().fogged.length).toBeLessThan(humanMisses)
+    const lostHuman = lostShots(s().events, 'human').length
+    const lostEnemy = lostShots(s().events, 'enemy').length
+    expect(lostHuman).toBeGreaterThan(0)
+    expect(lostEnemy).toBeGreaterThan(0)
+    // lost shots are events only: every board shot is a real hit/miss and no lost coord is in `shots` unless re-fired later
+    const total = s().events.filter((e) => e.kind !== 'spyglass').length
+    expect(s().enemyBoard.shots.length + s().playerBoard.shots.length).toBe(total - lostHuman - lostEnemy)
   })
 })
 
