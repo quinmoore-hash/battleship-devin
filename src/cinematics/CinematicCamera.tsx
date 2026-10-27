@@ -128,7 +128,7 @@ export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null
   }
   if (event.type === 'sink') {
     const fleet = event.owner === 'human' ? active.fleets.human : active.fleets.enemy
-    const ship = fleet.find((s) => s.spec.id === event.shipId)
+    const ship = fleet.find((s) => s.uid === (event.uid ?? event.shipId))
     const pose = ship ? shipWorldTransform(ship, ownBoardOrigin(event.owner)) : { position: [0, 0.2, event.owner === 'human' ? playerCenter[2] : enemyCenter[2]] as Vec3, rotationY: 0 }
     const hull = SHIPS[event.shipId].anchors.hull
     const C = set(tmp.a, pose.position)

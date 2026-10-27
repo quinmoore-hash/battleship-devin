@@ -1,6 +1,6 @@
 import { createStore, useStore, type StoreApi } from 'zustand'
 import { duckMusic, playCinematicAudio, playSfx } from '../audio'
-import type { PlacedShip, Player, ShipId } from '../engine'
+import type { PlacedShip, Player } from '../engine'
 import { defaultQuality } from '../scene'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
 import type { CannonRef } from '../ships/types'
@@ -22,7 +22,8 @@ export interface ActiveCinematic {
   plan: ShotPlan | null
   /** Ship being sunk (sink) or the fleet to fly over (victory). */
   owner?: Player
-  shipId?: ShipId
+  /** `PlacedShip.uid` of the sinking ship (sink events). */
+  uid?: string
   fleets: Fleets
   beat: BeatName | null
   /** The shot's fire → whistle → impact audio timeline, cancelled if the shot is skipped before it lands. */
@@ -33,9 +34,10 @@ export interface DirectorState {
   active: ActiveCinematic | null
   busy: boolean
   /** Guns recoiling right now — pass straight to `<Fleet firing>` of the firing fleet. */
-  firing: Partial<Record<ShipId, CannonRef[]>>
+  firing: Partial<Record<string, CannonRef[]>>
   /** Sink progress of the ship currently going down — pass to `<Fleet sinkProgress>` of its fleet. */
-  sinkProgress: Partial<Record<ShipId, number>>
+  /** Keyed by `PlacedShip.uid` (BUG-361 / Black Flag: a fleet may repeat a class). */
+  sinkProgress: Partial<Record<string, number>>
   /** True once the current shot's ball has (or would have) landed; UI reveals markers/damage then. */
   impacted: boolean
   /** Playback rate for VFX (0.4 inside the sink's slow-mo). */
@@ -122,7 +124,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     const { active } = store.getState()
     if (!active) return
     const settled: Partial<DirectorState> = { active: null, busy: false, firing: {}, impacted: false, timeScale: 1, letterbox: false, completed: store.getState().completed + 1 }
-    if (active.event.type === 'sink') settled.sinkProgress = { ...store.getState().sinkProgress, [active.event.shipId]: 1 }
+    if (active.event.type === 'sink') settled.sinkProgress = { ...store.getState().sinkProgress, [active.event.uid ?? active.event.shipId]: 1 }
     store.setState(settled)
     stopTicker()
     const p = pending
@@ -143,7 +145,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     if (a.event.type === 'shot' && a.plan) {
       const { plan } = a
       if (beat === 'fire') {
-        if (plan.battery) patch.firing = { [plan.battery.shipId]: plan.battery.cells.map((cell) => ({ cell, side: plan.battery!.side })) }
+        if (plan.battery) patch.firing = { [plan.battery.uid]: plan.battery.cells.map((cell) => ({ cell, side: plan.battery!.side })) }
         // one audio timeline per shot, its impact cue timed to land with the ball (fire beat → impact beat)
         if (audio) a.audio = playCinematicAudio(a.event, { flightMs: shotFlightMs(a.seq), fast: a.seq.level !== 'full' })
       }
@@ -151,7 +153,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         if (!store.getState().impacted) {
           patch.impacted = true
           // a killing blow reveals the ship afloat; its `sink` sequence then takes the progress 0 → 1
-          if (plan.result.outcome === 'sunk' && plan.result.shipId) patch.sinkProgress = { ...store.getState().sinkProgress, [plan.result.shipId]: 0 }
+          if (plan.result.outcome === 'sunk' && plan.result.shipId) patch.sinkProgress = { ...store.getState().sinkProgress, [plan.result.shipUid ?? plan.result.shipId]: 0 }
           if (allowShake(a.seq)) patch.shake = SHAKE[plan.result.outcome] ?? 0.1
           if (audio && (beat === 'return' || a.clock.skipped)) {
             // skipped before the ball landed: drop the scheduled cues and land the impact now
@@ -203,16 +205,16 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         fleets,
         beat: null,
         owner: event.type === 'sink' ? event.owner : event.type === 'victory' ? event.winner : undefined,
-        shipId: event.type === 'sink' ? event.shipId : undefined,
+        uid: event.type === 'sink' ? event.uid ?? event.shipId : undefined,
       }
       if (seq.duration === 0) {
         // `off`: apply the end state synchronously and resolve
         store.setState({ active, busy: true })
         if (event.type === 'shot') enterBeat(active, 'return')
-        store.setState({ active: null, busy: false, firing: {}, impacted: false, shake: 0, letterbox: false, completed: store.getState().completed + 1, ...(event.type === 'sink' ? { sinkProgress: { ...store.getState().sinkProgress, [event.shipId]: 1 } } : {}) })
+        store.setState({ active: null, busy: false, firing: {}, impacted: false, shake: 0, letterbox: false, completed: store.getState().completed + 1, ...(event.type === 'sink' ? { sinkProgress: { ...store.getState().sinkProgress, [event.uid ?? event.shipId]: 1 } } : {}) })
         return Promise.resolve()
       }
-      store.setState({ active, busy: true, impacted: false, firing: {}, letterbox: true, timeScale: 1, sinkProgress: event.type === 'sink' ? { ...store.getState().sinkProgress, [event.shipId]: 0 } : store.getState().sinkProgress })
+      store.setState({ active, busy: true, impacted: false, firing: {}, letterbox: true, timeScale: 1, sinkProgress: event.type === 'sink' ? { ...store.getState().sinkProgress, [event.uid ?? event.shipId]: 0 } : store.getState().sinkProgress })
       enterBeat(active, beatAt(seq, 0, beatScratch).beat?.name ?? null)
       startTicker()
       return new Promise<void>((resolve) => {
@@ -233,12 +235,12 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       const { beat } = beatAt(seq, clock.t, beatScratch)
       const name = beat?.name ?? null
       if (name !== active.beat) enterBeat(active, name)
-      if (seq.sink && active.shipId) {
+      if (seq.sink && active.uid) {
         const p = sinkProgressAt(clock.t, seq.sink)
         const ts = timeScaleAt(seq, clock.t)
         const s = store.getState()
         // ≤ 100 updates per sink so <Fleet> is not re-rendered every frame
-        if (Math.abs((s.sinkProgress[active.shipId] ?? -1) - p) > 0.01 || p === 1 || s.timeScale !== ts) store.setState({ sinkProgress: { ...s.sinkProgress, [active.shipId]: p }, timeScale: ts })
+        if (Math.abs((s.sinkProgress[active.uid] ?? -1) - p) > 0.01 || p === 1 || s.timeScale !== ts) store.setState({ sinkProgress: { ...s.sinkProgress, [active.uid]: p }, timeScale: ts })
       }
       if (finished) finish()
     },

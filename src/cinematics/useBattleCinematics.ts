@@ -52,7 +52,7 @@ export function useBattleCinematics({ director = defaultDirector, enabled = true
     if (!enabled) return
     for (const e of fresh) {
       enqueue({ type: 'shot', by: e.by, target: e.result.coord, result: e.result })
-      if (e.result.outcome === 'sunk' && e.result.shipId) enqueue({ type: 'sink', owner: e.by === 'human' ? 'enemy' : 'human', shipId: e.result.shipId })
+      if (e.result.outcome === 'sunk' && e.result.shipId) enqueue({ type: 'sink', owner: e.by === 'human' ? 'enemy' : 'human', shipId: e.result.shipId, uid: e.result.shipUid ?? e.result.shipId })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, enabled])

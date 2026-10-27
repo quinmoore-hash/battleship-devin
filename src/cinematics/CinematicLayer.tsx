@@ -183,8 +183,9 @@ function BurnFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'burn' }>; onDon
 function SinkFx({ active, director, livery }: { active: ActiveCinematic; director: Director; livery: Record<Player, Livery> }) {
   const event = active.event as Extract<ActiveCinematic['event'], { type: 'sink' }>
   const fleet = event.owner === 'human' ? active.fleets.human : active.fleets.enemy
-  const ship = fleet.find((s) => s.spec.id === event.shipId)
-  const progress = useStore(director.store, (s) => s.sinkProgress[event.shipId] ?? 0)
+  const uid = event.uid ?? event.shipId
+  const ship = fleet.find((s) => s.uid === uid)
+  const progress = useStore(director.store, (s) => s.sinkProgress[uid] ?? 0)
   const timeScale = useStore(director.store, (s) => s.timeScale)
   if (!ship) return null
   return <SinkWater ship={ship} owner={event.owner} progress={progress} timeScale={timeScale} livery={livery[event.owner]} />
@@ -285,7 +286,7 @@ function VictoryFx({ active }: { active: ActiveCinematic }) {
         const pose = shipWorldTransform(ship, origin)
         const p: Vec3 = [pose.position[0], pose.position[1] + SHIPS[ship.spec.id].anchors.deckY * 0.6, pose.position[2]]
         return (
-          <group key={ship.spec.id}>
+          <group key={ship.uid}>
             <Fire position={p} seed={i * 13 + 1} scale={1.3} intensity={1} />
             <Smoke position={p} seed={i * 13 + 2} scale={1.6} intensity={1} />
           </group>

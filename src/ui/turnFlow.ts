@@ -165,7 +165,7 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
       await play({ type: 'shot', by, target: result.coord, result })
       if (result.outcome === 'sunk' && result.shipId) {
         beat(`${side}-sink`, result)
-        await play({ type: 'sink', owner: side === 'player' ? 'enemy' : 'human', shipId: result.shipId })
+        await play({ type: 'sink', owner: side === 'player' ? 'enemy' : 'human', shipId: result.shipId, uid: result.shipUid ?? result.shipId })
       }
     }
   }

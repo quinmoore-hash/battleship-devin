@@ -35,7 +35,7 @@ export function maskPendingHit(ships: PlacedShip[], target: Coord | null): Place
 
 /** Sunk ships whose sinking has finished playing (or was never animated), i.e. the ones that get flotsam. */
 export function settledWrecks(ships: PlacedShip[], sinkProgress: Partial<Record<string, number>>): PlacedShip[] {
-  return ships.filter((s) => s.hits.length >= s.spec.length && (sinkProgress[s.spec.id] ?? 1) >= 1)
+  return ships.filter((s) => s.hits.length >= s.spec.length && (sinkProgress[s.uid] ?? 1) >= 1)
 }
 
 /**
