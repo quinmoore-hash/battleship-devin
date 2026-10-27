@@ -10,7 +10,7 @@ const Effects = lazy(() => import('./Effects').then((m) => ({ default: m.Effects
 import { BayDressing } from './Environment'
 import { is3dDisabled } from './flags'
 import { Lighting, SkyDome } from './SkyDome'
-import { computeAtmosphere, GOLDEN_HOUR, type Weather } from './sun'
+import { computeAtmosphere, parseTimeOfDay, parseWeather, setLanternGlow, type Weather } from './sun'
 import { Water, type Quality } from './Water'
 import { Rain, useLightning, type LightningStrike } from './Weather'
 import { usePerf, usePerfStore } from '../perf/store'
@@ -41,7 +41,22 @@ export {
   type BoardPlacement,
   type Vec3,
 } from './layout'
-export { computeAtmosphere, GOLDEN_HOUR, type Atmosphere, type Weather } from './sun'
+export {
+  computeAtmosphere,
+  GOLDEN_HOUR,
+  TIME_PRESETS,
+  TIME_PRESET_NAMES,
+  TIME_PRESET_LABELS,
+  WEATHERS,
+  WEATHER_LABELS,
+  isTimePreset,
+  isWeather,
+  parseTimeOfDay,
+  parseWeather,
+  type Atmosphere,
+  type TimePreset,
+  type Weather,
+} from './sun'
 export { ISLANDS, LANDMARKS, isLand, terrainHeight, waterDepth } from './cove'
 export type { LightningStrike } from './Weather'
 export { sampleWaveHeight, sampleWaveNormal, WAVES } from './waves'
@@ -86,13 +101,11 @@ export function defaultQuality(): Quality {
 }
 
 function defaultWeather(): Weather {
-  return readUrlParam('weather') === 'stormy' ? 'stormy' : 'calm'
+  return parseWeather(readUrlParam('weather'))
 }
 
 function defaultTimeOfDay(): number {
-  const t = readUrlParam('tod')
-  const n = t === null ? NaN : Number(t)
-  return Number.isFinite(n) ? n : GOLDEN_HOUR
+  return parseTimeOfDay(readUrlParam('tod'))
 }
 
 /**
@@ -140,7 +153,8 @@ function SceneContents({
   const phase = useGameStore((s) => s.phase)
   const activeView = view ?? PHASE_VIEW[phase] ?? 'menu'
   const atmosphere = useMemo(() => computeAtmosphere(timeOfDay, weather), [timeOfDay, weather])
-  const lightning = useLightning(atmosphere.storm, onLightning)
+  useEffect(() => setLanternGlow(atmosphere.lanternGlow), [atmosphere])
+  const lightning = useLightning(atmosphere.lightning ? atmosphere.storm : 0, onLightning)
   // back at the menu nothing baked is on screen: free the baked ships so the renderer returns to its menu baseline
   useEffect(() => {
     if (phase === 'menu') clearBakeCache()
@@ -152,7 +166,7 @@ function SceneContents({
       <Water quality={quality} atmosphere={atmosphere} lightning={lightning} waves={perf.waves} segments={perf.waterSegments} />
       <ShipBakery />
       {dressing && <BayDressing atmosphere={atmosphere} quality={quality} />}
-      <Rain storm={atmosphere.storm} quality={quality} />
+      <Rain storm={atmosphere.rain} quality={quality} />
       <CameraRig view={activeView} interactive={interactive ?? activeView === 'battle'} override={cameraOverride} />
       {children}
       {perf.postprocessing && quality !== 'low' && (

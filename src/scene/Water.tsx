@@ -70,6 +70,8 @@ const fragmentShader = /* glsl */ `
   uniform float uStars;
   uniform float uDetail;
   uniform float uStorm;
+  uniform float uLook;
+  uniform float uRain;
   uniform float uFlash;
   uniform sampler2D uHeightMap;
   uniform float uMapExtent;
@@ -135,24 +137,24 @@ const fragmentShader = /* glsl */ `
     float sand = 1.0 - smoothstep(0.0, 1.8, depth);
     vec3 sandCol = mix(uShallow, vec3(0.78, 0.86, 0.72) * (0.3 + 0.7 * uDaylight), 0.55);
     vec3 water = mix(uDeep, uShallow, shallow * shallow);
-    water = mix(water, sandCol, sand * 0.8 * (1.0 - uStorm * 0.5));
+    water = mix(water, sandCol, sand * 0.8 * (1.0 - uLook * 0.5));
     // subsurface scattering through wave crests lit from behind
     float sss = clamp(vCrest * 2.0 + 0.2, 0.0, 1.0) * clamp(dot(-L, V) * 0.5 + 0.5, 0.0, 1.0);
-    water = mix(water, uShallow * 1.1, sss * 0.4 * uDaylight * (1.0 - uStorm * 0.7));
+    water = mix(water, uShallow * 1.1, sss * 0.4 * uDaylight * (1.0 - uLook * 0.7));
 
     // ---- detail normals: ripples, wind streaks and rain in a storm
     float r1 = noise(rp * 5.5 + vec2(uTime * 0.35, uTime * 0.22)) + 0.5 * noise(rp * 11.0 - vec2(uTime * 0.4, uTime * 0.1));
     float r2 = noise(rp * 6.1 - vec2(uTime * 0.27, -uTime * 0.33)) + 0.5 * noise(rp * 12.0 + vec2(uTime * 0.2, uTime * 0.45));
-    vec3 ripple = vec3((r1 - 0.75), 0.0, (r2 - 0.75)) * (0.06 + 0.09 * uStorm) * uDetail;
+    vec3 ripple = vec3((r1 - 0.75), 0.0, (r2 - 0.75)) * (0.06 + 0.09 * uLook) * uDetail;
     // storm: wind-streaked chop stretched along the wind, plus rain impact rings
     float streak = noise(vec2(rp.x * 0.9 + rp.y * 0.4 + uTime * 1.4, rp.y * 6.0)) - 0.5;
-    ripple.z += streak * 0.12 * uStorm;
+    ripple.z += streak * 0.12 * uLook;
     float rings = rainRings(rp * 1.6, uTime * 1.5) + rainRings(rp * 2.3 + 11.0, uTime * 1.7 + 3.0);
-    ripple.xz += vec2(rings) * 0.35 * uStorm * uDetail;
+    ripple.xz += vec2(rings) * 0.35 * uRain * uDetail;
     N = normalize(N + ripple);
 
     // ---- caustics dancing on the sand in the shallows
-    float ca = caustic(rp * 0.9, uTime) * shallow * uDaylight * (1.0 - uStorm);
+    float ca = caustic(rp * 0.9, uTime) * shallow * uDaylight * (1.0 - uLook);
     water += uShallow * ca * 0.4;
 
     // ---- fresnel reflection of the sky (sharper on calm water, softer in a storm)
@@ -162,7 +164,7 @@ const fragmentShader = /* glsl */ `
     float up = clamp(R.y, 0.0, 1.0);
     vec3 sky = mix(uHorizon, uZenith, pow(up, 0.45));
     float sunRefl = pow(max(dot(R, L), 0.0), 36.0);
-    sky += uGlow * sunRefl * 0.7 * (1.0 - uStorm);
+    sky += uGlow * sunRefl * 0.7 * (1.0 - uLook);
     sky += vec3(0.75, 0.82, 1.0) * uFlash * 1.5;
     vec3 color = mix(water, sky, fresnel * mix(0.6, 1.0, uDaylight));
 
@@ -171,7 +173,7 @@ const fragmentShader = /* glsl */ `
     float ndh = max(dot(N, H), 0.0);
     float spec = min(pow(ndh, 420.0) * 1.4 + pow(ndh, 60.0) * 0.14, 1.2);
     float sparkle = pow(ndh, 180.0) * step(0.82, noise(rp * 40.0 + uTime * 2.0)) * 2.0;
-    color += uSunColor * (spec + sparkle * uDetail) * uSunIntensity * 0.9 * (1.0 - uStorm * 0.85);
+    color += uSunColor * (spec + sparkle * uDetail) * uSunIntensity * 0.9 * (1.0 - uLook * 0.85);
 
     // ---- moon path: silver glitter road under the moon at night
     vec3 M = normalize(vec3(-L.x, -L.y, L.z));
@@ -182,12 +184,12 @@ const fragmentShader = /* glsl */ `
 
     // ---- foam: breaking crests, wash on the beach, spray streaks in a storm
     float foamNoise = fbm(rp * 3.6 + vec2(uTime * 0.12, -uTime * 0.08));
-    float crestFoam = smoothstep(0.26 - 0.16 * uStorm, 0.4, vCrest / (1.0 + 1.4 * uStorm)) * smoothstep(0.45, 0.8, foamNoise) * 0.75;
+    float crestFoam = smoothstep(0.26 - 0.16 * uLook, 0.4, vCrest / (1.0 + 1.4 * uStorm)) * smoothstep(0.45, 0.8, foamNoise) * 0.75;
     float shoreWave = sin(depth * 2.4 - uTime * 1.6 + sandNoise * 3.0) * 0.5 + 0.5;
     float shoreFoam = smoothstep(2.6, 0.2, depth) * smoothstep(0.35, 0.8, foamNoise * 0.5 + shoreWave * 0.6);
     shoreFoam += smoothstep(0.45, 0.0, depth) * 0.6;
-    float sprayFoam = smoothstep(0.55, 0.75, noise(vec2(rp.x * 0.5 + uTime * 0.6, rp.y * 3.0))) * uStorm * 0.5;
-    float foam = clamp(crestFoam * (1.0 - 0.35 * uStorm) + shoreFoam + sprayFoam, 0.0, 1.0) * uDetail;
+    float sprayFoam = smoothstep(0.55, 0.75, noise(vec2(rp.x * 0.5 + uTime * 0.6, rp.y * 3.0))) * uLook * 0.5;
+    float foam = clamp(crestFoam * (1.0 - 0.35 * uLook) + shoreFoam + sprayFoam, 0.0, 1.0) * uDetail;
     vec3 foamColor = mix(vec3(0.6, 0.7, 0.78), vec3(1.0), uDaylight) * mix(0.3, 1.0, uDaylight);
     color = mix(color, foamColor, foam * 0.75);
 
@@ -214,6 +216,8 @@ function makeUniforms(quality: Quality, heightMap: THREE.DataTexture, amp: numbe
     uTime: waveUniforms.uTime,
     uAmp: { value: amp },
     uStorm: waveUniforms.uStorm,
+    uLook: { value: 0 },
+    uRain: { value: 0 },
     uFlash: { value: 0 },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSunColor: { value: new THREE.Color('#fff') },
@@ -291,9 +295,11 @@ export function Water({ quality, atmosphere, lightning, waves, segments: segment
       u.uGlow.value.set(atmosphere.sunGlow)
       u.uDaylight.value = atmosphere.daylight
       u.uStars.value = atmosphere.stars
-      u.uStorm.value = atmosphere.storm
+      u.uLook.value = atmosphere.storm
+      u.uRain.value = atmosphere.rain
+      u.uStorm.value = atmosphere.swell
     }
-    setSeaState(atmosphere.storm)
+    setSeaState(atmosphere.swell)
   }, [atmosphere, all])
 
   useEffect(() => {

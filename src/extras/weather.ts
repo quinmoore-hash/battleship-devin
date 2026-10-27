@@ -1,5 +1,8 @@
-import type { Weather } from '../scene'
-import { useGameStore } from '../store/gameStore'
+import { TIME_PRESETS, type Weather } from '../scene'
+import { selectSkyWeather, useGameStore } from '../store/gameStore'
 
-/** `'stormy'` while the stormy-seas mode is on; `undefined` otherwise so `<OceanScene>` keeps its default. */
-export const useGameWeather = (): Weather | undefined => useGameStore((s) => (s.modes.storm ? 'stormy' : undefined))
+/** Weather for `<OceanScene>`: `'stormy'` while the Stormy-seas rule is on, else the Sky & sea pick (`settings.weather`). */
+export const useGameWeather = (): Weather => useGameStore(selectSkyWeather)
+
+/** Time of day for `<OceanScene>` from the Sky & sea preset in settings. */
+export const useGameTimeOfDay = (): number => useGameStore((s) => TIME_PRESETS[s.settings.timeOfDay])

@@ -82,6 +82,16 @@ camera: the rig stops writing position/target/fov and disables orbit, then damps
 `sampleWaveHeight/Normal`, layout helpers above, `<SceneDemo>` (`?scene-demo`). Perf knobs (set by `OceanScene` from
 `usePerf()`): `<Lighting shadowSize?>` (0 = no shadow pass), `<Water waves?>`, `<Effects enabled?>` (lazy chunk).
 
+**Sky & sea (looks only).** `Weather = 'calm' | 'overcast' | 'squall' | 'stormy'` and `TIME_PRESETS` (`dawn 0.27`, `noon 0.5`,
+`golden` = `GOLDEN_HOUR`, `dusk 0.77`, `night 0.98`; `parseTimeOfDay` / `parseWeather` read `?tod=` / `?weather=` by name or
+number). `computeAtmosphere(t, weather)` returns separate `storm` (overcast look), `rain`, `swell` (→ `setSeaState`) and
+`lightning` (stormy only) scalars plus one **key light**: the sun by day, the moon (`moon = 1`, cool `keyColor`, lower
+`keyIntensity`) once the sun is under the horizon — there is no second moon light. `fillIntensity` / `hemiIntensity` /
+`ambientIntensity` have night floors so hulls never read as silhouettes; `lanternGlow` (1 by day, 2.4 at night) is pushed to
+the ship kit through `setLanternGlow` and multiplied into the lantern flame emissive. Every preset switch is a uniform /
+light-parameter change on the same materials — the program count is flat across all 15 time × weather combos
+(`npm run perf:sky`). Cove lamps are emissive only: no light may mount or unmount with the time of day (BUG-580).
+
 ### perf (`src/perf`)
 `usePerf()` → `{ tier, dpr, shadows, particlesScale, postprocessing, lod, quality, waves, waterSegments }` resolved from GPU
 detection (`WEBGL_debug_renderer_info`, dpr × screen, cores, 2 s startup FPS probe via `<PerfBootstrap>`) and the
@@ -195,7 +205,10 @@ Game over dispatches `window` events `battleship:replay` and `battleship:photo` 
 for the victory flyover (`data-flyover="true"` while it plays).
 
 ## Final wiring (`src/App.tsx`)
-`<Game>` mounts, once: `PerfBootstrap` + `FpsWatchdog` + `A11yBootstrap`; `<OceanScene weather cameraOverride={director.busy}>`
+`<Game>` mounts, once: `PerfBootstrap` + `FpsWatchdog` + `A11yBootstrap`; `<OceanScene weather timeOfDay cameraOverride={director.busy}>`
+(`weather` / `timeOfDay` from `useGameWeather()` / `useGameTimeOfDay()`: the Sky & sea pick in `settings.timeOfDay` /
+`settings.weather`, with the Stormy-seas rule forcing `'stormy'` via `selectSkyWeather`; `ui-root` mirrors them as `data-tod` /
+`data-weather`)
 with `<GameWorld>` and, in battle / game over, `<CinematicLayer>` + `<CinematicCamera>`; `<GameUI>`, `<ExtrasLayer>`,
 `<Letterbox hint={false}>` (click / Space / Esc skip; the HUD shows its own skip button), `QualityToast`, `?perf` overlay.
 `useEffect` binds `bindCinematics()` (registers the shared director with the turn flow and skips it when the phase leaves
@@ -215,7 +228,8 @@ Black Flag: `mode-black-flag`, `fleet-picker`, `fleet-preset-{classic|armada|wol
 `power-shots[data-armed]`, `power-broadside[data-used]`, `power-spyglass[data-used]`, `power-rotate`, `treasure-count`,
 `stat-black-flag`, `howto-black-flag`; chart cells carry `cell-spied(-ship|-water)` / `cell-treasure` classes,
 `setting-{sfx|music|mute|reduced-motion|colorblind}`, `setting-{cinematics|quality}-{option}`, `settings-close`,
-`ui-root[data-colorblind][data-no3d]`. If you redesign the UI, keep these (or update `e2e/` in the same PR).
+`ui-root[data-colorblind][data-no3d][data-tod][data-weather]`, Sky & sea picker `skysea-picker`, `skysea-time`, `skysea-weather`
+(menu corner and Settings). If you redesign the UI, keep these (or update `e2e/` in the same PR).
 Playwright runs with `?no3d` for flow tests and with SwiftShader for the 3D smoke test; cinematics must honour
 `settings.cinematics = 'off'` so flows stay fast and deterministic.
 

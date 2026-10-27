@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../../store/gameStore'
 import type { Vec3 } from '../../scene/layout'
+import { getLanternGlow } from '../../scene/sun'
 import { seededRandom } from '../../vfx/random'
 import type { Livery, Lod } from '../types'
 import { shipMaterials } from './materials'
@@ -124,7 +125,7 @@ export function Lantern({ position, livery, lit = true, scale = 1, light = false
   useFrame(({ clock }) => {
     const t = clock.elapsedTime * 9 + phase
     const f = lit ? (reducedMotion ? 1 : 0.8 + 0.2 * (Math.sin(t) * 0.5 + Math.sin(t * 2.7) * 0.3 + Math.sin(t * 5.3) * 0.2)) : 0
-    flame.emissiveIntensity = f * 3
+    flame.emissiveIntensity = f * 3 * getLanternGlow()
     if (lightRef.current) lightRef.current.intensity = f * 0.9
   })
   return (
@@ -175,7 +176,7 @@ export function SternLantern({ position, livery, lit = true, scale = 1, light = 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime * 7 + phase
     const f = lit ? (reducedMotion ? 1 : 0.85 + 0.15 * (Math.sin(t) * 0.6 + Math.sin(t * 3.1) * 0.4)) : 0
-    flame.emissiveIntensity = f * 3.5
+    flame.emissiveIntensity = f * 3.5 * getLanternGlow()
     if (lightRef.current) lightRef.current.intensity = f * 2
   })
   const ribs = lod === 0 ? 8 : 6

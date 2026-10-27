@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { isTimePreset, type TimePreset, type Weather } from '../scene/sun'
 import { createOpponent, seededRng, type AiOpponent } from '../ai'
 import {
   broadsideCells,
@@ -80,7 +81,17 @@ export interface Settings {
   quality: QualitySetting
   /** Colour-blind safe markers: distinct shapes/patterns for hit / miss / sunk, not just colour. */
   colorblind: boolean
+  /** "Sky & sea" looks (visual only): named time of day and weather for `<OceanScene>`. */
+  timeOfDay: TimePreset
+  weather: SkyWeather
 }
+
+/** Weather the player can pick; `stormy` is reserved for the Stormy-seas rule, which overrides this. */
+export type SkyWeather = Exclude<Weather, 'stormy'>
+export const SKY_WEATHERS: readonly SkyWeather[] = ['calm', 'overcast', 'squall']
+export const isSkyWeather = (v: unknown): v is SkyWeather => typeof v === 'string' && (SKY_WEATHERS as readonly string[]).includes(v)
+/** Weather the scene actually shows: the Stormy-seas rule forces `stormy`, otherwise the player's pick. */
+export const selectSkyWeather = (s: { modes: { storm: boolean }; settings: { weather: SkyWeather } }): Weather => (s.modes.storm ? 'stormy' : s.settings.weather)
 
 /**
  * Optional rule variants, chosen at `startGame`. Both false = classic Battleship (one shot per turn,
@@ -183,16 +194,24 @@ export interface GameState {
 
 let eventId = 0
 
-const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false }
+const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false, timeOfDay: 'golden', weather: 'calm' }
 
 /** Settings the player chose that survive a reload (one key, `battleship-devin.settings`). `reducedMotion` defaults to the OS preference. */
 export const SETTINGS_STORAGE_KEY = 'battleship-devin.settings'
-const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind', 'reducedMotion', 'quality']
+const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind', 'reducedMotion', 'quality', 'timeOfDay', 'weather']
 
 /** OS preference — only the default; the player's explicit toggle (persisted) wins afterwards (BUG-314). */
 export const prefersReducedMotion = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-export function loadSettings(storage: Pick<Storage, 'getItem'> | null = typeof localStorage === 'undefined' ? null : localStorage): Settings {
+/**
+ * Loads persisted settings; unknown or malformed values fall back to defaults. `?tod=<preset>` and
+ * `?weather=<calm|overcast|squall>` in `search` override the stored Sky & sea choice for this visit
+ * (`?weather=stormy` is the legacy spelling of the squall look; lightning belongs to the Stormy-seas rule).
+ */
+export function loadSettings(
+  storage: Pick<Storage, 'getItem'> | null = typeof localStorage === 'undefined' ? null : localStorage,
+  search: string = typeof window === 'undefined' ? '' : (window.location?.search ?? ''),
+): Settings {
   const out = { ...DEFAULT_SETTINGS, reducedMotion: prefersReducedMotion() }
   try {
     const raw = storage?.getItem(SETTINGS_STORAGE_KEY)
@@ -203,8 +222,20 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> | null = typeof l
     if (typeof p.colorblind === 'boolean') out.colorblind = p.colorblind
     if (typeof p.reducedMotion === 'boolean') out.reducedMotion = p.reducedMotion
     if (p.quality === 'auto' || p.quality === 'low' || p.quality === 'medium' || p.quality === 'high') out.quality = p.quality
+    if (isTimePreset(p.timeOfDay)) out.timeOfDay = p.timeOfDay
+    if (isSkyWeather(p.weather)) out.weather = p.weather
   } catch {
     /* corrupt or unavailable storage: defaults */
+  }
+  try {
+    const q = new URLSearchParams(search)
+    const tod = q.get('tod')
+    const weather = q.get('weather')
+    if (isTimePreset(tod)) out.timeOfDay = tod
+    if (isSkyWeather(weather)) out.weather = weather
+    else if (weather === 'stormy') out.weather = 'squall'
+  } catch {
+    /* malformed query: keep stored values */
   }
   return out
 }

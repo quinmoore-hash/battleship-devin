@@ -7,6 +7,7 @@ import { is3dDisabled } from '../scene/flags'
 import { useGameStore } from '../store/gameStore'
 import { DIFFICULTIES } from './difficulties'
 import { CompassRose, Skull, WaxSeal } from './Ornaments'
+import { SkySeaPicker } from './SkySeaPicker'
 import { useUi } from './UiContext'
 import { useUiStore } from './uiStore'
 
@@ -33,6 +34,9 @@ export function MainMenu({ extras }: { extras?: ReactNode } = {}) {
   return (
     <div className="menu" data-testid="main-menu">
       <LoadingScreen />
+      <aside className="menu-skysea ink-in" style={{ animationDelay: '600ms' }}>
+        <SkySeaPicker compact />
+      </aside>
       <header className="menu-title ink-in">
         <div className="title-rule" aria-hidden>
           <span />
