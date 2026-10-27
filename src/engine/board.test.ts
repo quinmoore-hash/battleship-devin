@@ -5,7 +5,10 @@ import {
   createBoard,
   enemyView,
   fire,
+  hasBeenShot,
   isFleetPlaced,
+  landed,
+  lostShot,
   isFleetSunk,
   placeShip,
   randomPlacement,
@@ -77,6 +80,18 @@ describe('firing', () => {
 
   it('refuses out-of-bounds shots', () => {
     expect(() => fire(board, { x: 10, y: 0 })).toThrow()
+  })
+
+  it("a shot lost in the storm is an event only: the board is untouched, the cell stays unknown and can be fired at", () => {
+    const lost = lostShot({ x: 2, y: 2 })
+    expect(lost).toEqual({ coord: { x: 2, y: 2 }, outcome: 'lost' })
+    expect(landed(lost)).toBe(false)
+    expect(landed(fire(board, { x: 2, y: 2 }).result)).toBe(true)
+    expect(hasBeenShot(board, { x: 2, y: 2 })).toBe(false)
+    expect(board.ships[0].hits).toEqual([])
+    const grid = viewGrid({ ...enemyView(board), shots: [lost] })
+    expect(grid[2][2]).toBe('unknown')
+    expect(fire(board, { x: 2, y: 2 }).result.outcome).toBe('hit')
   })
 
   it('enemyView only exposes shots and remaining ship specs', () => {

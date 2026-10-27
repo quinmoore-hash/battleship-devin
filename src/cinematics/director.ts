@@ -78,7 +78,7 @@ const gameFleets = (): Fleets => {
   return { human: s.playerBoard.ships, enemy: s.enemyBoard.ships }
 }
 
-const SHAKE: Record<string, number> = { miss: 0.05, hit: 0.16, sunk: 0.22 }
+const SHAKE: Record<string, number> = { miss: 0.05, hit: 0.16, sunk: 0.22, lost: 0.03 }
 
 export function createDirector(opts: DirectorOptions = {}): Director {
   const defaultFleets = opts.fleets ?? gameFleets
@@ -159,7 +159,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
             // skipped before the ball landed: drop the scheduled cues and land the impact now
             a.audio?.cancel()
             a.audio = null
-            playSfx(plan.result.outcome === 'miss' ? 'miss' : plan.result.outcome === 'sunk' ? 'sunk' : 'hit')
+            playSfx(plan.result.outcome === 'lost' ? 'thunder' : plan.result.outcome === 'miss' ? 'miss' : plan.result.outcome === 'sunk' ? 'sunk' : 'hit')
           }
         }
         if (beat === 'return') patch.firing = {}

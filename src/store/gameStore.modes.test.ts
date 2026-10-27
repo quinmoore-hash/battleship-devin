@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { seededRng } from '../ai'
-import { allCoords, coordKey, fire, isSunk, randomPlacement, viewGrid, type Coord } from '../engine'
-import { DEFAULT_MODES, foggedEnemyView, salvoSize, STORM_FOG_CHANCE, useGameStore } from './gameStore'
+import { allCoords, coordKey, enemyView, fire, hasBeenShot, isSunk, randomPlacement, viewGrid, type Coord } from '../engine'
+import { DEFAULT_MODES, lostShots, salvoSize, STORM_LOST_CHANCE, useGameStore } from './gameStore'
 
 const s = () => useGameStore.getState()
 
@@ -30,7 +30,7 @@ describe('game modes: defaults', () => {
     expect(s().events).toHaveLength(1)
     expect(s().lastVolley).toHaveLength(1)
     expect(s().turn).toBe('enemy')
-    expect(s().fogged).toEqual([])
+    expect(lostShots(s().events)).toEqual([])
     expect(s().enemyTurn()).toBeDefined()
     expect(s().events).toHaveLength(2)
   })
@@ -145,93 +145,160 @@ describe('salvo mode', () => {
   })
 })
 
-describe('stormy seas', () => {
+describe('stormy seas: shots lost in the storm', () => {
   beforeEach(() => s().reset())
 
-  function fireMisses(n: number) {
-    const water = openWater()
-    const fired: Coord[] = []
-    for (const c of water) {
-      if (fired.length >= n || s().phase !== 'battle') break
-      if (s().turn !== 'human') s().enemyTurn()
-      if (s().phase !== 'battle') break
-      if (s().fireAt(c) !== undefined) fired.push(c)
+  /** Plays whole turns (human shot/volley + enemy reply) on a fixed cell list until `n` human shots were fired or the game ends. */
+  function playTurns(n: number, cells: Coord[] = allCoords()) {
+    let i = 0
+    let fired = 0
+    let guard = 0
+    while (fired < n && s().phase === 'battle' && guard++ < 2000) {
+      if (s().turn === 'enemy') {
+        s().enemyTurn()
+        continue
+      }
+      const c = cells[i++ % cells.length]
+      const r = s().fireAt(c)
+      if (r !== undefined) fired++
     }
-    return fired
   }
 
-  it('hides roughly 30% of the misses, never hits, and keeps them recorded on the board', () => {
-    let fogged = 0
-    let misses = 0
-    for (let seed = 1; seed <= 6; seed++) {
-      startBattle({ storm: true }, seed)
-      const fired = fireMisses(40)
-      misses += fired.length
-      fogged += s().fogged.length
-      const missKeys = new Set(s().enemyBoard.shots.filter((sh) => sh.outcome === 'miss').map((sh) => coordKey(sh.coord)))
-      for (const key of s().fogged) expect(missKeys.has(key)).toBe(true)
-      // fogged cells are still shots: re-firing is illegal
-      for (const key of s().fogged) {
-        const [x, y] = key.split(',').map(Number)
-        if (s().turn === 'human' && s().phase === 'battle') expect(s().fireAt({ x, y })).toBeUndefined()
-      }
-      s().reset()
-    }
-    const ratio = fogged / misses
-    expect(ratio).toBeGreaterThan(STORM_FOG_CHANCE - 0.15)
-    expect(ratio).toBeLessThan(STORM_FOG_CHANCE + 0.15)
+  it('a lost shot consumes the turn, deals no damage, leaves no mark and the square can be fired at again', () => {
+    // find a seed whose very first roll is "lost" (deterministic: seededRng(seed)() < 0.3)
+    let seed = 1
+    while (seededRng(seed)() >= STORM_LOST_CHANCE) seed++
+    startBattle({ storm: true }, seed)
+    const before = s().enemyBoard
+    const r = s().fireAt({ x: 4, y: 4 })
+    expect(r).toEqual({ coord: { x: 4, y: 4 }, outcome: 'lost' })
+    expect(s().events).toHaveLength(1)
+    expect(s().events[0].by).toBe('human')
+    expect(s().lastVolley).toEqual(s().events)
+    expect(s().enemyBoard).toBe(before) // untouched: no shot recorded, no hit
+    expect(hasBeenShot(s().enemyBoard, { x: 4, y: 4 })).toBe(false)
+    expect(viewGrid(enemyView(s().enemyBoard))[4][4]).toBe('unknown')
+    expect(s().turn).toBe('enemy') // the turn is spent
+    expect(s().fireAt({ x: 4, y: 4 })).toBeUndefined() // not our turn
+    s().enemyTurn()
+    expect(s().turn).toBe('human')
+    // re-firing the same square is legal and rolls again
+    const again = s().fireAt({ x: 4, y: 4 })
+    expect(again).toBeDefined()
+    expect(again).not.toBeNull()
+    expect(['lost', 'miss', 'hit', 'sunk']).toContain(again!.outcome)
+    if (again!.outcome !== 'lost') expect(hasBeenShot(s().enemyBoard, { x: 4, y: 4 })).toBe(true)
   })
 
-  it('is deterministic for a given seed and never fogs anything in classic mode', () => {
+  it('roughly 30% of every shot is lost, for both sides, and lost shots never touch either board', () => {
+    let lostH = 0
+    let lostE = 0
+    let shotsH = 0
+    let shotsE = 0
+    for (let seed = 1; seed <= 8; seed++) {
+      startBattle({ storm: true }, seed)
+      playTurns(40)
+      const ev = s().events
+      const h = ev.filter((e) => e.by === 'human')
+      const e = ev.filter((e) => e.by === 'enemy')
+      shotsH += h.length
+      shotsE += e.length
+      lostH += lostShots(ev, 'human').length
+      lostE += lostShots(ev, 'enemy').length
+      // the boards only hold the shots that landed
+      expect(s().enemyBoard.shots).toHaveLength(h.length - lostShots(ev, 'human').length)
+      expect(s().playerBoard.shots).toHaveLength(e.length - lostShots(ev, 'enemy').length)
+      for (const sh of [...s().enemyBoard.shots, ...s().playerBoard.shots]) expect(sh.outcome).not.toBe('lost')
+      s().reset()
+    }
+    expect(lostH / shotsH).toBeGreaterThan(STORM_LOST_CHANCE - 0.12)
+    expect(lostH / shotsH).toBeLessThan(STORM_LOST_CHANCE + 0.12)
+    expect(lostE / shotsE).toBeGreaterThan(STORM_LOST_CHANCE - 0.12)
+    expect(lostE / shotsE).toBeLessThan(STORM_LOST_CHANCE + 0.12)
+  })
+
+  it('a lost hit does no damage: the ship is only hit when the shot lands', () => {
+    startBattle({ storm: true }, 5)
+    const sloop = s().enemyBoard.ships.find((sh) => sh.spec.id === 'sloop')!
+    let guard = 0
+    while (s().phase === 'battle' && !isSunk(s().enemyBoard.ships.find((sh) => sh.spec.id === 'sloop')!) && guard++ < 60) {
+      if (s().turn === 'enemy') {
+        s().enemyTurn()
+        continue
+      }
+      const hitsBefore = s().enemyBoard.ships.find((sh) => sh.spec.id === 'sloop')!.hits.length
+      const cell = sloop.cells.find((c) => !hasBeenShot(s().enemyBoard, c))!
+      const r = s().fireAt(cell)!
+      const hitsAfter = s().enemyBoard.ships.find((sh) => sh.spec.id === 'sloop')!.hits.length
+      if (r.outcome === 'lost') expect(hitsAfter).toBe(hitsBefore)
+      else expect(hitsAfter).toBe(hitsBefore + 1)
+    }
+    expect(lostShots(s().events, 'human').length + s().enemyBoard.ships.find((sh) => sh.spec.id === 'sloop')!.hits.length).toBe(s().events.filter((e) => e.by === 'human').length)
+  })
+
+  it('is deterministic for a seed and nothing is ever lost outside stormy seas', () => {
     const run = (modes: Partial<typeof DEFAULT_MODES>, seed: number) => {
       s().startGame('easy', modes, seed)
       useGameStore.setState({ enemyBoard: randomPlacement(seededRng(99)) })
       s().autoPlacePlayerFleet()
       s().confirmPlacement()
-      fireMisses(30)
-      const fogged = [...s().fogged]
+      playTurns(30)
+      const lost = s().events.filter((e) => e.by === 'human').map((e) => e.result.outcome === 'lost')
       s().reset()
-      return fogged
+      return lost
     }
     const a = run({ storm: true }, 42)
-    const b = run({ storm: true }, 42)
-    const c = run({ storm: true }, 43)
-    expect(a.length).toBeGreaterThan(0)
-    expect(a).toEqual(b)
-    expect(c).not.toEqual(a)
-    expect(run({}, 42)).toEqual([])
+    expect(a).toContain(true)
+    expect(run({ storm: true }, 42)).toEqual(a)
+    expect(run({ storm: true }, 43)).not.toEqual(a)
+    expect(run({}, 42)).not.toContain(true)
+    expect(run({ salvo: true }, 42)).not.toContain(true)
   })
 
-  it('foggedEnemyView drops the hidden misses so viewGrid shows them as unknown', () => {
-    startBattle({ storm: true }, 7)
-    fireMisses(40)
-    const { enemyBoard, fogged } = s()
-    expect(fogged.length).toBeGreaterThan(0)
-    const view = foggedEnemyView(enemyBoard, fogged)
-    expect(view.shots).toHaveLength(enemyBoard.shots.length - fogged.length)
-    const grid = viewGrid(view)
-    for (const key of fogged) {
-      const [x, y] = key.split(',').map(Number)
-      expect(grid[y][x]).toBe('unknown')
-    }
-    const full = viewGrid(foggedEnemyView(enemyBoard, []))
-    for (const key of fogged) {
-      const [x, y] = key.split(',').map(Number)
-      expect(full[y][x]).toBe('miss')
-    }
-  })
-
-  it('stormy seas and salvo combine: a fogged miss can come from any shot of the volley', () => {
+  it('salvo + stormy seas: every shot of the volley rolls on its own; lost shots stay in the volley and keep their square open', () => {
     startBattle({ storm: true, salvo: true }, 3)
     const water = openWater()
-    let i = 0
     let guard = 0
-    while (s().fogged.length === 0 && s().phase === 'battle' && guard++ < 60) {
+    while (lostShots(s().events, 'human').length === 0 && s().phase === 'battle' && guard++ < 40) {
       if (s().turn === 'enemy') s().enemyTurn()
-      else s().fireAt(water[i++ % water.length])
+      else for (const c of water.splice(0, 5)) s().fireAt(c)
     }
-    expect(s().fogged.length).toBeGreaterThan(0)
-    expect(s().events.filter((e) => e.by === 'human').length % 1).toBe(0)
+    const volley = s().events.filter((e) => e.by === 'human').slice(-5)
+    expect(volley).toHaveLength(5)
+    const lost = volley.filter((e) => e.result.outcome === 'lost')
+    expect(lost.length).toBeGreaterThan(0)
+    expect(lost.length).toBeLessThan(5)
+    for (const e of lost) expect(hasBeenShot(s().enemyBoard, e.result.coord)).toBe(false)
+    for (const e of volley.filter((e) => e.result.outcome !== 'lost')) expect(hasBeenShot(s().enemyBoard, e.result.coord)).toBe(true)
+    expect(s().salvo.pending).toEqual([])
+  })
+
+  it('the AI never re-fires at a known square, re-targets lost squares and never gets stuck (all difficulties)', () => {
+    for (const difficulty of ['easy', 'medium', 'hard'] as const) {
+      for (let seed = 1; seed <= 3; seed++) {
+        s().startGame(difficulty, { storm: true, salvo: seed === 3 }, seed * 11)
+        s().autoPlacePlayerFleet()
+        s().confirmPlacement()
+        const cells = allCoords()
+        let guard = 0
+        while (s().phase === 'battle' && guard++ < 1500) {
+          if (s().turn === 'enemy') s().enemyTurn()
+          else s().fireAt(cells.find((c) => !hasBeenShot(s().enemyBoard, c) && !s().salvo.pending.some((p) => p.x === c.x && p.y === c.y))!)
+        }
+        expect(s().phase).toBe('gameover')
+        const enemyShots = s().events.filter((e) => e.by === 'enemy')
+        const landed = enemyShots.filter((e) => e.result.outcome !== 'lost')
+        const keys = landed.map((e) => coordKey(e.result.coord))
+        expect(new Set(keys).size).toBe(keys.length) // no landed square is ever fired at twice
+        expect(s().playerBoard.shots).toHaveLength(landed.length)
+        // lost squares came back: at least one lost coord was fired at again later (over three seeds this always happens)
+        if (seed === 1) {
+          const lostKeys = lostShots(s().events, 'enemy').map((e) => coordKey(e.result.coord))
+          expect(lostKeys.some((k) => keys.includes(k))).toBe(true)
+        }
+        s().reset()
+      }
+    }
   })
 })
 

@@ -5,7 +5,7 @@
 import type { CanonicalSfx } from './manifest'
 import type { Vec3 } from './spatial'
 
-export type ShotOutcome = 'hit' | 'miss' | 'sunk'
+export type ShotOutcome = 'hit' | 'miss' | 'sunk' | 'lost'
 
 export interface AudioCue {
   /** ms after the shot is fired */
@@ -35,6 +35,7 @@ export const SHOT_FLIGHT_MS = { full: 1800, fast: 650 } as const
 
 /**
  * fire → whistle → (splash | wood + splinters [+ mast snap → groan → bubbles → cheer]).
+ * `lost` (stormy seas): fire → whistle → a thunderclap swallows the shot, with only a faint far splash.
  * All offsets are relative to the muzzle flash so the caller can align `at: 0` with the visual.
  */
 export function shotTimeline(outcome: ShotOutcome, options: ShotTimingOptions = {}): AudioCue[] {
@@ -45,6 +46,11 @@ export function shotTimeline(outcome: ShotOutcome, options: ShotTimingOptions = 
   if (flight > 400) cues.push({ at: Math.min(180, flight * 0.15), sfx: 'cannon-whistle', at3d: to })
   if (outcome === 'miss') {
     cues.push({ at: flight, sfx: 'splash-miss', at3d: to })
+    return cues
+  }
+  if (outcome === 'lost') {
+    cues.push({ at: Math.max(0, flight - 120), sfx: 'thunder', gain: 0.8 })
+    cues.push({ at: flight, sfx: 'splash-miss', at3d: to, gain: 0.3 })
     return cues
   }
   cues.push({ at: flight, sfx: 'impact-wood', at3d: to })

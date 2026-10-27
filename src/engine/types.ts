@@ -30,7 +30,11 @@ export interface PlacedShip {
   hits: Coord[]
 }
 
-export type ShotOutcome = 'miss' | 'hit' | 'sunk'
+/**
+ * `lost`: stormy seas only — the shot vanished in the storm. It is logged as an event but never recorded on the
+ * board (`fire()` is not called), so the square stays unknown and can be fired at again.
+ */
+export type ShotOutcome = 'miss' | 'hit' | 'sunk' | 'lost'
 
 export interface ShotResult {
   coord: Coord

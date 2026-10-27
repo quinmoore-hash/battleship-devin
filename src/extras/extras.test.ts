@@ -68,6 +68,17 @@ describe('replayModel', () => {
     expect(snap.modes).toEqual({ salvo: true, storm: false, blackFlag: false })
   })
 
+  it('a shot lost in the storm leaves the boards unchanged in the replay', () => {
+    const snap = snapshotFromState({ ...game, modes: { salvo: false, storm: true, blackFlag: false }, winner: game.winner })
+    const lost = { id: 999, by: 'human' as const, kind: 'shot' as const, result: { coord: game.events[0].result.coord, outcome: 'lost' as const } }
+    const withLost = { ...snap, events: [lost, ...snap.events] }
+    const frames = buildFrames(withLost)
+    expect(frames).toHaveLength(withLost.events.length + 1)
+    expect(frames[1]).toBe(frames[0])
+    expect(frames[frames.length - 1].enemyBoard.shots).toEqual(game.enemyBoard.shots)
+    expect(describeEvent(lost)).toMatch(/— lost in the storm$/)
+  })
+
   it('captions and counters', () => {
     expect(describeEvent({ id: 1, by: 'human', kind: 'shot', result: { coord: { x: 1, y: 3 }, outcome: 'miss' } })).toBe('You fire at B4 — splash')
     expect(describeEvent({ id: 1, by: 'enemy', kind: 'shot', result: { coord: { x: 0, y: 0 }, outcome: 'hit', shipId: 'sloop' } })).toMatch(/^Devin fires at A1 — hit the /)

@@ -39,7 +39,7 @@ export interface Stats {
 export interface GameSummary {
   difficulty: Difficulty
   won: boolean
-  /** Shots the human fired. */
+  /** Shots the human fired that reached the water (stormy seas: shots lost in the storm are not counted, so `hits / shots` is the same accuracy the report shows). */
   shots: number
   /** Of which hit a ship. */
   hits: number
@@ -97,11 +97,12 @@ export function summarizeGame(state: Pick<GameState, 'difficulty' | 'winner' | '
     if (e.by === 'human' && prev !== 'human') turns++
     prev = e.by
   }
+  const landed = human.filter((e) => e.result.outcome !== 'lost')
   return {
     difficulty: state.difficulty,
     won: state.winner === 'human',
-    shots: human.length,
-    hits: human.filter((e) => e.result.outcome !== 'miss').length,
+    shots: landed.length,
+    hits: landed.filter((e) => e.result.outcome !== 'miss').length,
     turns,
     durationMs,
     modes: state.modes,

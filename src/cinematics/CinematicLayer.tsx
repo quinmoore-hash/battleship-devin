@@ -35,6 +35,8 @@ type NewResidual = DistributiveOmit<Residual, 'id'>
 
 const DEFAULT_LIVERY: Record<Player, Livery> = { human: 'pirate', enemy: 'navy' }
 const BURN_SECONDS = 4.5
+/** A shot lost in the storm only shows a muted splash where it went astray: no marker, no impact, no fire. */
+const LOST_SPLASH_SCALE = 0.55
 /** Fireworks budget: bursts × particles. */
 const FIREWORKS = { high: { bursts: 14, count: 90 }, low: { bursts: 6, count: 50 } }
 
@@ -45,6 +47,7 @@ const FIREWORKS = { high: { bursts: 14, count: 90 }, low: { bursts: 6, count: 50
  *
  * Budget per shot: one `<Broadside>` (≤ 3 balls at `full`/high, 1 at `fast` or low), exactly one `<Splash>` or one
  * `<ImpactFlash>` + `<SplinterBurst>` (lead ball), and at `full`/high one `<Fire>` + `<Smoke>` ignition for 4.5 s.
+ * A shot lost in the storm (stormy seas) is the same broadside with a half-size splash off the target and nothing else.
  * Every effect unmounts when done.
  */
 export function CinematicLayer({ director = defaultDirector, livery = DEFAULT_LIVERY }: CinematicLayerProps) {
@@ -78,9 +81,9 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
 
   const shots = useMemo<BroadsideShot[]>(() => {
     const rnd = seededRandom(seed)
-    const miss = plan.result.outcome === 'miss'
+    const water = plan.result.outcome === 'miss' || plan.result.outcome === 'lost'
     return plan.muzzles.map((m, i) => {
-      const jitter = miss ? 0.38 : 0.12
+      const jitter = water ? 0.38 : 0.12
       const to: Vec3 = i === 0 ? plan.impact : [plan.impact[0] + (rnd() - 0.5) * 2 * jitter, plan.impact[1], plan.impact[2] + (rnd() - 0.5) * 2 * jitter]
       return { from: m.position, to }
     })
@@ -123,6 +126,7 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
       if (!s.impacted && s.active?.id === active.id) director.store.setState({ impacted: true })
       if (index !== 0) return // one splash / one impact per shot: the lead ball
       if (plan.result.outcome === 'miss') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed, scale: 1 })
+      else if (plan.result.outcome === 'lost') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed, scale: LOST_SPLASH_SCALE })
       else {
         add({ kind: 'hit', position: point, normal: plan.normal, seed, scale: 1 })
         if (ignite) add({ kind: 'burn', position: point, seed, born: performance.now() })

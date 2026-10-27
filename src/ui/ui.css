@@ -1246,6 +1246,10 @@
 .shot-log li.log-miss .outcome {
   color: var(--ink-soft);
 }
+.shot-log li.log-lost .outcome {
+  color: #6f8ea8;
+  font-style: italic;
+}
 
 /* ---------- game over ---------- */
 .gameover {

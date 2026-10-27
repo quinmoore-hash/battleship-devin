@@ -148,15 +148,16 @@ describe('Treasure', () => {
     expect(s().turn).toBe('enemy')
   })
 
-  it('stormy: the extra shot can still be lost to the fog', () => {
+  it('stormy: the extra shot rolls its own "lost in the storm" chance', () => {
     begin('easy', { storm: true })
-    useGameStore.setState({ fogRng: () => 0 }) // every miss fogs
+    let roll = 0
+    useGameStore.setState({ stormRng: () => (roll++ === 0 ? 1 : 0) }) // the chest shot lands, every later shot is lost
     const chest = s().treasure.enemy[0]
     s().fireAt(chest)
     expect(s().turn).toBe('human')
     const bonus = openWater()
-    s().fireAt(bonus)
-    expect(s().fogged).toContain(coordKey(bonus))
+    expect(s().fireAt(bonus)).toEqual({ coord: bonus, outcome: 'lost' })
+    expect(s().enemyBoard.shots.some((sh) => coordKey(sh.coord) === coordKey(bonus))).toBe(false)
     expect(s().turn).toBe('enemy')
   })
 })

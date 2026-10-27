@@ -15,6 +15,15 @@ describe('shotTimeline', () => {
     expect(cues[2].at3d).toEqual([2, 0, -8])
   })
 
+  it('lost (stormy seas): fire → whistle → thunder swallows the shot, only a faint splash lands', () => {
+    const cues = shotTimeline('lost', { to: [2, 0, -8] })
+    expect(names(cues)).toEqual(['cannon-fire', 'cannon-whistle', 'thunder', 'splash-miss'])
+    expect(cues[2].at).toBeLessThanOrEqual(SHOT_FLIGHT_MS.full)
+    expect(cues[3].at).toBe(SHOT_FLIGHT_MS.full)
+    expect(cues[3].gain).toBeLessThan(0.5)
+    expect(names(cues)).not.toContain('impact-wood')
+  })
+
   it('hit: wood impact then the crew shouts', () => {
     const cues = shotTimeline('hit')
     expect(names(cues)).toEqual(['cannon-fire', 'cannon-whistle', 'impact-wood', 'crew-shout-hit'])

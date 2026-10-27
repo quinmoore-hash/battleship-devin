@@ -62,6 +62,18 @@ describe('planShot', () => {
     expect(Math.abs(p.impact[0] - c[0])).toBeLessThan(0.51)
     expect(Math.abs(p.impact[2] - c[2])).toBeLessThan(1.5)
   })
+  it('a shot lost in the storm comes down off the target cell, on the water, with no victim', () => {
+    const lost: ShotResult = { coord: { x: 5, y: 4 }, outcome: 'lost' }
+    const p = planShot('human', lost, human, navy)
+    const c = cellToWorld(lost.coord, enemy)
+    expect(p.victim).toBeUndefined()
+    expect(p.impact[1]).toBe(c[1])
+    const off = Math.hypot(p.impact[0] - c[0], p.impact[2] - c[2])
+    expect(off).toBeGreaterThan(0.6)
+    expect(off).toBeLessThan(1.2)
+    expect(planShot('human', lost, human, navy).impact).toEqual(p.impact) // deterministic
+  })
+
   it('the Navy fires from its gun line when it has no afloat ship to fire from', () => {
     const p = planShot('enemy', { coord: { x: 3, y: 1 }, outcome: 'hit' }, [], human)
     expect(p.shooter).toBeNull()
