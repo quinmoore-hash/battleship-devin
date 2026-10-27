@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { FRIGATE_ANCHORS } from './anchors'
-import { FRIGATE, GUN_X, MASTS, bulwarkHalfWidth, deckY, gunCell, gunX, halfBeamAtDeck, keelY, railY, sectionHalfWidth } from './form'
+import { FRIGATE_ANCHORS, FRIGATE_MODEL_ANCHORS } from './anchors'
+import { BOWSPRIT, FIT, FRIGATE, GUN_X, MASTS, bulwarkHalfWidth, deckY, gunCell, gunX, halfBeamAtDeck, keelY, railY, sectionHalfWidth } from './form'
 
 const half = FRIGATE.length / 2
 
 describe('frigate anchors', () => {
   it('has one cannon per side for every cell, two per cell', () => {
     for (let cell = 0; cell < FRIGATE.length; cell++) {
-      const port = FRIGATE_ANCHORS.cannons.filter((c) => c.cell === cell && c.side === 'port')
-      const stbd = FRIGATE_ANCHORS.cannons.filter((c) => c.cell === cell && c.side === 'starboard')
+      const port = FRIGATE_MODEL_ANCHORS.cannons.filter((c) => c.cell === cell && c.side === 'port')
+      const stbd = FRIGATE_MODEL_ANCHORS.cannons.filter((c) => c.cell === cell && c.side === 'starboard')
       expect(port.length).toBe(2)
       expect(stbd.length).toBe(2)
     }
-    expect(FRIGATE_ANCHORS.cannons.length).toBe(GUN_X.length * 2)
+    expect(FRIGATE_MODEL_ANCHORS.cannons.length).toBe(GUN_X.length * 2)
   })
 
   it('places every muzzle inside its cell, just outboard of the bulwark, firing outward', () => {
-    for (const c of FRIGATE_ANCHORS.cannons) {
+    for (const c of FRIGATE_MODEL_ANCHORS.cannons) {
       const [x, y, z] = c.muzzle
       expect(x).toBeLessThanOrEqual(half - c.cell)
       expect(x).toBeGreaterThanOrEqual(half - c.cell - 1)
@@ -35,21 +35,21 @@ describe('frigate anchors', () => {
   })
 
   it('stands three masts on the centreline on their decks, bow to stern', () => {
-    expect(FRIGATE_ANCHORS.masts.length).toBe(3)
-    FRIGATE_ANCHORS.masts.forEach((m, i) => {
+    expect(FRIGATE_MODEL_ANCHORS.masts.length).toBe(3)
+    FRIGATE_MODEL_ANCHORS.masts.forEach((m, i) => {
       expect(m.base[2]).toBe(0)
       expect(m.base[1]).toBe(deckY(m.base[0]))
       expect(Math.abs(m.base[0])).toBeLessThan(half)
       expect(m.height).toBe(MASTS[i].height)
-      if (i > 0) expect(m.base[0]).toBeLessThan(FRIGATE_ANCHORS.masts[i - 1].base[0])
+      if (i > 0) expect(m.base[0]).toBeLessThan(FRIGATE_MODEL_ANCHORS.masts[i - 1].base[0])
     })
-    expect(FRIGATE_ANCHORS.masts[1].height).toBeGreaterThan(FRIGATE_ANCHORS.masts[0].height)
-    expect(FRIGATE_ANCHORS.masts[1].height).toBeGreaterThan(FRIGATE_ANCHORS.masts[2].height)
+    expect(FRIGATE_MODEL_ANCHORS.masts[1].height).toBeGreaterThan(FRIGATE_MODEL_ANCHORS.masts[0].height)
+    expect(FRIGATE_MODEL_ANCHORS.masts[1].height).toBeGreaterThan(FRIGATE_MODEL_ANCHORS.masts[2].height)
   })
 
   it('impact points lie on the port hull side between the waterline and the deck, one per cell', () => {
-    expect(FRIGATE_ANCHORS.impactPoints.length).toBe(FRIGATE.length)
-    FRIGATE_ANCHORS.impactPoints.forEach((p, i) => {
+    expect(FRIGATE_MODEL_ANCHORS.impactPoints.length).toBe(FRIGATE.length)
+    FRIGATE_MODEL_ANCHORS.impactPoints.forEach((p, i) => {
       expect(p[0]).toBeCloseTo(half - (i + 0.5), 5)
       expect(p[1]).toBeGreaterThan(0)
       expect(p[1]).toBeLessThan(FRIGATE.deckY)
@@ -60,11 +60,11 @@ describe('frigate anchors', () => {
   })
 
   it('reports hull dims consistent with the form', () => {
-    expect(FRIGATE_ANCHORS.deckY).toBe(FRIGATE.deckY)
-    expect(FRIGATE_ANCHORS.hull.beam).toBe(FRIGATE.beam)
-    expect(FRIGATE_ANCHORS.hull.draft).toBe(FRIGATE.draft)
-    expect(FRIGATE_ANCHORS.hull.length).toBeGreaterThanOrEqual(FRIGATE.length)
-    expect(FRIGATE_ANCHORS.hull.height).toBeGreaterThan(MASTS[1].height)
+    expect(FRIGATE_MODEL_ANCHORS.deckY).toBe(FRIGATE.deckY)
+    expect(FRIGATE_MODEL_ANCHORS.hull.beam).toBe(FRIGATE.beam)
+    expect(FRIGATE_MODEL_ANCHORS.hull.draft).toBe(FRIGATE.draft)
+    expect(FRIGATE_MODEL_ANCHORS.hull.length).toBeGreaterThanOrEqual(FRIGATE.length)
+    expect(FRIGATE_MODEL_ANCHORS.hull.height).toBeGreaterThan(MASTS[1].height)
   })
 })
 
@@ -105,5 +105,19 @@ describe('frigate hull form', () => {
         expect(bulwarkHalfWidth(gunX(gx, side), deckY(gx) + 0.1) * 2).toBeGreaterThan(0.78 * 0.4 + 0.04)
       }
     }
+  })
+})
+
+describe('frigate root fit (footprint inside its 3 cells)', () => {
+  it('scales + shifts the anchors exactly like the model root', () => {
+    expect(FRIGATE_ANCHORS.hull.length).toBeCloseTo(FRIGATE_MODEL_ANCHORS.hull.length * FIT.scale, 6)
+    expect(FRIGATE_ANCHORS.deckY).toBeCloseTo(FRIGATE_MODEL_ANCHORS.deckY * FIT.scale, 6)
+    FRIGATE_ANCHORS.masts.forEach((m, i) => expect(m.base[0]).toBeCloseTo(FRIGATE_MODEL_ANCHORS.masts[i].base[0] * FIT.scale + FIT.dx, 6))
+  })
+  it('keeps the stern and the bowsprit tip within ±length/2 after fitting', () => {
+    const tip = BOWSPRIT.root[0] + Math.cos(BOWSPRIT.angle) * (BOWSPRIT.length + BOWSPRIT.jibboom)
+    expect(tip * FIT.scale + FIT.dx).toBeLessThanOrEqual(half)
+    expect(FRIGATE.xStern * FIT.scale + FIT.dx).toBeGreaterThanOrEqual(-half)
+    for (const p of FRIGATE_ANCHORS.impactPoints) expect(Math.abs(p[0])).toBeLessThan(half)
   })
 })

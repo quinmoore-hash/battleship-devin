@@ -2,15 +2,17 @@
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { mergeGeometries } from './geometry'
+import { ropeRadiusAtLod } from '../kit/Rope'
 
 export type RopeSeg = [from: Vec3, to: Vec3, radius?: number]
 
 const UP = new THREE.Vector3(0, 1, 0)
 
 /** One cylinder per segment, oriented from → to, merged. Slight catenary sag for long horizontal runs. */
-export function ropesGeometry(segments: RopeSeg[], radial = 5, sag = 0): THREE.BufferGeometry {
+export function ropesGeometry(segments: RopeSeg[], radial = 5, sag = 0, lod = 0): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = []
-  for (const [from, to, radius = 0.009] of segments) {
+  for (const [from, to, gauge = 0.009] of segments) {
+    const radius = ropeRadiusAtLod(gauge, lod)
     const a = new THREE.Vector3(...from)
     const b = new THREE.Vector3(...to)
     if (sag > 0 && Math.abs(a.y - b.y) < 0.4 * a.distanceTo(b)) {

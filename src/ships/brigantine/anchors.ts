@@ -1,6 +1,7 @@
 import type { Vec3 } from '../../scene/layout'
 import type { ShipAnchors, Side } from '../types'
-import { BEAM, CANNON_X, DECK_Y, DRAFT, FOREMAST_HEIGHT, FOREMAST_X, HALF, LENGTH, MAINMAST_HEIGHT, MAINMAST_X, hullHalfWidth } from './hull'
+import { fitAnchors } from '../kit/fit'
+import { BEAM, CANNON_X, DECK_Y, DRAFT, FIT, FOREMAST_HEIGHT, FOREMAST_X, HALF, LENGTH, MAINMAST_HEIGHT, MAINMAST_X, hullHalfWidth } from './hull'
 
 /** Height of the cannon bore above the deck (kit `Cannon` barrel axis × CANNON_SCALE). */
 export const CANNON_SCALE = 0.5
@@ -31,7 +32,8 @@ export function cannonMuzzle(x: number, side: Side): Vec3 {
   return [x, CANNON_BORE_Y, side === 'starboard' ? z : -z]
 }
 
-export const BRIGANTINE_ANCHORS: ShipAnchors = {
+/** Anchors in the unscaled model frame (what the geometry code uses). */
+export const BRIGANTINE_MODEL_ANCHORS: ShipAnchors = {
   cannons: CANNON_X.flatMap((x) =>
     (['port', 'starboard'] as const).map((side) => ({
       cell: cellOfX(x),
@@ -52,3 +54,6 @@ export const BRIGANTINE_ANCHORS: ShipAnchors = {
     return [x, y, -hullHalfWidth(x, y)] as Vec3
   }),
 }
+
+/** Anchors in the ship frame the game sees, after the root FIT scale/shift. */
+export const BRIGANTINE_ANCHORS: ShipAnchors = fitAnchors(BRIGANTINE_MODEL_ANCHORS, FIT.scale, FIT.dx)

@@ -4,6 +4,7 @@
  * the textured ensign. Masts snap (upper section pivots and falls) as `snapped` → 1 and sails shred with it.
  */
 import { useFrame } from '@react-three/fiber'
+import { ropeRadiusAtLod } from '../kit/Rope'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -103,18 +104,18 @@ function ropeGeometry(from: Vec3, to: Vec3, radius: number): THREE.BufferGeometr
 }
 
 /** All lines merged into one geometry. */
-export function buildRopeGeometry(lines: RopeLine[], radius = 0.009): THREE.BufferGeometry | null {
-  const parts = lines.filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) > 1e-4).map(([a, b, r]) => ropeGeometry(a, b, r ?? radius))
+export function buildRopeGeometry(lines: RopeLine[], radius = 0.009, lod: Lod = 0): THREE.BufferGeometry | null {
+  const parts = lines.filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) > 1e-4).map(([a, b, r]) => ropeGeometry(a, b, ropeRadiusAtLod(r ?? radius, lod)))
   if (parts.length === 0) return null
   const merged = mergeGeometries(parts, false)
   parts.forEach((p) => p.dispose())
   return merged
 }
 
-export function RopeSet({ lines, mats, radius, visible = true }: { lines: RopeLine[]; mats: BrigMaterials; radius?: number; visible?: boolean }) {
+export function RopeSet({ lines, mats, radius, lod = 0, visible = true }: { lines: RopeLine[]; mats: BrigMaterials; radius?: number; lod?: Lod; visible?: boolean }) {
   const key = lines.flat(2).join(',')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const geom = useMemo(() => buildRopeGeometry(lines, radius), [key, radius])
+  const geom = useMemo(() => buildRopeGeometry(lines, radius, lod), [key, radius, lod])
   if (!geom) return null
   return <mesh geometry={geom} material={mats.rope} visible={visible} castShadow frustumCulled={false} />
 }
@@ -267,6 +268,7 @@ export function ForeMast({ base, height, sails, snapped, damaged, phase, lod, ma
               <RopeSet
                 mats={mats}
                 radius={0.005}
+                lod={lod}
                 lines={[
                   [[0, -0.05, -yd.w / 2 + 0.05], [0, -0.09, -yd.w / 4]],
                   [[0, -0.09, -yd.w / 4], [0, -0.05, -0.02]],

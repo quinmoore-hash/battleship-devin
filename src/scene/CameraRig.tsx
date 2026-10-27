@@ -12,17 +12,28 @@ const enemyCenter = boardCenter(BOARD_LAYOUT.enemy)
 const midZ = (playerCenter[2] + enemyCenter[2]) / 2
 
 /** Fixed shots. `menu` orbits slowly around its target instead of using `position`. */
+/**
+ * Shots are framed for landscape. On a portrait viewport (phones) the horizontal field would be too narrow for
+ * the 10-wide boards, so widen the vertical fov until the horizontal one matches the landscape design value.
+ */
+export function fitFov(fov: number, aspect: number): number {
+  if (!(aspect < 1)) return fov
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) / aspect)
+  return Math.min(THREE.MathUtils.radToDeg(half) * 2, 80)
+}
+
 export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target: THREE.Vector3; fov: number }> = {
   menu: { position: new THREE.Vector3(0, 11, 36), target: new THREE.Vector3(0, 0.5, midZ), fov: 42 },
   placement: {
-    position: new THREE.Vector3(playerCenter[0], 17, playerCenter[2] + 11),
-    target: new THREE.Vector3(playerCenter[0], 0, playerCenter[2] - 1),
+    position: new THREE.Vector3(playerCenter[0], 15.5, playerCenter[2] + 10),
+    target: new THREE.Vector3(playerCenter[0], 0, playerCenter[2] - 0.5),
     fov: 42,
   },
   battle: {
-    position: new THREE.Vector3(0, 19, playerCenter[2] + 27),
-    target: new THREE.Vector3(0, 0, midZ - 5),
-    fov: 40,
+    // low and close enough that the hulls read (BUG-530); both boards still fit — see fitFov for portrait phones
+    position: new THREE.Vector3(0, 15.5, playerCenter[2] + 21),
+    target: new THREE.Vector3(0, 0.3, midZ - 3.5),
+    fov: 42,
   },
   gameover: {
     position: new THREE.Vector3(-21, 6, enemyCenter[2] + 17),
@@ -115,7 +126,7 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
       controls.current.update()
     }
 
-    const fov = THREE.MathUtils.damp(camera.fov, shot.fov, 2, dt)
+    const fov = THREE.MathUtils.damp(camera.fov, fitFov(shot.fov, camera.aspect), 2, dt)
     if (Math.abs(fov - camera.fov) > 1e-3) {
       camera.fov = fov
       camera.updateProjectionMatrix()
@@ -132,7 +143,7 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
       enablePan={false}
       enableDamping
       dampingFactor={0.08}
-      minDistance={12}
+      minDistance={9}
       maxDistance={48}
       minPolarAngle={0.15}
       maxPolarAngle={Math.PI / 2 - 0.2}

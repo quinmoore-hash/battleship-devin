@@ -2,6 +2,8 @@
  * Pure three.js geometry builders for the Man-o’-War. No React, no DOM: everything here can run under Vitest.
  */
 import * as THREE from 'three'
+import { ropeRadiusAtLod } from '../kit/Rope'
+import type { Lod } from '../types'
 import type { Vec3 } from '../../scene/layout'
 import { seededRandom } from '../../vfx/random'
 import type { HullSection } from '../kit'
@@ -181,7 +183,7 @@ export interface RopeSeg {
 }
 
 /** All ropes of a rig as one geometry: thin open tubes, 4 or 5 facets, arc-length UVs for the twist texture. */
-export function ropeTubes(segs: RopeSeg[], facets = 4): THREE.BufferGeometry {
+export function ropeTubes(segs: RopeSeg[], facets = 4, lod: Lod = 0): THREE.BufferGeometry {
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
@@ -196,6 +198,7 @@ export function ropeTubes(segs: RopeSeg[], facets = 4): THREE.BufferGeometry {
     const len = dir.length()
     if (len < 1e-5) continue
     dir.divideScalar(len)
+    const r = ropeRadiusAtLod(s.r, lod)
     n1.crossVectors(dir, Math.abs(dir.y) > 0.9 ? alt : up).normalize()
     n2.crossVectors(dir, n1).normalize()
     const base = positions.length / 3
@@ -206,7 +209,7 @@ export function ropeTubes(segs: RopeSeg[], facets = 4): THREE.BufferGeometry {
         const nx = Math.cos(ang) * n1.x + Math.sin(ang) * n2.x
         const ny = Math.cos(ang) * n1.y + Math.sin(ang) * n2.y
         const nz = Math.cos(ang) * n1.z + Math.sin(ang) * n2.z
-        positions.push(p[0] + nx * s.r, p[1] + ny * s.r, p[2] + nz * s.r)
+        positions.push(p[0] + nx * r, p[1] + ny * r, p[2] + nz * r)
         normals.push(nx, ny, nz)
         uvs.push(k / facets, end === 0 ? 0 : len / (s.r * 6))
       }

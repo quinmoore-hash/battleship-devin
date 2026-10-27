@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
-import { CAMERA_SHOTS } from '../scene/CameraRig'
+import { CAMERA_SHOTS, fitFov } from '../scene/CameraRig'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { ownBoardOrigin } from './battery'
 import { director as defaultDirector, type ActiveCinematic, type Director } from './director'
@@ -113,12 +113,12 @@ export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null
         const miss = plan.result.outcome === 'miss'
         // a real hull (the player's ship, or a revealed wreck) needs room: stay outside the rigging of its neighbours
         const hull = plan.victim ? SHIPS[plan.victim.ship.spec.id].anchors.hull : null
-        const r = miss ? 5.5 : hull ? hull.beam * 1.5 + 5.5 : 4.6
+        const r = miss ? 5.5 : hull ? hull.beam * 1.2 + 3.4 : 3.6
         const a = k * 0.45
         const dir = tmp.b.copy(n).multiplyScalar(hull ? 0.9 : 0.75).addScaledVector(side, hull ? 0.45 : 0.65).normalize().applyAxisAngle(UP, a)
-        out.position.copy(I).addScaledVector(dir, r).addScaledVector(UP, miss ? 2.3 : (hull ? hull.height * 0.9 + 1.6 : 1.7) + k * 0.4)
-        out.target.copy(I).addScaledVector(UP, miss ? 0.2 : 0.35)
-        out.fov = miss ? 46 : 42
+        out.position.copy(I).addScaledVector(dir, r).addScaledVector(UP, miss ? 2.3 : (hull ? hull.height * 0.5 + 0.9 : 1.3) + k * 0.3)
+        out.target.copy(I).addScaledVector(UP, miss ? 0.2 : hull ? hull.height * 0.2 + 0.2 : 0.3)
+        out.fov = miss ? 46 : 38
         return false
       }
       default:
@@ -129,15 +129,15 @@ export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null
   if (event.type === 'sink') {
     const fleet = event.owner === 'human' ? active.fleets.human : active.fleets.enemy
     const ship = fleet.find((s) => s.uid === (event.uid ?? event.shipId))
-    const pose = ship ? shipWorldTransform(ship, ownBoardOrigin(event.owner)) : { position: [0, 0.2, event.owner === 'human' ? playerCenter[2] : enemyCenter[2]] as Vec3, rotationY: 0 }
+    const pose = ship ? shipWorldTransform(ship, ownBoardOrigin(event.owner)) : { position: [0, BOARD_LAYOUT.surfaceY, event.owner === 'human' ? playerCenter[2] : enemyCenter[2]] as Vec3, rotationY: 0 }
     const hull = SHIPS[event.shipId].anchors.hull
     const C = set(tmp.a, pose.position)
     if (beat?.name === 'sink') {
-      const r = hull.length * 0.7 + 2.6
+      const r = hull.length * 0.55 + 1.5
       const a = pose.rotationY + 0.95 + k * 1.1
-      const orbit: Pose = { position: tmp.b, target: tmp.n, fov: 40 - k * 4 }
-      orbit.position.set(C.x + Math.sin(a) * r, C.y + 1.3 + k * 0.9, C.z + Math.cos(a) * r)
-      orbit.target.set(C.x, C.y + 0.5 - k * 0.6, C.z)
+      const orbit: Pose = { position: tmp.b, target: tmp.n, fov: 38 - k * 4 }
+      orbit.position.set(C.x + Math.sin(a) * r, C.y + 0.9 + k * 0.7, C.z + Math.cos(a) * r)
+      orbit.target.set(C.x, C.y + 0.45 - k * 0.5, C.z)
       lerpPose(out, start, orbit, smoothstep(k / 0.18))
       return false
     }
@@ -240,7 +240,7 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
     if (camera.position.y < MIN_Y) camera.position.y = MIN_Y
     camera.lookAt(smooth.current.target)
     if (Math.abs(camera.fov - smooth.current.fov) > 1e-3) {
-      camera.fov = smooth.current.fov
+      camera.fov = fitFov(smooth.current.fov, camera.aspect)
       camera.updateProjectionMatrix()
     }
   })

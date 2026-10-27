@@ -25,15 +25,22 @@ export interface BoardPlacement {
  *
  * `cellToWorld(coord, origin, cellSize)` gives the centre of a cell on either board.
  */
+/**
+ * Boards, ships and markers sit this far above the resting water (y = 0). Ship models put their
+ * waterline at local y = 0, so this must stay near zero or hulls hover above the sea (BUG-110b);
+ * the grid ropes/floats and the fleet both ride the same wave bank on top of it.
+ */
+export const SURFACE_Y = 0.04
+
 export const BOARD_LAYOUT = {
   /** The human's own fleet (the enemy fires at it). Nearest the camera. */
-  player: { origin: [-5, 0.2, 1] as Vec3, size: 10, cellSize: 1 } satisfies BoardPlacement,
+  player: { origin: [-5, SURFACE_Y, 1] as Vec3, size: 10, cellSize: 1 } satisfies BoardPlacement,
   /** The enemy's waters (the human fires at it). Across the gap, further from the camera. */
-  enemy: { origin: [-5, 0.2, -13] as Vec3, size: 10, cellSize: 1 } satisfies BoardPlacement,
+  enemy: { origin: [-5, SURFACE_Y, -13] as Vec3, size: 10, cellSize: 1 } satisfies BoardPlacement,
   /** Open water between the two boards, in world units along z. */
   gap: 4,
-  /** Height above the resting water line at which boards, ships and markers should sit. */
-  surfaceY: 0.2,
+  /** Height above the resting water line at which boards, ships and markers sit (see SURFACE_Y). */
+  surfaceY: SURFACE_Y,
 } as const
 
 export type BoardKey = keyof Pick<typeof BOARD_LAYOUT, 'player' | 'enemy'>

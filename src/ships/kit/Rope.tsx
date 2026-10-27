@@ -8,6 +8,14 @@ import { shipMaterials } from './materials'
 const ROPE_TILE = 0.07
 
 /** Catenary-ish hanging curve between two points; `sag` is the mid-span droop in metres. */
+/**
+ * Rope radius for a LOD. Sub-pixel ropes alias into dotted lines from the game camera (BUG-531), so the
+ * baked LOD 1 / LOD 2 models use thicker ropes with a floor; LOD 0 close-ups keep the true gauge.
+ */
+export function ropeRadiusAtLod(radius: number, lod: number): number {
+  return lod === 0 ? radius : lod === 1 ? Math.max(radius * 1.6, 0.018) : Math.max(radius * 2, 0.024)
+}
+
 export function ropeCurve(from: Vec3, to: Vec3, sag: number, samples = 12): THREE.Vector3[] {
   const pts: THREE.Vector3[] = []
   for (let i = 0; i <= samples; i++) {
@@ -43,7 +51,7 @@ export function Rope({ from, to, livery, radius = 0.012, sag = 0, lod = 0 }: Rop
   const m = shipMaterials(livery)
   const geom = useMemo(() => {
     const samples = sag > 0 ? (lod === 0 ? 14 : 7) : 2
-    return ropeGeometry(ropeCurve(from, to, sag, samples), radius, lod === 0 ? 6 : lod === 1 ? 4 : 3)
+    return ropeGeometry(ropeCurve(from, to, sag, samples), ropeRadiusAtLod(radius, lod), lod === 0 ? 6 : lod === 1 ? 4 : 3)
   }, [from, to, radius, sag, lod])
   useLayoutEffect(() => () => geom.dispose(), [geom])
   return <mesh geometry={geom} material={m.rope} castShadow />
@@ -77,7 +85,7 @@ const _up = new THREE.Vector3(0, 1, 0)
 export function Ratlines({ from, to, livery, rungs = 10, shrouds = 3, spread = 0.35, mirror = true, lod = 0 }: RatlinesProps) {
   const m = shipMaterials(livery)
   const sides = mirror ? [1, -1] : [1]
-  const rungCount = lod === 2 ? 0 : lod === 1 ? Math.round(rungs / 2) : rungs
+  const rungCount = lod === 0 ? rungs : 0 // rungs are the finest lines: LOD 0 only
   const lines = useMemo(() => {
     const out: { a: Vec3; b: Vec3 }[] = []
     for (const side of sides) {
@@ -90,7 +98,7 @@ export function Ratlines({ from, to, livery, rungs = 10, shrouds = 3, spread = 0
   }, [from, to, shrouds, spread, mirror]) // eslint-disable-line react-hooks/exhaustive-deps
   const geom = useMemo(() => {
     const r = lod === 0 ? 5 : 3
-    const geos = lines.map((l) => ropeGeometry([new THREE.Vector3(...l.a), new THREE.Vector3(...l.b)], 0.012, r, 1))
+    const geos = lines.map((l) => ropeGeometry([new THREE.Vector3(...l.a), new THREE.Vector3(...l.b)], ropeRadiusAtLod(0.012, lod), r, 1))
     return mergeBuffers(geos)
   }, [lines, lod])
   useLayoutEffect(() => () => geom.dispose(), [geom])
@@ -121,7 +129,7 @@ export function Ratlines({ from, to, livery, rungs = 10, shrouds = 3, spread = 0
     <group>
       <mesh geometry={geom} material={m.rope} castShadow />
       {total > 0 && <instancedMesh ref={inst} args={[RUNG_GEOM, m.rope, total]} castShadow frustumCulled={false} />}
-      {lod < 2 &&
+      {rungCount > 0 &&
         lines.map((l, i) => (
           <group key={i} position={l.a}>
             <mesh geometry={DEADEYE_GEOM} material={m.oak} rotation-x={Math.PI / 2} position-y={0.05} />

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BRIGANTINE_ANCHORS, cannonPosition, cellOfX } from './anchors'
-import { BEAM, DECK_CAMBER, DECK_Y, HALF, LENGTH, PORT_BOTTOM, PORT_TOP, STEM_X, TRANSOM_X, buildDeckGeometry, buildHullGeometry, deckSurfaceY, hermite, hullHalfWidth, keelY, sheerY } from './hull'
+import { BRIGANTINE_ANCHORS, BRIGANTINE_MODEL_ANCHORS, cannonPosition, cellOfX } from './anchors'
+import { BEAM, DECK_CAMBER, DECK_Y, FIT, HALF, LENGTH, PORT_BOTTOM, PORT_TOP, STEM_X, TRANSOM_X, buildDeckGeometry, buildHullGeometry, deckSurfaceY, hermite, hullHalfWidth, keelY, sheerY } from './hull'
 
 describe('brigantine hull field', () => {
   it('hermite interpolates through its knots and stays monotone on a line', () => {
@@ -90,7 +90,7 @@ describe('brigantine hull geometry', () => {
 })
 
 describe('brigantine anchors', () => {
-  const a = BRIGANTINE_ANCHORS
+  const a = BRIGANTINE_MODEL_ANCHORS
 
   it('has one cannon per side for every cell', () => {
     for (let cell = 0; cell < LENGTH; cell++) {
@@ -146,5 +146,15 @@ describe('brigantine anchors', () => {
     expect(a.deckY).toBe(DECK_Y)
     expect(a.hull.height).toBeGreaterThan(a.masts[1].height)
     expect(a.hull.draft).toBeGreaterThan(-keelY(0) - 0.05)
+  })
+})
+
+describe('brigantine root fit (footprint inside its 3 cells)', () => {
+  it('scales + shifts the anchors exactly like the model root and keeps the hull within ±HALF', () => {
+    expect(BRIGANTINE_ANCHORS.hull.length).toBeCloseTo(LENGTH * FIT.scale, 6)
+    BRIGANTINE_ANCHORS.masts.forEach((m, i) => expect(m.base[0]).toBeCloseTo(BRIGANTINE_MODEL_ANCHORS.masts[i].base[0] * FIT.scale + FIT.dx, 6))
+    expect(STEM_X * FIT.scale + FIT.dx).toBeLessThan(HALF)
+    expect(TRANSOM_X * FIT.scale + FIT.dx).toBeGreaterThan(-HALF)
+    for (const p of BRIGANTINE_ANCHORS.impactPoints) expect(Math.abs(p[0])).toBeLessThan(HALF)
   })
 })
