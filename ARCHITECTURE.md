@@ -37,24 +37,42 @@ public/assets/ textures, audio.
 ## Public APIs (keep these stable)
 
 ### engine (`src/engine`)
-- `BOARD_SIZE`, `FLEET`, `FLEET_BY_ID` — fleet is `man-o-war`(5) `galleon`(4) `frigate`(3) `brigantine`(3) `sloop`(2)
-- `createBoard`, `canPlace`, `placeShip`, `removeShip`, `randomPlacement`, `isFleetPlaced`
-- `fire(board, coord) -> { board, result }`, `isFleetSunk`, `isSunk`, `enemyView`, `viewGrid`
+- `BOARD_SIZE`, `FLEET`, `FLEET_BY_ID` — the classic fleet is `man-o-war`(5) `galleon`(4) `frigate`(3) `brigantine`(3) `sloop`(2)
+- Black Flag fleets: `FLEET_PRESETS` (`classic` / `armada` / `wolf-pack` / `raiders`, all 17 cells), `presetFleet(id)`, `fleetCells(fleet)`,
+  `fleetUnits(fleet) -> { spec, uid }[]`. A `PlacedShip.uid` is the ship **instance** key (`'sloop'`, `'sloop#2'`, …; equals
+  `spec.id` in a classic fleet) — placement, FleetStatus, sink progress, flotsam and damage are keyed by `uid`, geometry by `spec.id`
+  (`uidClass(uid)`). `ShotResult.shipUid` carries it (`shotShipKey(result)` falls back to `shipId`).
+- `createBoard`, `canPlace(board, spec, origin, orientation, uid?)`, `placeShip(…, uid?)`, `removeShip(board, uid)`,
+  `randomPlacement(rng?, fleet?)`, `isFleetPlaced(board, fleet?)`
+- `fire(board, coord) -> { board, result }` (pure, no randomness), `isFleetSunk`, `isSunk`, `enemyView`, `viewGrid`
+- Black Flag helpers (pure): `broadsideCells(center, orientation)` (3-cell line clipped to the board), `treasureCells(board, rng, 2)`
+  (open water, never touching), `hasTreasureAt`, `touching`
 - helpers: `coordKey`, `coordLabel`, `inBounds`, `neighbors`, `allCoords`
 - types: `Coord`, `Board`, `PlacedShip`, `ShipSpec`, `ShipId`, `ShotResult`, `EnemyBoardView`, `Difficulty`, `Player = 'human' | 'enemy'`
 
 ### ai (`src/ai`)
 ```ts
-interface AiOpponent { readonly difficulty: Difficulty; nextShot(view: EnemyBoardView): Coord; observe(result: ShotResult): void }
+interface AiOpponent { readonly difficulty: Difficulty; nextShot(view: EnemyBoardView): Coord; observe(result: ShotResult): void
+  // Black Flag (optional; Easy implements none): Spyglass pick / observation and the Broadside line to fire
+  spyTarget?(view): Coord | null; observeSpy?(coord, ship: boolean): void; broadsideTarget?(view): { center: Coord; orientation: Orientation } | null }
 createOpponent(difficulty, rng?) => AiOpponent;  describeStrategy(difficulty);  seededRng(seed);  playGame(opponent, board)
 ```
 
 ### store (`src/store/gameStore.ts`)
 `useGameStore` with `phase`, `difficulty`, `playerBoard`, `enemyBoard`, `turn`, `winner`, `events`, `settings`
 (`sfxVolume`, `musicVolume`, `reducedMotion`, `cinematics: 'full' | 'fast' | 'off'`) and actions `startGame`,
-`placePlayerShip`, `removePlayerShip`, `autoPlacePlayerFleet`, `confirmPlacement`, `fireAt`, `enemyTurn`,
-`updateSettings`, `reset`. The game loop controls pacing: after the human fires, it awaits the cinematic
-(or a timer when cinematics are off) and then calls `enemyTurn()`.
+`placePlayerShip(spec, origin, orientation, uid?)`, `removePlayerShip(uid)`, `autoPlacePlayerFleet`, `confirmPlacement`, `fireAt`,
+`enemyTurn`, `updateSettings`, `reset`. The game loop controls pacing: after the human fires, it awaits the cinematic
+(or a timer when cinematics are off) and then calls `enemyTurn()` — unless `turn` is still `'human'` (treasure).
+
+Rules of engagement live in `modes: GameModes = { salvo, storm, blackFlag }` (all off = Classic, any combination). Black Flag adds
+`fleets` / `fleetPresets` per `Player` (`setFleetPreset(id)` in placement; the AI draws a random preset in `startGame`),
+`powerShots: Record<Player, { broadside: boolean; spyglass: boolean }>` (one use each per game), `treasure: Record<Player, Coord[]>`
+(two chests per board, rolled from the seeded `rng` in `confirmPlacement`), `spied: Record<Player, SpyMark[]>` and `bonusShots`.
+Actions: `fireBroadside(center, orientation) -> ShotResult[]` (skips shot/off-board cells, whole turn, replaces the Salvo volley,
+each ball fogs separately in the storm), `spyAt(coord) -> 'ship' | 'water'` (no shot, no turn). `GameEvent` is
+`{ id, by, result, kind: 'shot' | 'broadside' | 'spyglass' | 'treasure', group?, spied? }`; a treasure hit keeps the turn
+(`bonusShots`; in Salvo it is +1 shot in the volley). Replay / stats skip `spyglass` events (they are not shots).
 
 ### scene (`src/scene`)
 `<OceanScene quality? timeOfDay? view? interactive? cameraOverride? dressing? weather?>{children}</OceanScene>` full-screen Canvas with
@@ -190,9 +208,12 @@ Demo routes (`?…-demo`) are lazy chunks; the game bundle is split into `three`
 `ui-root[data-phase]`, `ocean-canvas`, `ocean-fallback`, `main-menu`, `difficulty-{easy|medium|hard}`, `placement`,
 `auto-place`, `confirm-placement`, `battle`, `enemy-grid`, `enemy-grid-{x}-{y}[data-state]`, `player-grid`, `status`
 (contains "Your turn" when the human may fire), `gameover[data-winner]`, `play-again`, `rematch`, `quit`, `quit-confirm`,
-`nav-settings`, `nav-how-to-play`. Also used: `ship-tray-{id}[data-placed][aria-pressed]`, `placed-count`, `rotate`,
-`clear-placement`, `restart`, `skip-cinematic`, `fire-confirm(-yes|-no)`, `shot-log`, `fleet-status-{side}-{id}[data-sunk]`,
+`nav-settings`, `nav-how-to-play`. Also used: `ship-tray-{uid}[data-placed][aria-pressed]`, `placed-count`, `rotate`,
+`clear-placement`, `restart`, `skip-cinematic`, `fire-confirm(-yes|-no)`, `shot-log`, `fleet-status-{side}-{uid}[data-sunk]`,
 `stat-{shots|accuracy|turns|sunk|lost|streak|time}`, `rank`, `report-replay`, `report-photo`, `hint-{placement|battle}`, `loading`,
+Black Flag: `mode-black-flag`, `fleet-picker`, `fleet-preset-{classic|armada|wolf-pack|raiders}[aria-checked]`,
+`power-shots[data-armed]`, `power-broadside[data-used]`, `power-spyglass[data-used]`, `power-rotate`, `treasure-count`,
+`stat-black-flag`, `howto-black-flag`; chart cells carry `cell-spied(-ship|-water)` / `cell-treasure` classes,
 `setting-{sfx|music|mute|reduced-motion|colorblind}`, `setting-{cinematics|quality}-{option}`, `settings-close`,
 `ui-root[data-colorblind][data-no3d]`. If you redesign the UI, keep these (or update `e2e/` in the same PR).
 Playwright runs with `?no3d` for flow tests and with SwiftShader for the 3D smoke test; cinematics must honour

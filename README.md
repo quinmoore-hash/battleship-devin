@@ -40,7 +40,14 @@ How a turn plays: place your fleet on the water (drag / click, R to rotate — t
 click the enemy waters. The cinematics director flies the camera to your firing ship, the broadside lands on the target
 (splash, or splinters and fire — a sunk ship rolls over in slow motion and leaves flotsam), the enemy aims and answers.
 Settings › Cinematics: `full` (default), `fast` (one ball, short cuts) or `off` (instant results); click, Space or Esc
-skips the current shot. Salvo and Stormy-seas rules are on the menu; the after-action report offers Replay and Photo mode.
+skips the current shot. Salvo, Stormy-seas and Black Flag rules are on the menu (tick any combination); the after-action
+report offers Replay and Photo mode.
+
+**Black Flag** — pick your fleet before placing (Classic, Armada, Wolf pack or Raiders — all 17 cells; the enemy draws one too),
+two power shots per side per game under the enemy chart — **Broadside** (`B`, `R` rotates: a line of three cells, your whole
+turn) and **Spyglass** (`G`: reveals one cell, no shot, no turn) — and two hidden treasure chests per board: hit one and you
+fire again at once. Medium/Hard captains use their Broadside the turn after their first hit; Hard looks through the Spyglass
+when one cell stands out. Full rules under How to play › Rules of engagement.
 
 Graphics quality (Settings › first row, or `?quality=`): `auto` picks `medium` for integrated GPUs (Apple M-series,
 Intel Iris/Xe — the tuned 60 fps target is a MacBook Air M4 at native resolution), `low` for phones / old GPUs, and
