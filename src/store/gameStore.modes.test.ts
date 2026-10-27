@@ -280,11 +280,10 @@ describe('stormy seas: shots lost in the storm', () => {
         s().autoPlacePlayerFleet()
         s().confirmPlacement()
         const cells = allCoords()
-        let i = 0
         let guard = 0
-        while (s().phase === 'battle' && guard++ < 3000) {
+        while (s().phase === 'battle' && guard++ < 1500) {
           if (s().turn === 'enemy') s().enemyTurn()
-          else s().fireAt(cells[i++ % cells.length])
+          else s().fireAt(cells.find((c) => !hasBeenShot(s().enemyBoard, c))!)
         }
         expect(s().phase).toBe('gameover')
         const enemyShots = s().events.filter((e) => e.by === 'enemy')
