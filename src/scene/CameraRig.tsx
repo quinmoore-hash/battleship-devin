@@ -46,7 +46,7 @@ const MENU_ORBIT = { radius: 36, height: 11, speed: 0.045 }
 
 /** Width of the side HUD (fleet panel + enemy-waters column, gaps, padding) the boards must clear — mirrors ui.css `.battle-body`. */
 function hudSidePx(width: number): number {
-  return width <= 900 ? 0 : width <= 1100 ? 490 : 580
+  return width <= 900 ? 0 : width <= 1100 ? 580 : 600
 }
 /** Half-width of the player board including its row labels, and the z of its near label row. */
 const NEAR_HALF_WIDTH = 6.2
