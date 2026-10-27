@@ -124,6 +124,20 @@ try {
   await page.getByTestId('battle').waitFor({ timeout: 60_000 })
   const yourTurn = () => page.getByTestId('status').filter({ hasText: /your turn/i }).waitFor({ timeout: 120_000 })
   await yourTurn()
+  // PERF_WRECKS=N: BUG-404 budget check — sink N ships up front (half ours, half theirs, never a whole fleet) via the perf store hook
+  const wrecks = Number(process.env.PERF_WRECKS ?? 0)
+  if (wrecks > 0) {
+    await page.evaluate((n) => {
+      const store = window.__perf.store()
+      const sinkSome = (board, k) => ({ ...board, ships: board.ships.map((sh, i) => (i < k ? { ...sh, hits: [...sh.cells] } : sh)) })
+      store.setState((s) => ({
+        playerBoard: sinkSome(s.playerBoard, Math.min(Math.ceil(n / 2), s.playerBoard.ships.length - 1)),
+        enemyBoard: sinkSome(s.enemyBoard, Math.min(Math.floor(n / 2), s.enemyBoard.ships.length - 1)),
+      }))
+    }, wrecks)
+    await page.waitForTimeout(6000)
+    console.log(`[frames] forced ${wrecks} wrecks; settled draws ${await page.evaluate(() => window.__frames.last.length)}`)
+  }
   let fired = 0
   const cells = []
   for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) cells.push([x, y])

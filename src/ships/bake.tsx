@@ -38,7 +38,7 @@ interface Entry {
   element: ReactElement
   object: THREE.Group | null
   framesMounted: number
-  /** Mounted `<BakedShip>`s showing this key; an entry nobody shows for `EVICT_MS` is disposed. */
+  /** Mounted `<BakedShip>`s showing this key; an entry nobody shows (and no mounted `<Ship>` holds) for `EVICT_MS` is disposed. */
   users: number
   /** `performance.now()` when the last `<BakedShip>` using this entry unmounted; 0 while in use. */
   idleSince: number
