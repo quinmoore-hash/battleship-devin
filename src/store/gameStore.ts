@@ -400,8 +400,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (modes.salvo) {
       if (salvo.pending.some((p) => sameCoord(p, coord))) return undefined
       const pending = [...salvo.pending, coord]
-      // a treasure bonus volley is exactly the chests found; otherwise one shot per surviving ship
-      const size = bonusShots > 0 ? bonusShots : Math.min(salvo.size, salvoSize(playerBoard))
+      // a treasure bonus volley is exactly the chests found; otherwise one shot per surviving ship —
+      // never more than the unshot cells left, or the last volley could never fill (BUG-548)
+      const unshot = enemyBoard.size * enemyBoard.size - enemyBoard.shots.length
+      const size = Math.max(1, Math.min(bonusShots > 0 ? bonusShots : Math.min(salvo.size, salvoSize(playerBoard)), unshot))
       if (pending.length < size) {
         set({ salvo: { pending, size } })
         return null
