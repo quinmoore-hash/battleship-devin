@@ -1,8 +1,9 @@
 import { coordLabel, FLEET_BY_ID } from '../engine'
 import type { GameEvent } from '../store/gameStore'
 
-const word = (e: GameEvent): string =>
-  e.kind === 'treasure' ? 'treasure!' : e.result.outcome === 'lost' ? (e.by === 'human' ? 'lost in the storm — fire again' : 'lost in the storm') : e.result.outcome === 'sunk' && e.result.shipId ? `sank ${FLEET_BY_ID[e.result.shipId]?.name ?? 'a ship'}` : e.result.outcome
+/** `hotSeat`: the deck passes after a lost shot too, so no "fire again". */
+const word = (e: GameEvent, hotSeat = false): string =>
+  e.kind === 'treasure' ? 'treasure!' : e.result.outcome === 'lost' ? (e.by === 'human' && !hotSeat ? 'lost in the storm — fire again' : 'lost in the storm') : e.result.outcome === 'sunk' && e.result.shipId ? `sank ${FLEET_BY_ID[e.result.shipId]?.name ?? 'a ship'}` : e.result.outcome
 
 /** One log line per event; the balls of a Black Flag Broadside collapse into one line ("Broadside D4–F4: miss, HIT, miss"). */
 export interface LogLine {
@@ -13,7 +14,7 @@ export interface LogLine {
   outcome: string
 }
 
-export function logLines(events: readonly GameEvent[]): LogLine[] {
+export function logLines(events: readonly GameEvent[], hotSeat = false): LogLine[] {
   const lines: LogLine[] = []
   const groups = new Map<number, GameEvent[]>()
   for (const e of events) {
@@ -32,7 +33,7 @@ export function logLines(events: readonly GameEvent[]): LogLine[] {
     } else if (e.kind === 'treasure') {
       lines.push({ id: e.id, by: e.by, className: 'log-treasure', coord: `Treasure at ${coordLabel(e.result.coord)}`, outcome: 'fire again!' })
     } else {
-      lines.push({ id: e.id, by: e.by, className: `log-${e.result.outcome}`, coord: coordLabel(e.result.coord), outcome: word(e) })
+      lines.push({ id: e.id, by: e.by, className: `log-${e.result.outcome}`, coord: coordLabel(e.result.coord), outcome: word(e, hotSeat) })
     }
   }
   for (const line of lines) {
@@ -49,7 +50,7 @@ export function logLines(events: readonly GameEvent[]): LogLine[] {
 
 export function ShotLog({ events, names }: { events: GameEvent[]; names?: { human: string; enemy: string } }) {
   const shots = events.filter((e) => e.kind !== 'spyglass').length
-  const recent = logLines(events).reverse().slice(0, 40)
+  const recent = logLines(events, !!names).reverse().slice(0, 40)
   return (
     <section className="shot-log" data-testid="shot-log" aria-label="Shot log">
       <header>
