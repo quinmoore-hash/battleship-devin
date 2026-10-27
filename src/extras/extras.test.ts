@@ -69,7 +69,7 @@ describe('replayModel', () => {
   })
 
   it('a shot lost in the storm leaves the boards unchanged in the replay', () => {
-    const snap = snapshotFromState({ ...game, modes: { salvo: false, storm: true }, winner: game.winner })
+    const snap = snapshotFromState({ ...game, modes: { salvo: false, storm: true, blackFlag: false }, winner: game.winner })
     const lost = { id: 999, by: 'human' as const, kind: 'shot' as const, result: { coord: game.events[0].result.coord, outcome: 'lost' as const } }
     const withLost = { ...snap, events: [lost, ...snap.events] }
     const frames = buildFrames(withLost)
