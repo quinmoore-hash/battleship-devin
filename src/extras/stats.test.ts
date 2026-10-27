@@ -120,16 +120,16 @@ describe('stats: summarizeGame + recorder', () => {
       {
         difficulty: 'hard',
         winner: 'enemy',
-        modes: { salvo: true, storm: false },
+        modes: { salvo: true, storm: false, blackFlag: false },
         events: [
-          { id: 1, by: 'human', result: { coord: { x: 0, y: 0 }, outcome: 'hit', shipId: 'sloop' } },
-          { id: 2, by: 'enemy', result: { coord: { x: 0, y: 0 }, outcome: 'miss' } },
-          { id: 3, by: 'human', result: { coord: { x: 1, y: 0 }, outcome: 'miss' } },
+          { id: 1, by: 'human', kind: 'shot', result: { coord: { x: 0, y: 0 }, outcome: 'hit', shipId: 'sloop' } },
+          { id: 2, by: 'enemy', kind: 'shot', result: { coord: { x: 0, y: 0 }, outcome: 'miss' } },
+          { id: 3, by: 'human', kind: 'shot', result: { coord: { x: 1, y: 0 }, outcome: 'miss' } },
         ],
       },
       1234,
     )
-    expect(summary).toEqual({ difficulty: 'hard', won: false, shots: 2, hits: 1, turns: 2, durationMs: 1234, modes: { salvo: true, storm: false } })
+    expect(summary).toEqual({ difficulty: 'hard', won: false, shots: 2, hits: 1, turns: 2, durationMs: 1234, modes: { salvo: true, storm: false, blackFlag: false } })
   })
 
   it('records a game once when the store goes battle -> gameover, timing the battle phase', () => {
@@ -152,7 +152,7 @@ describe('stats: summarizeGame + recorder', () => {
       t = 2000
       store.setState({ phase: 'battle' })
       t = 9000
-      store.setState({ events: [{ id: 1, by: 'human', result: { coord: { x: 0, y: 0 }, outcome: 'miss' } }] })
+      store.setState({ events: [{ id: 1, by: 'human', kind: 'shot', result: { coord: { x: 0, y: 0 }, outcome: 'miss' } }] })
       store.setState({ phase: 'gameover', winner: 'human' })
       store.setState({ phase: 'gameover', winner: 'human' })
       const saved = loadStats(storage)

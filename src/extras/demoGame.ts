@@ -28,7 +28,7 @@ export function simulateGame(seed: number, { difficulty = 'medium', humanSkill =
       const next = fire(enemyBoard, coord)
       enemyBoard = next.board
       human.observe(next.result)
-      events.push({ id: id++, by: 'human', result: next.result })
+      events.push({ id: id++, by: 'human', kind: 'shot', result: next.result })
       if (isFleetSunk(enemyBoard)) winner = 'human'
       turn = 'enemy'
     } else {
@@ -36,10 +36,10 @@ export function simulateGame(seed: number, { difficulty = 'medium', humanSkill =
       const next = fire(playerBoard, coord)
       playerBoard = next.board
       enemy.observe(next.result)
-      events.push({ id: id++, by: 'enemy', result: next.result })
+      events.push({ id: id++, by: 'enemy', kind: 'shot', result: next.result })
       if (isFleetSunk(playerBoard)) winner = 'enemy'
       turn = 'human'
     }
   }
-  return { difficulty, winner, modes: { salvo: false, storm: false }, playerBoard, enemyBoard, events }
+  return { difficulty, winner, modes: { salvo: false, storm: false, blackFlag: false }, playerBoard, enemyBoard, events }
 }

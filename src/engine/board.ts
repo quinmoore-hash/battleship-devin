@@ -1,4 +1,4 @@
-import { FLEET } from './fleet'
+import { FLEET, fleetUnits } from './fleet'
 import {
   BOARD_SIZE,
   type Board,
@@ -34,32 +34,36 @@ export function shipCells(spec: ShipSpec, origin: Coord, orientation: Orientatio
   return cells
 }
 
+/** `uid` = the ship instance being (re)placed; defaults to the class id (classic fleets). */
 export function canPlace(
   board: Board,
   spec: ShipSpec,
   origin: Coord,
   orientation: Orientation,
+  uid: string = spec.id,
 ): boolean {
   const cells = shipCells(spec, origin, orientation)
   if (!cells.every((c) => inBounds(c, board.size))) return false
   const occupied = new Set(
-    board.ships.filter((s) => s.spec.id !== spec.id).flatMap((s) => s.cells.map(coordKey)),
+    board.ships.filter((s) => s.uid !== uid).flatMap((s) => s.cells.map(coordKey)),
   )
   return cells.every((c) => !occupied.has(coordKey(c)))
 }
 
-/** Returns a new board with the ship placed (replacing any previous placement of the same ship). */
+/** Returns a new board with the ship placed (replacing any previous placement of the same `uid`). */
 export function placeShip(
   board: Board,
   spec: ShipSpec,
   origin: Coord,
   orientation: Orientation,
+  uid: string = spec.id,
 ): Board {
-  if (!canPlace(board, spec, origin, orientation)) {
-    throw new Error(`Cannot place ${spec.id} at ${coordKey(origin)} ${orientation}`)
+  if (!canPlace(board, spec, origin, orientation, uid)) {
+    throw new Error(`Cannot place ${uid} at ${coordKey(origin)} ${orientation}`)
   }
   const ship: PlacedShip = {
     spec,
+    uid,
     origin,
     orientation,
     cells: shipCells(spec, origin, orientation),
@@ -67,16 +71,18 @@ export function placeShip(
   }
   return {
     ...board,
-    ships: [...board.ships.filter((s) => s.spec.id !== spec.id), ship],
+    ships: [...board.ships.filter((s) => s.uid !== uid), ship],
   }
 }
 
-export function removeShip(board: Board, shipId: ShipSpec['id']): Board {
-  return { ...board, ships: board.ships.filter((s) => s.spec.id !== shipId) }
+/** Removes the ship with this `uid` (a class id removes the first ship of that class, as before). */
+export function removeShip(board: Board, uid: string): Board {
+  return { ...board, ships: board.ships.filter((s) => s.uid !== uid) }
 }
 
+/** Every unit of `fleet` is on the board (by `uid`, so a Wolf pack needs all four sloops). */
 export const isFleetPlaced = (board: Board, fleet: readonly ShipSpec[] = FLEET): boolean =>
-  fleet.every((spec) => board.ships.some((s) => s.spec.id === spec.id))
+  fleetUnits(fleet).every((u) => board.ships.some((s) => s.uid === u.uid))
 
 export function randomPlacement(
   rng: () => number = Math.random,
@@ -84,17 +90,17 @@ export function randomPlacement(
   size = BOARD_SIZE,
 ): Board {
   let board = createBoard(size)
-  for (const spec of fleet) {
+  for (const { spec, uid } of fleetUnits(fleet)) {
     let placed = false
     for (let attempt = 0; attempt < 1000 && !placed; attempt++) {
       const orientation: Orientation = rng() < 0.5 ? 'horizontal' : 'vertical'
       const origin = { x: Math.floor(rng() * size), y: Math.floor(rng() * size) }
-      if (canPlace(board, spec, origin, orientation)) {
-        board = placeShip(board, spec, origin, orientation)
+      if (canPlace(board, spec, origin, orientation, uid)) {
+        board = placeShip(board, spec, origin, orientation, uid)
         placed = true
       }
     }
-    if (!placed) throw new Error(`Failed to place ${spec.id}`)
+    if (!placed) throw new Error(`Failed to place ${uid}`)
   }
   return board
 }
@@ -126,11 +132,12 @@ export function fire(board: Board, coord: Coord): { board: Board; result: ShotRe
     coord,
     outcome: isSunk(hitShip) ? 'sunk' : 'hit',
     shipId: target.spec.id,
+    shipUid: target.uid,
   }
   return {
     board: {
       ...board,
-      ships: board.ships.map((s) => (s.spec.id === target.spec.id ? hitShip : s)),
+      ships: board.ships.map((s) => (s.uid === target.uid ? hitShip : s)),
       shots: [...board.shots, result],
     },
     result,
@@ -146,15 +153,18 @@ export function enemyView(board: Board): EnemyBoardView {
   }
 }
 
+/** The ship a hit belongs to: its `uid` when known, else the class id (older replays, hand-made results). */
+export const shotShipKey = (s: ShotResult): string | undefined => s.shipUid ?? s.shipId
+
 /** size x size grid of what the attacker can see. Indexed [y][x]. */
 export function viewGrid(view: EnemyBoardView, board?: Board): CellView[][] {
   const grid: CellView[][] = Array.from({ length: view.size }, () =>
     Array.from({ length: view.size }, () => 'unknown' as CellView),
   )
-  const sunkIds = new Set(view.shots.filter((s) => s.outcome === 'sunk').map((s) => s.shipId))
+  const sunkIds = new Set(view.shots.filter((s) => s.outcome === 'sunk').map(shotShipKey))
   for (const shot of view.shots) {
     grid[shot.coord.y][shot.coord.x] =
-      shot.outcome === 'miss' ? 'miss' : shot.shipId && sunkIds.has(shot.shipId) ? 'sunk' : 'hit'
+      shot.outcome === 'miss' ? 'miss' : shot.shipId && sunkIds.has(shotShipKey(shot)) ? 'sunk' : 'hit'
   }
   if (board) {
     for (const ship of board.ships) {
@@ -177,3 +187,37 @@ export const neighbors = (c: Coord, size = BOARD_SIZE): Coord[] =>
 
 /** Column letter + row number, e.g. {x:0,y:0} -> "A1". */
 export const coordLabel = (c: Coord): string => `${String.fromCharCode(65 + c.x)}${c.y + 1}`
+
+/**
+ * Black Flag — Broadside: the 3 cells centred on `target` along a row (`horizontal`) or column (`vertical`),
+ * clipped to the board. Pure; the store skips cells already shot.
+ */
+export function broadsideCells(target: Coord, orientation: Orientation, size = BOARD_SIZE): Coord[] {
+  const out: Coord[] = []
+  for (let i = -1; i <= 1; i++) {
+    const c = orientation === 'horizontal' ? { x: target.x + i, y: target.y } : { x: target.x, y: target.y + i }
+    if (inBounds(c, size)) out.push(c)
+  }
+  return out
+}
+
+/** Chebyshev adjacency (shares an edge or a corner). */
+export const touching = (a: Coord, b: Coord): boolean => Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1
+
+/**
+ * Black Flag — treasure: `count` chests on open-water cells of `board` (never under a ship, never touching each
+ * other), drawn with `rng` so a seeded game is reproducible. Deterministic given the same board + rng sequence.
+ */
+export function treasureCells(board: Board, rng: () => number, count = 2): Coord[] {
+  const occupied = new Set(board.ships.flatMap((s) => s.cells.map(coordKey)))
+  let open = allCoords(board.size).filter((c) => !occupied.has(coordKey(c)))
+  const out: Coord[] = []
+  while (out.length < count && open.length > 0) {
+    const pick = open[Math.floor(rng() * open.length)]
+    out.push(pick)
+    open = open.filter((c) => !touching(c, pick))
+  }
+  return out
+}
+
+export const hasTreasureAt = (treasure: readonly Coord[], c: Coord): boolean => treasure.some((t) => sameCoord(t, c))

@@ -1,17 +1,22 @@
 import {
   coordKey,
+  inBounds,
   type Coord,
   type Difficulty,
   type EnemyBoardView,
+  type Orientation,
   type ShipSpec,
   type ShotResult,
 } from '../engine'
-import { readView, type Knowledge } from './knowledge'
+import { applySpied, broadsideThroughHit, readView, type Knowledge, type Spied } from './knowledge'
 import { pick } from './rng'
 import type { AiOpponent } from './types'
 
 /** How much more a placement counts for every open hit it would explain. */
 const HIT_WEIGHT = 25
+
+/** Spyglass: look only when the hottest cell carries at least this many times the weight of the runner-up. */
+export const SPYGLASS_RATIO = 2
 
 /**
  * Hard: probability-density targeting.
@@ -27,14 +32,24 @@ export class HardOpponent implements AiOpponent {
   readonly difficulty: Difficulty = 'hard'
   private readonly rng: () => number
   private parity?: { modulus: number; offset: number }
+  private spied: Spied[] = []
 
   constructor(rng: () => number = Math.random) {
     this.rng = rng
   }
 
-  nextShot(view: EnemyBoardView): Coord {
+  /** The view plus what the Spyglass saw: open water is a miss, a seen ship weighs like an open hit. */
+  private knowledge(view: EnemyBoardView): { k: Knowledge; seenShips: Coord[] } {
     const k = readView(view)
+    const seenShips = applySpied(k, this.spied)
+    return { k: seenShips.length ? { ...k, openHits: [...k.openHits, ...seenShips] } : k, seenShips }
+  }
+
+  nextShot(view: EnemyBoardView): Coord {
+    const { k, seenShips } = this.knowledge(view)
     if (k.unshot.length === 0) throw new Error('No cells left to fire at')
+    // a ship seen through the Spyglass is a certain hit
+    if (seenShips.length > 0) return seenShips[0]
 
     const heat = heatmap(k, view.remainingShips)
     const hunting = k.openHits.length === 0
@@ -57,6 +72,41 @@ export class HardOpponent implements AiOpponent {
   }
 
   observe(_result: ShotResult): void {}
+
+  observeSpy(coord: Coord, ship: boolean): void {
+    this.spied.push({ coord, ship })
+  }
+
+  /** Look when one cell clearly dominates the heatmap (≥ `SPYGLASS_RATIO` × the runner-up). */
+  spyTarget(view: EnemyBoardView): Coord | null {
+    const { k } = this.knowledge(view)
+    const heat = heatmap(k, view.remainingShips)
+    let top: { c: Coord; h: number } | null = null
+    let second = 0
+    for (const c of k.unshot) {
+      const h = heat.get(coordKey(c)) ?? 0
+      if (!top || h > top.h) {
+        if (top) second = top.h
+        top = { c, h }
+      } else if (h > second) second = h
+    }
+    if (!top || top.h === 0 || second === 0) return null
+    return top.h >= SPYGLASS_RATIO * second ? top.c : null
+  }
+
+  /** The turn after the first confirmed hit: the line through it along the hotter axis. */
+  broadsideTarget(view: EnemyBoardView): { center: Coord; orientation: Orientation } | null {
+    const { k } = this.knowledge(view)
+    const line = broadsideThroughHit(k)
+    if (!line) return null
+    const heat = heatmap(k, view.remainingShips)
+    const weigh = (cells: Coord[]) => cells.reduce((n, c) => n + (inBounds(c, k.size) && !k.taken.has(coordKey(c)) ? (heat.get(coordKey(c)) ?? 0) : 0), 0)
+    const { center } = line
+    const h = weigh([{ x: center.x - 1, y: center.y }, { x: center.x + 1, y: center.y }])
+    const v = weigh([{ x: center.x, y: center.y - 1 }, { x: center.x, y: center.y + 1 }])
+    if (h === 0 && v === 0) return line
+    return { center, orientation: v > h ? 'vertical' : 'horizontal' }
+  }
 
   private parityCells(k: Knowledge, remaining: readonly ShipSpec[], heat: Map<string, number>): Coord[] {
     const modulus = Math.max(2, Math.min(...remaining.map((s) => s.length)))

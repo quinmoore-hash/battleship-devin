@@ -7,7 +7,7 @@ const spec = (id: PlacedShip['spec']['id']) => FLEET.find((s) => s.id === id)!
 const ship = (id: PlacedShip['spec']['id'], x: number, y: number, orientation: 'horizontal' | 'vertical' = 'horizontal', hits: PlacedShip['hits'] = []): PlacedShip => {
   const s = spec(id)
   const cells = Array.from({ length: s.length }, (_, i) => (orientation === 'horizontal' ? { x: x + i, y } : { x, y: y + i }))
-  return { spec: s, origin: { x, y }, orientation, cells, hits }
+  return { spec: s, uid: s.id, origin: { x, y }, orientation, cells, hits }
 }
 
 const player = BOARD_LAYOUT.player.origin

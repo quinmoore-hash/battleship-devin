@@ -18,6 +18,12 @@ export interface ShipSpec {
 
 export interface PlacedShip {
   spec: ShipSpec
+  /**
+   * Unique per board: `spec.id` for the first ship of a class, `spec.id#2`, `#3`… for repeats (Black Flag fleets may
+   * carry two Men-o'-War or four Sloops). Everything that keys per-ship state (sink progress, firing, flotsam, replay)
+   * uses it; in a classic fleet it is always equal to `spec.id`.
+   */
+  uid: string
   origin: Coord
   orientation: Orientation
   cells: Coord[]
@@ -31,6 +37,8 @@ export interface ShotResult {
   outcome: ShotOutcome
   /** Set when outcome is 'hit' or 'sunk'. */
   shipId?: ShipId
+  /** The hit ship's `PlacedShip.uid` (same as `shipId` unless the fleet repeats a class). */
+  shipUid?: string
 }
 
 export interface Board {

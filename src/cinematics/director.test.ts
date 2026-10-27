@@ -5,7 +5,7 @@ import { CINEMATIC_TIMING, type CinematicEvent } from './types'
 
 const mk = (id: PlacedShip['spec']['id'], x: number, y: number): PlacedShip => {
   const spec = FLEET.find((s) => s.id === id)!
-  return { spec, origin: { x, y }, orientation: 'horizontal', cells: Array.from({ length: spec.length }, (_, i) => ({ x: x + i, y })), hits: [] }
+  return { spec, uid: spec.id, origin: { x, y }, orientation: 'horizontal', cells: Array.from({ length: spec.length }, (_, i) => ({ x: x + i, y })), hits: [] }
 }
 const fleets = { human: [mk('frigate', 2, 1)], enemy: [mk('galleon', 4, 4)] }
 const make = (reducedMotion = false) => createDirector({ autoTick: false, audio: false, fleets: () => fleets, reducedMotion: () => reducedMotion })

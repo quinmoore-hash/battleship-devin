@@ -2,12 +2,14 @@ import {
   coordKey,
   inBounds,
   neighbors,
+  shotShipKey,
   type Coord,
   type Difficulty,
   type EnemyBoardView,
+  type Orientation,
   type ShotResult,
 } from '../engine'
-import { readView, type Knowledge } from './knowledge'
+import { applySpied, broadsideThroughHit, readView, type Knowledge, type Spied } from './knowledge'
 import { pick } from './rng'
 import type { AiOpponent } from './types'
 
@@ -25,6 +27,7 @@ export class MediumOpponent implements AiOpponent {
   /** Hits on ships that are still afloat, in the order they were scored. */
   private hits: ShotResult[] = []
   private targets: Coord[] = []
+  private spied: Spied[] = []
 
   constructor(rng: () => number = Math.random) {
     this.rng = rng
@@ -33,6 +36,8 @@ export class MediumOpponent implements AiOpponent {
   nextShot(view: EnemyBoardView): Coord {
     const knowledge = readView(view)
     if (knowledge.unshot.length === 0) throw new Error('No cells left to fire at')
+    const seenShips = applySpied(knowledge, this.spied)
+    if (seenShips.length > 0) return seenShips[0]
 
     this.targets = this.targets.filter((t) => !knowledge.taken.has(coordKey(t)))
     if (this.targets.length === 0) this.targets = this.buildTargets(knowledge)
@@ -54,11 +59,22 @@ export class MediumOpponent implements AiOpponent {
       return
     }
     // Sunk: drop every hit on that ship, keep the strays, rebuild targets around them.
-    this.hits = this.hits.filter((h) => h.shipId !== result.shipId)
+    this.hits = this.hits.filter((h) => shotShipKey(h) !== shotShipKey(result))
     this.targets = []
     for (const h of this.hits) {
       for (const n of this.shuffled(neighbors(h.coord))) this.targets.push(n)
     }
+  }
+
+  observeSpy(coord: Coord, ship: boolean): void {
+    this.spied.push({ coord, ship })
+  }
+
+  /** The turn after the first confirmed hit: the 3-cell line through it. */
+  broadsideTarget(view: EnemyBoardView): { center: Coord; orientation: Orientation } | null {
+    const k = readView(view)
+    applySpied(k, this.spied)
+    return broadsideThroughHit(k)
   }
 
   /** Unshot cells at either end of every straight run of two or more open hits. */
