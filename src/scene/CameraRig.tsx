@@ -69,7 +69,7 @@ export function battleFraming(aspect: number, width: number, out: { target: THRE
     design = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalf) / aspect)), 30, 46)
   }
   const half = THREE.MathUtils.degToRad(fitFov(design, aspect) / 2)
-  const centre = Math.atan(pos.y / dNear) - 0.92 * half
+  const centre = Math.atan(pos.y / dNear) - 0.88 * half
   out.target.set(0, 0.3, pos.z - (pos.y - 0.3) / Math.tan(centre))
   out.fov = design
   return out
