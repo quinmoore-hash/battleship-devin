@@ -1873,3 +1873,14 @@
   .fleet-picker { grid-template-columns: 1fr; }
   .power-treasure { margin-left: 0; width: 100%; }
 }
+/* Black Flag log lines carry a longer label ("Broadside C5–C7", "Spyglass E5"): give it the row and drop the outcome under it */
+.shot-log li.log-broadside,
+.shot-log li.log-spyglass,
+.shot-log li.log-treasure {
+  grid-template-columns: 3.4rem 1fr;
+}
+.shot-log li.log-broadside .outcome,
+.shot-log li.log-spyglass .outcome,
+.shot-log li.log-treasure .outcome {
+  grid-column: 2;
+}
