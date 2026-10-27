@@ -1,6 +1,7 @@
 import { playSfx, useAudioSettings } from '../audio'
 import { useGameStore, type CinematicsLevel, type QualitySetting } from '../store/gameStore'
 import { Modal } from './Modal'
+import { SkySeaPicker } from './SkySeaPicker'
 
 /**
  * Settings. Volumes/mute are written to both the game store (rules/cinematics timing) and the
@@ -36,6 +37,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <span>Cinematics</span>
             <Segmented value={settings.cinematics} options={['full', 'fast', 'off']} testId="setting-cinematics" onChange={(v) => updateSettings({ cinematics: v as CinematicsLevel })} />
           </label>
+        </fieldset>
+        <fieldset className="settings-skysea">
+          <legend>Sky &amp; sea</legend>
+          <SkySeaPicker />
+          <p className="muted">Looks only — the rules of engagement are unchanged.</p>
         </fieldset>
         <fieldset>
           <legend>Sound</legend>

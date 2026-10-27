@@ -465,7 +465,6 @@ export function Fort({ night }: { night: number }) {
         <sphereGeometry args={[0.16, 8, 6]} />
         <meshStandardMaterial color="#ffd27a" emissive="#ffb347" emissiveIntensity={night * 3} toneMapped={false} />
       </mesh>
-      {night > 0.05 && <pointLight position={[0, 6.5, 2.4]} color="#ffb347" intensity={night * 20} distance={16} decay={2} />}
     </group>
   )
 }
@@ -587,7 +586,6 @@ export function Dock({ night }: { night: number }) {
           </mesh>
         </group>
       ))}
-      {night > 0.05 && <pointLight position={[-6.2, 3.3, 0]} color="#ffb347" intensity={night * 14} distance={14} decay={2} />}
       <Barrel position={[3, 0.95, -0.8]} livery="navy" scale={1.6} />
       <Barrel position={[3.5, 0.95, -0.4]} livery="navy" scale={1.5} />
       <Crate position={[4.6, 1.2, 0.6]} livery="navy" size={0.55} />
@@ -651,7 +649,6 @@ export function Tavern({ night }: { night: number }) {
         <boxGeometry args={[0.22, 0.3, 0.22]} />
         <meshStandardMaterial color="#ffd27a" emissive="#ffb347" emissiveIntensity={0.3 + night * 3} toneMapped={false} />
       </mesh>
-      {night > 0.05 && <pointLight position={[0, 2.6, 4]} color="#ffb347" intensity={night * 16} distance={16} decay={2} />}
     </group>
   )
 }

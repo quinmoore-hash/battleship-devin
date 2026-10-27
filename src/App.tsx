@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { bindGameAudio } from './audio'
 import { CinematicCamera, CinematicLayer, Letterbox, useDirector } from './cinematics'
-import { ExtrasLayer, MenuExtras, useGameWeather } from './extras'
+import { ExtrasLayer, MenuExtras, useGameTimeOfDay, useGameWeather } from './extras'
 import { OceanScene } from './scene'
 import { useGameStore } from './store/gameStore'
 import { GameUI } from './ui'
@@ -70,6 +70,7 @@ export default function App() {
  */
 function Game() {
   const weather = useGameWeather()
+  const timeOfDay = useGameTimeOfDay()
   const phase = useGameStore((s) => s.phase)
   const cinematic = useDirector((s) => s.busy)
   const inBattle = phase === 'battle' || phase === 'gameover'
@@ -86,7 +87,7 @@ function Game() {
       <PerfBootstrap />
       <FpsWatchdog />
       <A11yBootstrap />
-      <OceanScene weather={weather} cameraOverride={cinematic}>
+      <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic}>
         <GameWorld />
         {inBattle && <CinematicLayer />}
         {inBattle && <CinematicCamera />}

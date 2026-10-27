@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { is3dDisabled } from '../scene/flags'
-import { useGameStore } from '../store/gameStore'
+import { selectSkyWeather, useGameStore } from '../store/gameStore'
 import { BattleScreen } from './Battle'
 import { GameOverScreen } from './GameOver'
 import { HowToPlayModal } from './HowToPlay'
@@ -20,6 +20,8 @@ export function GameUI({ menuExtras }: { menuExtras?: ReactNode } = {}) {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const winner = useGameStore((s) => s.winner)
   const colorblind = useGameStore((s) => s.settings.colorblind)
+  const timeOfDay = useGameStore((s) => s.settings.timeOfDay)
+  const weather = useGameStore(selectSkyWeather)
   const [modal, setModal] = useState<UiModal>(null)
 
 
@@ -36,7 +38,7 @@ export function GameUI({ menuExtras }: { menuExtras?: ReactNode } = {}) {
 
   return (
     <UiContext.Provider value={ctx}>
-      <div className="ui-root" data-testid="ui-root" data-phase={phase} data-reduced-motion={reducedMotion} data-colorblind={colorblind} data-no3d={is3dDisabled()}>
+      <div className="ui-root" data-testid="ui-root" data-phase={phase} data-reduced-motion={reducedMotion} data-colorblind={colorblind} data-no3d={is3dDisabled()} data-tod={timeOfDay} data-weather={weather}>
         {phase !== 'menu' && (
           <nav className="corner-nav">
             <button type="button" className="icon-btn" aria-label="How to play" title="How to play" data-testid="nav-how-to-play" onClick={() => (playSfx('ui-click'), setModal('how-to-play'))}>

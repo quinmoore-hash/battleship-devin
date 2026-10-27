@@ -1884,3 +1884,83 @@
 .shot-log li.log-treasure .outcome {
   grid-column: 2;
 }
+
+/* Sky & sea picker (looks only): a small corner control on the menu, a fieldset in Settings.
+   Wide screens pin it top-right, clear of the posters; narrower ones place it in-flow under the menu buttons. */
+.menu-skysea {
+  order: 4;
+  justify-self: center;
+}
+.menu-dock {
+  order: 5;
+}
+.menu-foot {
+  order: 6;
+}
+@media (min-width: 1200px) {
+  .menu-skysea {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 12;
+    pointer-events: auto;
+  }
+}
+.skysea {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: end;
+}
+.skysea-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.skysea-field > span {
+  color: inherit;
+  opacity: 0.85;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+}
+.skysea .select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.skysea-compact {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(10, 22, 32, 0.78);
+  border: 1px solid rgba(255, 230, 190, 0.28);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+.skysea-compact .skysea-title {
+  align-self: center;
+  font-family: var(--font-display, serif);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brass, #e4c27a);
+  padding-right: 4px;
+}
+.skysea-compact .skysea-field > span {
+  color: rgba(255, 240, 214, 0.9);
+  opacity: 1;
+  font-size: 0.62rem;
+}
+.skysea-compact .select {
+  padding: 4px 26px 4px 8px;
+  font-size: 0.82rem;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .skysea-compact {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}

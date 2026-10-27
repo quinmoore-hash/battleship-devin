@@ -17,6 +17,12 @@ The fleet: Man-o’-War (5), Galleon (4), Frigate (3), Brigantine (3), Sloop (2)
 
 Deployed from `main` to GitHub Pages: https://quinmoore-hash.github.io/battleship-devin/
 
+**Sky & sea (looks only).** The small control in the top-right corner of the menu (also in Settings) picks the time of
+day — Dawn, Noon, Golden hour (default), Dusk, Moonlit night — and the weather — Calm, Overcast, Squall (rain and a
+bigger swell, no lightning). It re-lights the cove instantly and is remembered with your settings; `?tod=night&weather=squall`
+preselects it for a visit. It never changes the rules: the Stormy seas rule brings its own storm and shows "Stormy seas"
+greyed out in the picker while it is on.
+
 ## Develop
 
 ```bash

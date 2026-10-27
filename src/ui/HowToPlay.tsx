@@ -39,8 +39,12 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
         </dd>
         <dt>Two captains</dt>
         <dd>Hot-seat: two players on one screen take turns at the chart.</dd>
-        <dt>Sky &amp; sea</dt>
-        <dd>Visual only — picks the weather and time of day; the rules do not change.</dd>
+        <dt>Sky &amp; sea (looks only)</dt>
+        <dd data-testid="howto-sky-sea">
+          Pick the time of day (Dawn, Noon, Golden hour, Dusk, Moonlit night) and the weather (Calm, Overcast, Squall)
+          from the corner of the menu or in Settings. It only changes the light and the water — shots, odds and turns are
+          untouched. Stormy seas brings its own weather while it is on.
+        </dd>
       </dl>
       <h3>The fleet</h3>
       <ul className="howto-fleet">

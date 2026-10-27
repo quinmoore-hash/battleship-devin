@@ -219,9 +219,9 @@ export function Lighting({ atmosphere, quality, lightning, shadowSize }: { atmos
     bolt.current.intensity = f * 4
     if (lightning) bolt.current.position.copy(lightning.dir).multiplyScalar(80)
   })
-  const [sx, sy, sz] = atmosphere.sunDir
-  const sunPos: [number, number, number] = [sx * 70, Math.max(sy, 0.08) * 70, sz * 70]
-  const moonPos: [number, number, number] = [-sx * 70, Math.max(-sy, 0.1) * 70, sz * 70]
+  // one shadow-casting key light: the sun by day, the moon after dark (cool, dimmer) — never both
+  const [kx, ky, kz] = atmosphere.keyDir
+  const keyPos: [number, number, number] = [kx * 70, ky * 70, kz * 70]
   const size = shadowSize ?? (quality === 'high' ? 2048 : 1024)
   const fogNear = 55 - atmosphere.storm * 25
   const fogFar = 230 - atmosphere.storm * 110
@@ -230,9 +230,9 @@ export function Lighting({ atmosphere, quality, lightning, shadowSize }: { atmos
       <fog attach="fog" args={[atmosphere.fogColor, fogNear, fogFar]} />
       <directionalLight
         ref={sun}
-        position={sunPos}
-        color={atmosphere.sunColor}
-        intensity={atmosphere.sunIntensity}
+        position={keyPos}
+        color={atmosphere.keyColor}
+        intensity={atmosphere.keyIntensity}
         castShadow={size > 0}
         shadow-mapSize={[size || 1024, size || 1024]}
         shadow-bias={-0.0004}
@@ -244,11 +244,10 @@ export function Lighting({ atmosphere, quality, lightning, shadowSize }: { atmos
         shadow-camera-top={22}
         shadow-camera-bottom={-22}
       />
-      <directionalLight position={moonPos} color="#9fb4ff" intensity={atmosphere.moonIntensity} />
-      <directionalLight ref={fill} color="#fff1dc" intensity={0.55 * (0.4 + 0.6 * atmosphere.daylight)} />
+      <directionalLight ref={fill} color="#fff1dc" intensity={atmosphere.fillIntensity} />
       {/* lightning: a cold flash from above */}
       <directionalLight ref={bolt} position={[20, 80, -60]} color="#dfe8ff" intensity={0} />
-      <hemisphereLight color={atmosphere.skyZenith} groundColor={atmosphere.waterDeep} intensity={0.6 + 0.6 * atmosphere.daylight} />
+      <hemisphereLight color={atmosphere.skyZenith} groundColor={atmosphere.waterDeep} intensity={atmosphere.hemiIntensity} />
       <ambientLight color={atmosphere.ambientColor} intensity={atmosphere.ambientIntensity * 0.9} />
     </>
   )

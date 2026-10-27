@@ -12,7 +12,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "perf": "node scripts/perf.mjs",
-    "perf:game": "node scripts/perf-game.mjs"
+    "perf:game": "node scripts/perf-game.mjs",
+    "perf:sky": "node scripts/sky-sea-matrix.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

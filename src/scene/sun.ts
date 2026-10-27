@@ -7,11 +7,73 @@ import type { Vec3 } from './layout'
  */
 export const GOLDEN_HOUR = 0.68
 
-export type Weather = 'calm' | 'stormy'
+/**
+ * `calm` / `overcast` / `squall` are the player's "Sky & sea" picks (looks only); `stormy` is forced by the
+ * Stormy-seas rule: squall plus lightning and the heaviest swell.
+ */
+export type Weather = 'calm' | 'overcast' | 'squall' | 'stormy'
+export const WEATHERS: readonly Weather[] = ['calm', 'overcast', 'squall', 'stormy']
+export const WEATHER_LABELS: Record<Weather, string> = { calm: 'Calm', overcast: 'Overcast', squall: 'Squall', stormy: 'Stormy seas' }
+
+/** Named times of day for the Sky & sea picker (fractions of the day, see `computeAtmosphere`). */
+export const TIME_PRESETS = { dawn: 0.27, noon: 0.5, golden: GOLDEN_HOUR, dusk: 0.77, night: 0.98 } as const
+export type TimePreset = keyof typeof TIME_PRESETS
+export const TIME_PRESET_NAMES = Object.keys(TIME_PRESETS) as TimePreset[]
+export const TIME_PRESET_LABELS: Record<TimePreset, string> = { dawn: 'Dawn', noon: 'Noon', golden: 'Golden hour', dusk: 'Dusk', night: 'Moonlit night' }
+
+export const isTimePreset = (v: unknown): v is TimePreset => typeof v === 'string' && Object.hasOwn(TIME_PRESETS, v)
+export const isWeather = (v: unknown): v is Weather => typeof v === 'string' && (WEATHERS as readonly string[]).includes(v)
+
+/** `?tod=`: a preset name or a number (fraction of the day); anything else is `fallback`. */
+export function parseTimeOfDay(raw: string | null | undefined, fallback: number = GOLDEN_HOUR): number {
+  if (raw == null || raw === '') return fallback
+  if (isTimePreset(raw)) return TIME_PRESETS[raw]
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : fallback
+}
+
+/** `?weather=` / stored value: a known weather, else `fallback` (unknown names never break the scene). */
+export function parseWeather(raw: unknown, fallback: Weather = 'calm'): Weather {
+  return isWeather(raw) ? raw : fallback
+}
+
+interface WeatherProfile {
+  /** Overcast look 0..1: cloud cover, grey-green desaturation, fog, dimmer sun. */
+  storm: number
+  /** Rain streaks + rings on the water 0..1. */
+  rain: number
+  /** Swell: 0 = sheltered cove, 1 = the stormy-seas heave (`setSeaState`). */
+  swell: number
+  lightning: boolean
+}
+const WEATHER_PROFILE: Record<Weather, WeatherProfile> = {
+  calm: { storm: 0, rain: 0, swell: 0, lightning: false },
+  overcast: { storm: 0.55, rain: 0, swell: 0.15, lightning: false },
+  squall: { storm: 0.85, rain: 1, swell: 0.7, lightning: false },
+  stormy: { storm: 1, rain: 1, swell: 1, lightning: true },
+}
 
 export interface Atmosphere {
-  /** 0 = calm, 1 = full storm (overcast, grey-green sea, heavy swell). */
+  weather: Weather
+  /** 0 = calm, 1 = full storm look (overcast, grey-green sea). Rain / swell / lightning are separate below. */
   storm: number
+  /** 0..1 rain density (squall and stormy). */
+  rain: number
+  /** 0..1 swell scale fed to `setSeaState` (squall 0.7, stormy 1). */
+  swell: number
+  /** Lightning only in the Stormy-seas rule weather. */
+  lightning: boolean
+  /** 0 = the key light is the sun, 1 = it is the moon (the one shadow-casting directional light swaps role). */
+  moon: number
+  /** Unit direction toward the key light (sun by day, moon at night). */
+  keyDir: Vec3
+  keyColor: string
+  keyIntensity: number
+  /** Camera-following fill so hulls never go black; higher at night / dusk (silhouette complaint). */
+  fillIntensity: number
+  hemiIntensity: number
+  /** Multiplier for lantern / buoy flame emissive: 1 by day, brighter after dark. */
+  lanternGlow: number
   /** Unit direction *toward* the sun. y < 0 means night. */
   sunDir: Vec3
   /** Sun elevation in [-1, 1] (sin of the altitude angle). */
@@ -162,7 +224,8 @@ function stormTint(hex: string, target: string, k: number): string {
 
 export function computeAtmosphere(timeOfDay: number, weather: Weather = 'calm'): Atmosphere {
   const t = ((timeOfDay % 1) + 1) % 1
-  const storm = weather === 'stormy' ? 1 : 0
+  const w = WEATHER_PROFILE[isWeather(weather) ? weather : 'calm']
+  const storm = w.storm
   const angle = (t - 0.25) * Math.PI * 2 // 0 at sunrise, PI/2 at noon, PI at sunset
   const elevation = Math.sin(angle)
   // sun travels east -> west across the bay, arcing over the near shore (+z) so the fleets are front-lit from
@@ -172,24 +235,39 @@ export function computeAtmosphere(timeOfDay: number, weather: Weather = 'calm'):
   const dir: Vec3 = [sunDir[0] / len, sunDir[1] / len, sunDir[2] / len]
 
   const daylight = smoothstep(-0.12, 0.18, elevation)
+  const night = 1 - daylight
   const stars = (1 - smoothstep(-0.22, 0.02, elevation)) * (1 - storm)
   const sunIntensity = lerp(0.08, 2.4, smoothstep(-0.05, 0.35, elevation)) * lerp(1, 0.28, storm)
-  const ambientIntensity = lerp(0.18, 0.75, daylight) * lerp(1, 0.7, storm)
-  const moonIntensity = (1 - daylight) * 0.35 * (1 - storm * 0.8)
+  const ambientIntensity = lerp(0.42, 0.75, daylight) * lerp(1, 0.84, storm)
+  const moonIntensity = night * 1.0 * (1 - storm * 0.35)
+
+  // the moon takes over the single directional slot once the sun is well under the horizon; the moon sits
+  // opposite the sun but on the same (near-shore) side, so night ships stay front-lit too
+  const moon = smoothstep(0.02, 0.12, -elevation)
+  const moonDir: Vec3 = [-dir[0], Math.max(-dir[1], 0.35), dir[2]]
+  const ml = Math.hypot(...moonDir)
+  const sunKey: Vec3 = [dir[0], Math.max(dir[1], 0.08), dir[2]]
+  const sl = Math.hypot(...sunKey)
+  const keyDir: Vec3 = moon > 0.5 ? [moonDir[0] / ml, moonDir[1] / ml, moonDir[2] / ml] : [sunKey[0] / sl, sunKey[1] / sl, sunKey[2] / sl]
 
   // a storm pulls every colour toward a bruised grey-green overcast, darker at night
   const k = storm * 0.72
-  const dark = lerp(1, 0.45, 1 - daylight)
+  const dark = lerp(1, 0.45, night)
   const overcast = rgbToHex([74 * dark, 84 * dark, 92 * dark])
   const seaStorm = rgbToHex([38 * dark, 60 * dark, 62 * dark])
   const shallowStorm = rgbToHex([70 * dark, 110 * dark, 108 * dark])
+  const sunColor = stormTint(ramp(SUN, t), '#c9d2d8', storm * 0.5)
 
   return {
+    weather: isWeather(weather) ? weather : 'calm',
     storm,
+    rain: w.rain,
+    swell: w.swell,
+    lightning: w.lightning,
     sunDir: dir,
     elevation,
     daylight,
-    sunColor: stormTint(ramp(SUN, t), '#c9d2d8', storm * 0.5),
+    sunColor,
     sunIntensity,
     ambientColor: stormTint(ramp(AMBIENT, t), overcast, k),
     ambientIntensity,
@@ -201,5 +279,22 @@ export function computeAtmosphere(timeOfDay: number, weather: Weather = 'calm'):
     waterShallow: stormTint(ramp(SHALLOW, t), shallowStorm, k),
     stars,
     moonIntensity,
+    moon,
+    keyDir,
+    keyColor: moon > 0.5 ? stormTint('#aebfff', '#c9d2d8', storm * 0.5) : sunColor,
+    keyIntensity: lerp(sunIntensity, moonIntensity, moon),
+    fillIntensity: lerp(0.7, 0.55, daylight) * lerp(1, 0.95, storm),
+    hemiIntensity: lerp(0.9, 1.2, daylight),
+    lanternGlow: 1 + night * 1.4,
   }
 }
+
+/**
+ * Lantern flame boost shared with the ship kit (`Lantern` / `SternLantern` read it every frame). The scene
+ * sets it from `Atmosphere.lanternGlow`, so the kit never has to know about the sky.
+ */
+const lanternGlow = { value: 1 }
+export const setLanternGlow = (v: number): void => {
+  lanternGlow.value = v
+}
+export const getLanternGlow = (): number => lanternGlow.value
