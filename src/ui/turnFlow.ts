@@ -1,6 +1,6 @@
 import type { CinematicDirector, CinematicEvent } from '../cinematics'
 import { CINEMATIC_TIMING } from '../cinematics'
-import type { Coord, Difficulty, ShotResult } from '../engine'
+import type { Coord, Orientation, Difficulty, ShotResult } from '../engine'
 import { is3dDisabled } from '../scene/flags'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
 
@@ -120,9 +120,13 @@ export interface TurnFlowOptions {
   rng?: () => number
 }
 
+/** Black Flag power shot to fire instead of a normal shot. */
+export type PowerFire = { kind: 'broadside'; orientation: Orientation }
+
 export interface TurnFlow {
   /** Fire at `coord` and play the whole turn (player shot → sink? → enemy aims → enemy shot → sink? → victory?). Resolves when input may resume. */
-  fire: (coord: Coord) => Promise<ShotResult | undefined>
+  /** `power: 'broadside'` fires the Black Flag Broadside line through `coord` instead of a single shot. */
+  fire: (coord: Coord, power?: PowerFire) => Promise<ShotResult | undefined>
   /** Play the battle-start flyover (3D + real director only). A `fire()` during it skips it and proceeds. */
   intro: () => Promise<void>
   /** Skip whatever is currently playing (click / Space). */
@@ -172,7 +176,8 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
 
   /** Volley resolved by the last `fireAt` / `enemyTurn` for `by`, falling back to the single returned result. */
   const volleyOf = (by: 'human' | 'enemy', fallback: ShotResult): ShotResult[] => {
-    const volley = useGameStore.getState().lastVolley.filter((e) => e.by === by).map((e) => e.result)
+    // a Spyglass look is not a shot: nothing to play
+    const volley = useGameStore.getState().lastVolley.filter((e) => e.by === by && e.kind !== 'spyglass').map((e) => e.result)
     return volley.length ? volley : [fallback]
   }
 
@@ -201,20 +206,21 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
     }
   }
 
-  const fire = async (coord: Coord) => {
+  const fire = async (coord: Coord, power?: PowerFire) => {
     if (introPlaying) {
       activeDirector(timers).skip()
       await introPlaying
     }
     const store = useGameStore.getState()
     if (busy || store.phase !== 'battle' || store.turn !== 'human') return undefined
-    const result = store.fireAt(coord)
+    const result = power?.kind === 'broadside' ? store.fireBroadside(coord, power.orientation).at(-1) : store.fireAt(coord)
     if (!result) return undefined
     busy = true
     try {
       await playVolley('player', volleyOf('human', result))
       if (await maybeGameOver(result)) return result
-      if (useGameStore.getState().phase !== 'battle') {
+      if (useGameStore.getState().phase !== 'battle' || useGameStore.getState().turn === 'human') {
+        // game over elsewhere, or a treasure chest granted another shot: the enemy waits
         beat('done', result)
         return result
       }

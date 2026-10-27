@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, type DragEvent } from 'react'
 import { playSfx } from '../audio'
-import { FLEET, FLEET_BY_ID, isFleetPlaced, type Coord, type ShipId } from '../engine'
+import { FLEET_BY_ID, FLEET_PRESETS, fleetUnits, isFleetPlaced, uidClass, type Coord } from '../engine'
 import { useGameStore } from '../store/gameStore'
 import { Grid, type GridCellInfo } from './Grid'
 import { Hint, WaxSeal } from './Ornaments'
@@ -29,15 +29,20 @@ export function PlacementScreen() {
   const hintsSeen = useUiStore((s) => s.hintsSeen)
   const dismissHint = useUiStore((s) => s.dismissHint)
 
-  const placedIds = useMemo(() => new Set(playerBoard.ships.map((s) => s.spec.id)), [playerBoard])
-  const allPlaced = isFleetPlaced(playerBoard)
+  const blackFlag = useGameStore((s) => s.modes.blackFlag)
+  const fleet = useGameStore((s) => s.fleets.human)
+  const preset = useGameStore((s) => s.fleetPresets.human)
+  const setFleetPreset = useGameStore((s) => s.setFleetPreset)
+  const units = useMemo(() => fleetUnits(fleet), [fleet])
+  const placedIds = useMemo(() => new Set(playerBoard.ships.map((s) => s.uid)), [playerBoard])
+  const allPlaced = isFleetPlaced(playerBoard, fleet)
 
   // Always carry something while ships remain: the first unplaced one.
   useEffect(() => {
-    if (carrying && !placedIds.has(carrying)) return
-    const next = FLEET.find((s) => !placedIds.has(s.id))
-    setCarrying(next?.id ?? null)
-  }, [carrying, placedIds, setCarrying])
+    if (carrying && !placedIds.has(carrying) && units.some((u) => u.uid === carrying)) return
+    const next = units.find((u) => !placedIds.has(u.uid))
+    setCarrying(next?.uid ?? null)
+  }, [carrying, placedIds, setCarrying, units])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -54,17 +59,17 @@ export function PlacementScreen() {
     return () => (window.removeEventListener('keydown', onKey), window.removeEventListener('contextmenu', onContext))
   }, [rotate])
 
-  const spec = carrying ? FLEET_BY_ID[carrying] : null
+  const spec = carrying ? FLEET_BY_ID[uidClass(carrying)] : null
   const hoverCell = hover?.side === 'player' ? hover.coord : null
   const footprint = spec && hoverCell ? footprintAt(playerBoard, spec, hoverCell, orientation) : null
   const previewKeys = useMemo(() => new Set(footprint?.cells.map((c) => `${c.x},${c.y}`)), [footprint])
 
   const dropAt = useCallback(
-    (c: Coord, id: ShipId | null = useUiStore.getState().carrying) => {
-      const s = id ? FLEET_BY_ID[id] : null
-      if (!s) return
+    (c: Coord, uid: string | null = useUiStore.getState().carrying) => {
+      const s = uid ? FLEET_BY_ID[uidClass(uid)] : null
+      if (!s || !uid) return
       const f = footprintAt(useGameStore.getState().playerBoard, s, c, useUiStore.getState().orientation)
-      if (f.valid && placePlayerShip(s, f.origin, useUiStore.getState().orientation)) {
+      if (f.valid && placePlayerShip(s, f.origin, useUiStore.getState().orientation, uid)) {
         playSfx('place')
         setHover(null)
       } else playSfx('miss')
@@ -75,8 +80,8 @@ export function PlacementScreen() {
   const onCell = (c: Coord) => {
     const occupied = playerBoard.ships.find((s) => s.cells.some((k) => k.x === c.x && k.y === c.y))
     if (occupied) {
-      removePlayerShip(occupied.spec.id)
-      setCarrying(occupied.spec.id, occupied.orientation)
+      removePlayerShip(occupied.uid)
+      setCarrying(occupied.uid, occupied.orientation)
       playSfx('ui-click')
       return
     }
@@ -93,7 +98,7 @@ export function PlacementScreen() {
     }
   }
 
-  const onDragStart = (e: DragEvent, id: ShipId) => {
+  const onDragStart = (e: DragEvent, id: string) => {
     e.dataTransfer.setData('text/plain', id)
     e.dataTransfer.effectAllowed = 'move'
     setCarrying(id)
@@ -106,23 +111,52 @@ export function PlacementScreen() {
           Muster the fleet <WaxSeal tone="teal" />
         </h2>
         <p className="muted small">Pick a ship, hover your waters and click to anchor it. Drag ships on the water to move them.</p>
+        {blackFlag && (
+          <div className="fleet-picker" data-testid="fleet-picker" role="radiogroup" aria-label="Pick your fleet">
+            <strong className="fleet-picker-title">Black Flag — pick your fleet</strong>
+            {FLEET_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                role="radio"
+                aria-checked={preset === p.id}
+                className={`fleet-preset ${preset === p.id ? 'is-selected' : ''}`}
+                data-testid={`fleet-preset-${p.id}`}
+                onClick={() => {
+                  if (preset === p.id) return
+                  playSfx('ui-click')
+                  setFleetPreset(p.id)
+                  setCarrying(null)
+                }}
+              >
+                <span className="fleet-preset-name">{p.name}</span>
+                <span className="fleet-preset-ships" aria-hidden>
+                  {p.ships.map((id, i) => (
+                    <i key={i} style={{ width: `${FLEET_BY_ID[id].length * 0.42}em` }} />
+                  ))}
+                </span>
+                <small>{p.description}</small>
+              </button>
+            ))}
+          </div>
+        )}
         <ul className="tray" aria-label="Ships to place">
-          {FLEET.map((s) => {
-            const placed = placedIds.has(s.id)
-            const active = carrying === s.id
+          {units.map(({ spec: s, uid }) => {
+            const placed = placedIds.has(uid)
+            const active = carrying === uid
             return (
-              <li key={s.id}>
+              <li key={uid}>
                 <button
                   type="button"
                   className={`tray-ship ${placed ? 'is-placed' : ''} ${active ? 'is-active' : ''}`}
-                  data-testid={`ship-tray-${s.id}`}
+                  data-testid={`ship-tray-${uid}`}
                   data-placed={placed}
                   aria-pressed={active}
                   draggable={!placed}
-                  onDragStart={(e) => onDragStart(e, s.id)}
+                  onDragStart={(e) => onDragStart(e, uid)}
                   onClick={() => {
-                    if (placed) removePlayerShip(s.id)
-                    setCarrying(s.id)
+                    if (placed) removePlayerShip(uid)
+                    setCarrying(uid)
                     playSfx('ui-click')
                   }}
                 >
@@ -145,13 +179,13 @@ export function PlacementScreen() {
           <button type="button" className="btn btn-rope" data-testid="auto-place" onClick={() => (playSfx('place'), autoPlace())}>
             Auto-place
           </button>
-          <button type="button" className="btn btn-ghost" data-testid="clear-placement" disabled={playerBoard.ships.length === 0} onClick={() => (playSfx('ui-click'), FLEET.forEach((s) => removePlayerShip(s.id)))}>
+          <button type="button" className="btn btn-ghost" data-testid="clear-placement" disabled={playerBoard.ships.length === 0} onClick={() => (playSfx('ui-click'), playerBoard.ships.forEach((s) => removePlayerShip(s.uid)))}>
             Clear
           </button>
         </div>
         <div className="tray-foot">
           <span className="placed-count" data-testid="placed-count">
-            {playerBoard.ships.length}/{FLEET.length} placed
+            {playerBoard.ships.length}/{units.length} placed
           </span>
           <button type="button" className="btn btn-crimson btn-big" data-testid="confirm-placement" disabled={!allPlaced} onClick={() => (playSfx('ui-click'), confirmPlacement())}>
             Start battle

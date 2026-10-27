@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { playSfx } from '../audio'
 import { useDirector } from '../cinematics'
-import { useGameStore } from '../store/gameStore'
+import { fleetPresetName, TREASURE_PER_BOARD, treasureFound, useGameStore } from '../store/gameStore'
 import { Confetti } from './Confetti'
 import { Skull, WaxSeal } from './Ornaments'
 import { battleReport, captainRank, formatDuration } from './stats'
@@ -17,6 +17,10 @@ export function GameOverScreen() {
   const playerBoard = useGameStore((s) => s.playerBoard)
   const enemyBoard = useGameStore((s) => s.enemyBoard)
   const difficulty = useGameStore((s) => s.difficulty)
+  const modes = useGameStore((s) => s.modes)
+  const fleetPresets = useGameStore((s) => s.fleetPresets)
+  const fleets = useGameStore((s) => s.fleets)
+  const powerShots = useGameStore((s) => s.powerShots)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const startGame = useGameStore((s) => s.startGame)
   const reset = useGameStore((s) => s.reset)
@@ -31,8 +35,17 @@ export function GameOverScreen() {
     ['stat-shots', 'Shots fired', String(report.shots)],
     ['stat-accuracy', 'Accuracy', `${report.accuracy}%`],
     ['stat-turns', 'Turns', String(report.turns)],
-    ['stat-sunk', 'Enemy ships sunk', `${report.shipsSunk}/5`],
-    ['stat-lost', 'Ships lost', `${report.shipsLost}/5`],
+    ['stat-sunk', 'Enemy ships sunk', `${report.shipsSunk}/${fleets.enemy.length}`],
+    ['stat-lost', 'Ships lost', `${report.shipsLost}/${fleets.human.length}`],
+    ...(modes.blackFlag
+      ? ([
+          [
+            'stat-black-flag',
+            'Black Flag',
+            `${fleetPresetName(fleetPresets.human)} vs ${fleetPresetName(fleetPresets.enemy)} · ${treasureFound(events, 'human')}/${TREASURE_PER_BOARD} chests · ${[!powerShots.human.broadside && 'Broadside', !powerShots.human.spyglass && 'Spyglass'].filter(Boolean).join(' + ') || 'no power shots'} used`,
+          ],
+        ] as [string, string, string][])
+      : []),
     ['stat-streak', 'Best streak', String(report.bestStreak)],
     ['stat-time', 'Battle time', formatDuration(report.seconds)],
   ]

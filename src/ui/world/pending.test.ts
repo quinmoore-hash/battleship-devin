@@ -6,7 +6,7 @@ import { maskPendingHit, settledWrecks, visibleShots, withoutFogged } from './pe
 const ship = (hits: { x: number; y: number }[], id = 'sloop'): PlacedShip => {
   const spec = FLEET_BY_ID[id as keyof typeof FLEET_BY_ID]
   const cells = Array.from({ length: spec.length }, (_, i) => ({ x: i, y: 0 }))
-  return { spec, origin: { x: 0, y: 0 }, orientation: 'horizontal', cells, hits } as PlacedShip
+  return { spec, uid: spec.id, origin: { x: 0, y: 0 }, orientation: 'horizontal', cells, hits } as PlacedShip
 }
 const ev = (id: number, by: 'human' | 'enemy', x: number, y: number, outcome: 'hit' | 'miss' = 'hit'): GameEvent => ({ id, by, kind: 'shot', result: { coord: { x, y }, outcome } })
 

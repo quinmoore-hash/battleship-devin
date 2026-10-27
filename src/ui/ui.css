@@ -1765,3 +1765,110 @@
 .battle[data-cinematic='true'] .charts:hover {
   filter: none;
 }
+
+/* ---- Black Flag: fleet picker, power shots, chart glyphs ---- */
+.fleet-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.fleet-picker-title {
+  grid-column: 1 / -1;
+  font-family: var(--font-display, serif);
+  letter-spacing: 0.04em;
+  font-size: 0.95rem;
+}
+.fleet-preset {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  text-align: left;
+  border: 1px solid rgba(70, 40, 10, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 245, 220, 0.35);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.fleet-preset:hover { background: rgba(255, 245, 220, 0.6); }
+.fleet-preset.is-selected {
+  border-color: #7a1f1f;
+  box-shadow: inset 0 0 0 1px #7a1f1f, 0 0 0 2px rgba(122, 31, 31, 0.15);
+  background: rgba(255, 236, 200, 0.75);
+}
+.fleet-preset-name { font-weight: 700; font-size: 0.9rem; }
+.fleet-preset-ships { display: flex; flex-wrap: wrap; gap: 2px; }
+.fleet-preset-ships i { display: inline-block; height: 0.42em; background: #3a2a14; border-radius: 2px; opacity: 0.8; }
+.fleet-preset small { opacity: 0.75; font-size: 0.72rem; line-height: 1.2; }
+
+.power-shots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.power-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  line-height: 1.1;
+}
+.power-btn small { display: block; font-size: 0.68rem; opacity: 0.8; font-weight: 400; }
+.power-btn .power-icon { font-size: 1.1rem; }
+.power-btn.is-armed {
+  box-shadow: 0 0 0 2px #7a1f1f, 0 0 12px rgba(255, 170, 60, 0.6);
+  transform: translateY(-1px);
+}
+.power-btn[data-used='true'] { opacity: 0.45; filter: grayscale(0.6); }
+.power-rotate { font-size: 0.8rem; padding: 4px 8px; }
+.power-treasure {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: #6b4a00;
+  font-weight: 700;
+}
+
+.cell.cell-spied::after {
+  content: '◎';
+  position: absolute;
+  right: 1px;
+  top: 0;
+  font-size: 0.6em;
+  line-height: 1;
+  color: #1d3a5a;
+  pointer-events: none;
+}
+.cell.cell-spied-ship { box-shadow: inset 0 0 0 2px rgba(122, 31, 31, 0.6); }
+.cell.cell-spied-water { box-shadow: inset 0 0 0 2px rgba(29, 90, 120, 0.45); }
+.cell.cell-treasure {
+  background-image: radial-gradient(circle at 50% 55%, #f3c34a 0 28%, #8a5a12 30% 42%, transparent 44%);
+}
+.cell.cell-treasure::after {
+  content: '▣';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.75em;
+  color: #5a3a08;
+  pointer-events: none;
+}
+
+.shot-log li.log-treasure .outcome { color: #8a5a12; font-weight: 700; }
+.shot-log li.log-spyglass .outcome { color: #1d3a5a; font-style: italic; }
+.shot-log li.log-broadside .coord { font-weight: 700; }
+
+.howto-rules { margin: 0 0 12px; }
+.howto-rules dt { font-weight: 700; margin-top: 8px; }
+.howto-rules dd { margin: 2px 0 0; font-size: 0.9rem; line-height: 1.4; }
+.howto-rules kbd { font-size: 0.8em; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; }
+
+@media (max-width: 480px) {
+  .fleet-picker { grid-template-columns: 1fr; }
+  .power-treasure { margin-left: 0; width: 100%; }
+}
