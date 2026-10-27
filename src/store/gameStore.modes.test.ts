@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { seededRng } from '../ai'
-import { allCoords, coordKey, isSunk, randomPlacement, viewGrid, type Coord } from '../engine'
+import { allCoords, coordKey, fire, isSunk, randomPlacement, viewGrid, type Coord } from '../engine'
 import { DEFAULT_MODES, foggedEnemyView, salvoSize, STORM_FOG_CHANCE, useGameStore } from './gameStore'
 
 const s = () => useGameStore.getState()
@@ -232,5 +232,24 @@ describe('stormy seas', () => {
     }
     expect(s().fogged.length).toBeGreaterThan(0)
     expect(s().events.filter((e) => e.by === 'human').length % 1).toBe(0)
+  })
+})
+
+describe('salvo mode: endgame', () => {
+  beforeEach(() => s().reset())
+
+  it('caps the volley at the unshot cells left so the last ship can still be sunk (BUG-548)', () => {
+    startBattle({ salvo: true }, 7)
+    const ships = [...shipCells()]
+    const left = new Set(ships.slice(-2)) // the last two cells of the last ship
+    let board = s().enemyBoard
+    for (const c of allCoords()) if (!left.has(coordKey(c))) board = fire(board, c).board
+    useGameStore.setState({ enemyBoard: board, salvo: { pending: [], size: 5 } })
+    const [a, b] = allCoords().filter((c) => left.has(coordKey(c)))
+    expect(s().fireAt(a)).toBeNull()
+    expect(s().salvo.size).toBe(2)
+    expect(s().fireAt(b)?.outcome).toBe('sunk')
+    expect(s().phase).toBe('gameover')
+    expect(s().winner).toBe('human')
   })
 })
