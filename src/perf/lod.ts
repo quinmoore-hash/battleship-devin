@@ -15,7 +15,9 @@ export interface LodThresholds {
   dwell: number
 }
 
-export const LOD_THRESHOLDS: LodThresholds = { mid: 7.5, far: 15, hysteresis: 0.15, dwell: 1 }
+// Tuned with the battle overview ~27 units from the player board (BUG-530): the overview stays on lod 2 and
+// cinematic close-ups step down to lod 1/0, so the closer camera does not raise the Medium triangle budget.
+export const LOD_THRESHOLDS: LodThresholds = { mid: 6, far: 12, hysteresis: 0.15, dwell: 1 }
 
 /** Target level for a ship of `hullLength` cells at `distance`, ignoring hysteresis. */
 export function lodForDistance(distance: number, hullLength: number, t: LodThresholds = LOD_THRESHOLDS): Lod {

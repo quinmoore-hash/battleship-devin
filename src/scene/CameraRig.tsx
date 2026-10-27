@@ -31,8 +31,8 @@ export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target:
   },
   battle: {
     // low and close enough that the hulls read (BUG-530); both boards still fit — see fitFov for portrait phones
-    position: new THREE.Vector3(0, 15.5, playerCenter[2] + 21),
-    target: new THREE.Vector3(0, 0.3, midZ - 3.5),
+    position: new THREE.Vector3(0, 16.5, playerCenter[2] + 21.5),
+    target: new THREE.Vector3(0, 0.3, midZ - 5),
     fov: 42,
   },
   gameover: {
