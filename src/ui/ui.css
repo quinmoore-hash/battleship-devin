@@ -1932,6 +1932,7 @@
 .menu-skysea {
   order: 4;
   justify-self: center;
+  pointer-events: auto;
 }
 .menu-dock {
   order: 5;
@@ -1945,7 +1946,6 @@
     top: 12px;
     right: 12px;
     z-index: 12;
-    pointer-events: auto;
   }
 }
 .skysea {
