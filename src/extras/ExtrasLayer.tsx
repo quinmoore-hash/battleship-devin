@@ -111,6 +111,8 @@ const STRIP_FALLBACK_TOP = 46
 /** The strip lives outside `src/ui`, so it measures the battle top bar and docks just under it at any viewport width. */
 function useBelowBattleTop(): number {
   const [top, setTop] = useState(STRIP_FALLBACK_TOP)
+  // hot-seat: the battle HUD mounts under the handoff curtain, so measure again once the curtain drops
+  const handoff = useGameStore((s) => s.handoff)
   useLayoutEffect(() => {
     const measure = () => {
       const bar = document.querySelector<HTMLElement>('[data-testid="battle"] .battle-top')
@@ -125,7 +127,7 @@ function useBelowBattleTop(): number {
       window.removeEventListener('resize', measure)
       observer?.disconnect()
     }
-  }, [])
+  }, [handoff])
   return top
 }
 
