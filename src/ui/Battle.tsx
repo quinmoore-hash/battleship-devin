@@ -77,8 +77,9 @@ export function BattleScreen() {
       }
       if (!blackFlag || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement | null)?.closest('input, textarea')) return
       const k = e.key.toLowerCase()
-      if (k === 'b') setArmed((a) => (a === 'broadside' ? 'shot' : 'broadside'))
-      if (k === 'g') setArmed((a) => (a === 'spyglass' ? 'shot' : 'spyglass'))
+      const power = useGameStore.getState().powerShots.human
+      if (k === 'b' && power.broadside) setArmed((a) => (a === 'broadside' ? 'shot' : 'broadside'))
+      if (k === 'g' && power.spyglass) setArmed((a) => (a === 'spyglass' ? 'shot' : 'spyglass'))
       if (k === 'r') setBroadsideDir((o) => (o === 'horizontal' ? 'vertical' : 'horizontal'))
     }
     const onSkipEvent = () => skip()
@@ -136,7 +137,9 @@ export function BattleScreen() {
   const ownCells = useMemo(() => new Set(playerBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [playerBoard])
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt, tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const treasureCells = useMemo(() => new Set(events.filter((e) => e.kind === 'treasure').map((e) => coordKey(e.result.coord))), [events])
+  const chestsBy = (by: 'human' | 'enemy') => new Set(events.filter((e) => e.kind === 'treasure' && e.by === by).map((e) => coordKey(e.result.coord)))
+  const treasureCells = useMemo(() => chestsBy('human'), [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  const enemyChests = useMemo(() => chestsBy('enemy'), [events]) // eslint-disable-line react-hooks/exhaustive-deps
   const spiedByMe = useMemo(() => new Map(spied.human.map((m) => [coordKey(m.coord), m.ship])), [spied])
   const treasureFoundByMe = treasureFound(events, 'human')
   const lastEvent = events[events.length - 1]
@@ -176,7 +179,12 @@ export function BattleScreen() {
   }
   const playerCell = (c: Coord): GridCellInfo => {
     const state = playerView[c.y][c.x]
-    return { state: state === 'unknown' && ownCells.has(`${c.x},${c.y}`) ? 'ship' : state }
+    const chest = enemyChests.has(coordKey(c))
+    return {
+      state: state === 'unknown' && ownCells.has(`${c.x},${c.y}`) ? 'ship' : state,
+      className: chest ? 'cell-treasure' : undefined,
+      title: chest ? `${coordLabel(c)} — the enemy found treasure` : undefined,
+    }
   }
 
   const onEnemyCell = (c: Coord) => {

@@ -283,6 +283,8 @@ Production build (`npm run build && vite preview`, port 4173) driven in **headed
 | BUG-542 | P3 | ui | fixed | Placement tray, FleetStatus and clear-placement iterated the classic `FLEET` and `uiStore.carrying` was a `ShipId`, so a second ship of a class could never be placed or lifted | tray/status iterate `fleetUnits(fleets.human)` and carry a uid (`ship-tray-{uid}`, `fleet-status-{side}-{uid}`) | black-flag session | this PR |
 | BUG-543 | P3 | extras | fixed | Stats and Replay counted every `GameEvent` as a shot; a Spyglass look (no shot) would have inflated shots/turns and refired in Replay | `kind === 'spyglass'` events are skipped by `stats.ts`, `src/ui/stats.ts` and `replayModel.ts`; Broadside/treasure get captions | black-flag session | this PR |
 | BUG-544 | P3 | ui/turnFlow | fixed | `turnFlow.fire` always handed the turn to the enemy after the human volley; a treasure extra shot (turn stays `'human'`) would have let the AI fire out of turn | flow checks `turn === 'human'` after the volley and ends the beat instead | black-flag session | this PR |
+| BUG-545 | P2 | ui | fixed | A chest the *enemy* found on your board was drawn as a gold marker on the **enemy** chart (same coordinate, unshot cell) and nothing on your own chart | Battle splits treasure events by `by`: human chests mark the enemy chart, enemy chests mark your waters (testing agent) | black-flag session | this PR |
+| BUG-546 | P3 | ui | fixed | `B` / `G` still armed a spent power shot (status "Spyglass armed…" with the button disabled; clicks on the chart did nothing until Esc) | keyboard shortcuts check `powerShots.human` before arming (testing agent) | black-flag session | this PR |
 
 ### Pass table
 
