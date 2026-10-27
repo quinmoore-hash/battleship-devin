@@ -732,6 +732,7 @@
     inset 0 0 18px rgba(31, 127, 124, 0.25);
 }
 .cell {
+  position: relative;
   width: var(--cell);
   height: var(--cell);
   padding: 0;
