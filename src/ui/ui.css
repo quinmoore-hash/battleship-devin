@@ -1921,7 +1921,9 @@
   font-size: 0.85rem;
 }
 .skysea-field > span {
-  color: rgba(255, 240, 214, 0.9);
+  color: inherit;
+  opacity: 0.85;
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 0.68rem;
@@ -1950,6 +1952,8 @@
   padding-right: 4px;
 }
 .skysea-compact .skysea-field > span {
+  color: rgba(255, 240, 214, 0.9);
+  opacity: 1;
   font-size: 0.62rem;
 }
 .skysea-compact .select {
