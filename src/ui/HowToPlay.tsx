@@ -17,7 +17,7 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           you sank something. Then the enemy fires back — press <kbd>Space</kbd> to skip the cinematic.
         </li>
         <li>
-          <strong>Sink all five</strong> enemy ships before they sink yours.
+          <strong>Sink every enemy ship</strong> before they sink yours.
         </li>
       </ol>
       <h3>Rules of engagement</h3>
