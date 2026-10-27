@@ -117,7 +117,11 @@ export function PlacementScreen() {
         <h2 className="panel-title" data-testid="placement-title">
           {hotSeat ? `${captain}, muster your fleet` : 'Muster the fleet'} <WaxSeal tone={placing === 'enemy' ? 'crimson' : 'teal'} />
         </h2>
-        <p className="muted small">Pick a ship, hover your waters and click to anchor it. Drag ships on the water to move them.</p>
+        <p className="muted small">
+          {isCoarsePointer()
+            ? 'Pick a ship, then tap your waters to anchor it. Drag ships on the water to move them.'
+            : 'Pick a ship, hover your waters and click to anchor it. Drag ships on the water to move them.'}
+        </p>
         {blackFlag && (
           <div className="fleet-picker" data-testid="fleet-picker" role="radiogroup" aria-label="Pick your fleet">
             <strong className="fleet-picker-title">Black Flag — pick your fleet</strong>
@@ -147,6 +151,8 @@ export function PlacementScreen() {
             ))}
           </div>
         )}
+||||||| parent of 381d3ad (P2 perf + mobile chart: evict orphaned bakes, collapsed wreck bakes, NaN-safe cloth normals, 375px enemy chart fits (BUG-501/404/223/503/310/504/505))
+        <p className="muted small">Pick a ship, hover your waters and click to anchor it. Drag ships on the water to move them.</p>
         <ul className="tray" aria-label="Ships to place">
           {units.map(({ spec: s, uid }) => {
             const placed = placedIds.has(uid)

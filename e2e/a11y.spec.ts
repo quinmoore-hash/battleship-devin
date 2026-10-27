@@ -57,6 +57,8 @@ test.describe('accessibility', () => {
     const stops = grid.locator('button[tabindex="0"]:not([disabled])')
     await expect(stops).toHaveCount(1)
     await expect(stops).toBeFocused()
+    // ties resolve along the row (A2 → B2), not up a row to A1 (BUG-504)
+    await expect(page.getByTestId('enemy-grid-1-1')).toBeFocused()
     await page.keyboard.press('Shift+Tab')
     await expect(stops).not.toBeFocused()
     await page.keyboard.press('Tab')
@@ -81,7 +83,7 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('setting-quality')).toHaveValue('low')
   })
 
-  test('touch devices get >= 44px grid cells without horizontal page overflow', async ({ browser }) => {
+  test('touch devices get >= 32px grid cells that fit the panel without any horizontal scroll', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true, reducedMotion: 'reduce' })
     const page = await context.newPage()
     await page.goto('/?no3d')
@@ -97,9 +99,11 @@ test.describe('accessibility', () => {
     await page.getByTestId('auto-place').click()
     await page.getByTestId('confirm-placement').click()
     const cell = await page.getByTestId('enemy-grid-0-0').boundingBox()
-    expect(cell!.width).toBeGreaterThanOrEqual(44)
-    expect(cell!.height).toBeGreaterThanOrEqual(44)
-    // row numbers / column letters share the cells' 44 px pitch instead of collapsing into column A (BUG-310)
+    // 375 px cannot hold ten 44 px cells plus row labels: cells shrink to fit (≥ 32 px, WCAG 2.5.8) instead of scrolling (BUG-310)
+    expect(cell!.width).toBeGreaterThanOrEqual(32)
+    expect(cell!.height).toBeGreaterThanOrEqual(32)
+    expect(cell!.width).toBeLessThanOrEqual(44)
+    // row numbers / column letters share the cells' pitch instead of collapsing into column A (BUG-310)
     const enemyWrap = page.getByTestId('enemy-grid').locator('xpath=..')
     const rowLabel = await enemyWrap.locator('.grid-rows > *').nth(1).boundingBox()
     const colLabel = await enemyWrap.locator('.grid-cols > *').nth(1).boundingBox()
@@ -107,12 +111,11 @@ test.describe('accessibility', () => {
     expect(Math.abs(rowLabel!.y + rowLabel!.height / 2 - (b1!.y + b1!.height / 2))).toBeLessThan(4)
     expect(Math.abs(colLabel!.x + colLabel!.width / 2 - (b1!.x + b1!.width / 2))).toBeLessThan(4)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-    // the board is wider than the phone, so its wrapper must be a real horizontal scroller
+    // the whole board fits the phone: column J is on screen without the wrapper scrolling sideways
     const wrap = page.getByTestId('enemy-grid').locator('xpath=..')
     const box = await wrap.boundingBox()
     expect(box!.x + box!.width).toBeLessThanOrEqual(375)
-    expect(await wrap.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
-    await page.getByTestId('enemy-grid-9-0').scrollIntoViewIfNeeded()
+    expect(await wrap.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(false)
     const j1 = await page.getByTestId('enemy-grid-9-0').boundingBox()
     expect(j1!.x + j1!.width).toBeLessThanOrEqual(375)
     await page.getByTestId('enemy-grid-9-0').tap()

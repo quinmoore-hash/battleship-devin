@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { bakeObject, bakeStats, type BakeStats } from './bakeGeometry'
+import { LiveShip } from './LiveShip'
 
 export { bakeObject, bakeStats, materialKey, geometrySignature, type BakeStats } from './bakeGeometry'
 
@@ -37,6 +38,12 @@ interface Entry {
   element: ReactElement
   object: THREE.Group | null
   framesMounted: number
+  /** Mounted `<BakedShip>`s showing this key; an entry nobody shows for `EVICT_MS` is disposed. */
+  users: number
+  /** `performance.now()` when the last `<BakedShip>` using this entry unmounted; 0 while in use. */
+  idleSince: number
+  /** Collapse every part into one dark silhouette mesh (settled wreck under the surface). */
+  wreck: boolean
 }
 
 const entries = new Map<BakeKey, Entry>()
@@ -64,10 +71,18 @@ export function useBakeryActive(): boolean {
   return bakeryActive()
 }
 
-export function requestBake(key: BakeKey, element: ReactElement) {
+export function requestBake(key: BakeKey, element: ReactElement, wreck = false) {
   if (entries.has(key)) return
-  entries.set(key, { key, element, object: null, framesMounted: 0 })
+  entries.set(key, { key, element, object: null, framesMounted: 0, users: 0, idleSince: 0, wreck })
   emit()
+}
+
+/** How long an unused bake (lod flip, a ship settled into its wreck bake, back to the menu) stays cached before its geometry is dropped (BUG-501). Wall-clock, not frames: SwiftShader / throttled tabs run at a few fps. */
+export const EVICT_MS = 2000
+
+function disposeEntry(e: Entry) {
+  e.object?.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.())
+  entries.delete(e.key)
 }
 
 export const getBaked = (key: BakeKey): THREE.Group | null => entries.get(key)?.object ?? null
@@ -78,7 +93,7 @@ export const bakeReport = (): Record<BakeKey, BakeStats | null> => Object.fromEn
 
 /** Drops and disposes every baked ship (menu return, tests). */
 export function clearBakeCache() {
-  for (const e of entries.values()) e.object?.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.())
+  for (const e of entries.values()) disposeEntry(e)
   entries.clear()
   emit()
 }
@@ -125,12 +140,21 @@ export function ShipBakery() {
   }, [])
   useFrame(() => {
     let changed = false
+    const now = performance.now()
     for (const e of entries.values()) {
+      if (e.object && e.users === 0) {
+        if (!e.idleSince) e.idleSince = now
+        else if (now - e.idleSince > EVICT_MS) {
+          disposeEntry(e)
+          changed = true
+          continue
+        }
+      }
       if (e.object) continue
       const g = groups.current.get(e.key)
       if (!g) continue
       if (e.framesMounted++ < 1) continue
-      e.object = bakeObject(g)
+      e.object = bakeObject(g, e.wreck ? wreckMaterial() : undefined)
       changed = true
       if (typeof location !== 'undefined' && /[?&]perf/.test(location.search)) console.info('[bake]', e.key, JSON.stringify(e.object.userData.bakeStats), JSON.stringify(e.object.children.map((c, i) => `${(e.object!.userData.buckets as string[])[i] ?? c.type}:${bakeStats(c).triangles}`)))
     }
@@ -146,7 +170,7 @@ export function ShipBakery() {
             else groups.current.delete(e.key)
           }}
         >
-          {e.element}
+          <LiveShip shadowPolicy={false}>{e.element}</LiveShip>
         </group>
       ))}
     </group>
@@ -157,12 +181,32 @@ export interface BakedShipProps {
   bakeKey: BakeKey
   /** The live model element to bake (rendered hidden, once per key). */
   element: ReactElement
+  /** Bake as one waterlogged silhouette mesh instead of one mesh per material (settled wrecks, BUG-404). */
+  wreck?: boolean
+}
+
+let wreckMat: THREE.MeshStandardMaterial | null = null
+/** Shared material for collapsed wreck bakes: dark, waterlogged timber seen through the surface. */
+export function wreckMaterial(): THREE.MeshStandardMaterial {
+  if (!wreckMat) wreckMat = new THREE.MeshStandardMaterial({ color: 0x241a12, roughness: 0.95, metalness: 0 })
+  return wreckMat
 }
 
 /** Renders the shared baked group for `bakeKey`, requesting the bake on first use. */
-export function BakedShip({ bakeKey: key, element }: BakedShipProps) {
+export function BakedShip({ bakeKey: key, element, wreck = false }: BakedShipProps) {
   useSyncExternalStore(subscribe, getVersion)
-  useEffect(() => requestBake(key, element), [key, element])
+  useEffect(() => requestBake(key, element, wreck), [key, element, wreck])
+  useEffect(() => {
+    const e = entries.get(key)
+    if (e) {
+      e.users++
+      e.idleSince = 0
+    }
+    return () => {
+      const e = entries.get(key)
+      if (e) e.users = Math.max(0, e.users - 1)
+    }
+  }, [key])
   const baked = getBaked(key)
   const inst = useMemo(() => baked?.clone() ?? null, [baked])
   if (!inst) return null

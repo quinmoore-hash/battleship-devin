@@ -93,7 +93,24 @@ export function bakeStats(root: THREE.Object3D): BakeStats {
  * their geometry/material). Everything else is merged per (kind, material key, renderOrder,
  * attribute layout).
  */
-export function bakeObject(root: THREE.Object3D): THREE.Group {
+/**
+ * Reduces a part to a position + normal silhouette so parts with different attribute sets / materials can be
+ * merged into one wreck mesh. `g` is already a private clone; the result may be a new geometry (indexed input).
+ */
+function silhouette(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const s = g.index ? g.toNonIndexed() : g
+  if (s !== g) g.dispose()
+  for (const k of Object.keys(s.attributes)) if (k !== 'position' && k !== 'normal') s.deleteAttribute(k)
+  if (!s.getAttribute('normal')) s.computeVertexNormals()
+  return s
+}
+
+/**
+ * Merges every mesh under `root` into one object per material (+ render order + attribute layout). With
+ * `collapse`, every plain mesh instead becomes ONE silhouette mesh in that material (settled wrecks under the
+ * surface, BUG-404): instanced / multi-material / line parts are still kept as-is.
+ */
+export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material): THREE.Group {
   // the caller usually hides the live copy under `root`; bake its subtree regardless
   const wasVisible = root.visible
   root.visible = true
@@ -142,14 +159,16 @@ export function bakeObject(root: THREE.Object3D): THREE.Group {
     }
     sourceMeshes++
     tmpM.multiplyMatrices(inv, o.matrixWorld)
-    const g = mesh.geometry.clone()
+    let g = mesh.geometry.clone()
     for (const k of Object.keys(g.morphAttributes)) delete g.morphAttributes[k as keyof typeof g.morphAttributes]
     g.applyMatrix4(tmpM)
     const kind = isLineSeg ? 'lines' : 'mesh'
-    const key = `${kind}|${o.renderOrder}|${materialKey(mesh.material)}|${geometrySignature(g)}`
+    const wreck = !!collapse && kind === 'mesh'
+    if (wreck) g = silhouette(g)
+    const key = wreck ? 'mesh|wreck' : `${kind}|${o.renderOrder}|${materialKey(mesh.material)}|${geometrySignature(g)}`
     let b = buckets.get(key)
     if (!b) {
-      b = { kind, material: mesh.material, geoms: [], castShadow: false, receiveShadow: false, renderOrder: o.renderOrder, types: new Set() }
+      b = { kind, material: wreck ? collapse! : mesh.material, geoms: [], castShadow: false, receiveShadow: false, renderOrder: wreck ? 0 : o.renderOrder, types: new Set() }
       buckets.set(key, b)
     }
     b.geoms.push(g)
