@@ -73,7 +73,7 @@ describe('stats: salvo turns (BUG-316)', () => {
 
 describe('stats: stormy seas', () => {
   it('counts shots lost in the storm separately and keeps them out of the accuracy and the streak', () => {
-    const e = (id: number, by: 'human' | 'enemy', outcome: 'hit' | 'miss' | 'lost'): GameEvent => ({ id, by, result: { coord: { x: id % 10, y: Math.floor(id / 10) }, outcome, ...(outcome === 'hit' ? { shipId: 'sloop' as const } : {}) } })
+    const e = (id: number, by: 'human' | 'enemy', outcome: 'hit' | 'miss' | 'lost'): GameEvent => ({ id, by, kind: 'shot', result: { coord: { x: id % 10, y: Math.floor(id / 10) }, outcome, ...(outcome === 'hit' ? { shipId: 'sloop' as const } : {}) } })
     const events = [e(1, 'human', 'hit'), e(2, 'enemy', 'lost'), e(3, 'human', 'lost'), e(4, 'enemy', 'miss'), e(5, 'human', 'hit'), e(6, 'enemy', 'hit'), e(7, 'human', 'miss'), e(8, 'enemy', 'lost')]
     const r = battleReport(events, createBoard(), createBoard(), null)
     expect(r.shots).toBe(4)

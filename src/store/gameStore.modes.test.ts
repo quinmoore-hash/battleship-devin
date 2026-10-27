@@ -283,7 +283,7 @@ describe('stormy seas: shots lost in the storm', () => {
         let guard = 0
         while (s().phase === 'battle' && guard++ < 1500) {
           if (s().turn === 'enemy') s().enemyTurn()
-          else s().fireAt(cells.find((c) => !hasBeenShot(s().enemyBoard, c))!)
+          else s().fireAt(cells.find((c) => !hasBeenShot(s().enemyBoard, c) && !s().salvo.pending.some((p) => p.x === c.x && p.y === c.y))!)
         }
         expect(s().phase).toBe('gameover')
         const enemyShots = s().events.filter((e) => e.by === 'enemy')
