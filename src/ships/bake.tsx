@@ -79,6 +79,19 @@ export function requestBake(key: BakeKey, element: ReactElement, wreck = false) 
 
 /** How long an unused bake (lod flip, a ship settled into its wreck bake, back to the menu) stays cached before its geometry is dropped (BUG-501). Wall-clock, not frames: SwiftShader / throttled tabs run at a few fps. */
 export const EVICT_MS = 2000
+/** Keys a mounted `<Ship>` may switch to (its other LODs): kept cached while held so a lod swap during a cinematic never re-bakes. */
+const held = new Map<BakeKey, number>()
+export function holdBakes(keys: BakeKey[]) {
+  for (const k of keys) held.set(k, (held.get(k) ?? 0) + 1)
+  return () => {
+    for (const k of keys) {
+      const n = (held.get(k) ?? 1) - 1
+      if (n > 0) held.set(k, n)
+      else held.delete(k)
+    }
+  }
+}
+export const heldBakeCount = () => held.size
 
 function disposeEntry(e: Entry) {
   e.object?.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.())
@@ -143,7 +156,8 @@ export function ShipBakery() {
     const now = performance.now()
     for (const e of entries.values()) {
       if (e.object && e.users === 0) {
-        if (!e.idleSince) e.idleSince = now
+        if (held.has(e.key)) e.idleSince = 0
+        else if (!e.idleSince) e.idleSince = now
         else if (now - e.idleSince > EVICT_MS) {
           disposeEntry(e)
           changed = true

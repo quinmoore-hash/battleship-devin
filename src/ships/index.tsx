@@ -8,11 +8,11 @@
  *   shipWorldTransform(placed, boardOrigin)   position / rotationY of a placed ship
  */
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import type { PlacedShip, ShipId } from '../engine'
 import { LodGroup } from '../perf/LodShip'
-import { BakedShip, bakeKey, useBakeryActive } from './bake'
+import { BakedShip, bakeKey, holdBakes, useBakeryActive } from './bake'
 import { LiveShip } from './LiveShip'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
 import { sampleWaveHeight } from '../scene/waves'
@@ -58,6 +58,8 @@ export function Ship({ id, staticWreck: _staticWreck, ...rest }: ShipProps) {
   const cells = rest.damage.length
   const intact = useMemo<CellDamage[]>(() => Array.from({ length: cells }, () => 'intact'), [cells])
   const element = useMemo(() => <Model livery={rest.livery} damage={intact} lod={lod} quality={quality} />, [Model, rest.livery, intact, lod, quality])
+  const livery = rest.livery
+  useEffect(() => holdBakes([1, 2].map((l) => bakeKey(id, livery, l, quality) + (wreck ? '|wreck' : ''))), [id, livery, quality, wreck])
   if (live)
     return (
       <LiveShip>
