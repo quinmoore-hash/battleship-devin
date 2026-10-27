@@ -128,3 +128,57 @@ test('375×812: names, curtain and battle fit the viewport', async ({ browser })
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   await ctx.close()
 })
+
+test('two captains + Black Flag: each captain picks a fleet and has their own Broadside / Spyglass; treasure and the Spyglass keep the deck', async ({ page }) => {
+  test.setTimeout(180_000)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/?no3d')
+  await startTwoCaptains(page, { human: 'Anne', enemy: 'Jack' }, ['black-flag'])
+
+  // Captain 1 picks the Wolf pack
+  await expect(page.getByTestId('fleet-picker')).toBeVisible()
+  await page.getByTestId('fleet-preset-wolf-pack').click()
+  await expect(page.getByTestId('placed-count')).toHaveText('0/7 placed')
+  await page.getByTestId('auto-place').click()
+  await page.getByTestId('confirm-placement').click()
+  await passDeck(page, 'Jack', true)
+
+  // Captain 2 gets their own picker (the AI would have drawn a random preset) and picks the Armada
+  await expect(page.getByTestId('placement')).toHaveAttribute('data-placing', 'enemy')
+  await expect(page.getByTestId('fleet-picker')).toBeVisible()
+  await expect(page.getByTestId('placed-count')).toHaveText('0/5 placed')
+  await page.getByTestId('fleet-preset-armada').click()
+  await expect(page.getByTestId('placed-count')).toHaveText('0/4 placed')
+  await page.getByTestId('auto-place').click()
+  await page.getByTestId('confirm-placement').click()
+  await passDeck(page, 'Anne', true)
+
+  const battle = page.getByTestId('battle')
+  await expect(battle).toHaveAttribute('data-perspective', 'human')
+  await expect(page.getByTestId('fleet-status-player-sloop#4')).toBeVisible()
+  await expect(page.getByTestId('power-shots')).toBeVisible()
+  await expect(page.getByTestId('treasure-count')).toContainText('0/2')
+
+  // Anne: Spyglass keeps the deck (no shot, no curtain), then a Broadside is the whole turn → curtain
+  await page.keyboard.press('g')
+  await page.getByTestId('enemy-grid-4-4').click()
+  await expect(page.getByTestId('enemy-grid-4-4')).toHaveClass(/cell-spied/)
+  await expect(page.getByTestId('handoff')).toHaveCount(0)
+  await expect(page.getByTestId('power-spyglass')).toBeDisabled()
+  await page.keyboard.press('b')
+  await page.getByTestId('enemy-grid-2-5').click()
+  await passDeck(page, 'Jack')
+
+  // Jack has his own, unspent power shots; his Broadside resolves three cells on Anne's chart
+  await expect(battle).toHaveAttribute('data-perspective', 'enemy')
+  await expect(page.getByTestId('fleet-status-player-man-o-war#2')).toBeVisible()
+  await expect(page.getByTestId('power-broadside')).toBeEnabled()
+  await expect(page.getByTestId('power-spyglass')).toBeEnabled()
+  await page.keyboard.press('b')
+  await page.getByTestId('enemy-grid-5-5').click()
+  // the curtain follows the broadside at once, so read the result from Anne's side of the table
+  await passDeck(page, 'Anne')
+  await expect(page.getByTestId('shot-log').locator('li.log-broadside')).toHaveCount(2)
+  for (const id of ['player-grid-4-5', 'player-grid-5-5', 'player-grid-6-5']) await expect(page.getByTestId(id)).toHaveAttribute('data-state', /hit|miss|sunk/)
+  await expect(page.getByTestId('power-broadside')).toBeDisabled()
+})

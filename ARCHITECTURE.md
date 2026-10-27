@@ -81,7 +81,9 @@ both fleets are placed, `fireAt(coord, by)` resolves for either side (`by` defau
 `enemyTurn()` is a no-op, `firstPlacer` places *and fires* first and `rematch()` swaps it. `handoff: Player | null` is the
 curtain (`beginHandoff(to)` / `endHandoff()` — the only way down; both `fireAt` and the controllers refuse input while it is set)
 and `perspective: Player` is the side the HUD / 3D world / director film from (`endHandoff` sets it to `turn`; always `human`
-in single player).
+in single player). Black Flag in a hot-seat game: `setFleetPreset` targets the `placing` captain (no preset is drawn for a local
+`enemy`), `fireBroadside(center, orientation, by?)` / `spyAt(coord, by?)` / `resolveHuman(volley, kind, group?, by?)` take the shooter the
+same way `fireAt` does, `powerShots` / `treasure` / `spied` are already per `Player`; a treasure hit keeps the deck (no curtain).
 
 ### scene (`src/scene`)
 `<OceanScene quality? timeOfDay? view? interactive? cameraOverride? dressing? weather?>{children}</OceanScene>` full-screen Canvas with

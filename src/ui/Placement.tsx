@@ -37,8 +37,8 @@ export function PlacementScreen() {
   const dismissHint = useUiStore((s) => s.dismissHint)
 
   const blackFlag = useGameStore((s) => s.modes.blackFlag)
-  const fleet = useGameStore((s) => s.fleets.human)
-  const preset = useGameStore((s) => s.fleetPresets.human)
+  const fleet = useGameStore((s) => s.fleets[s.placing])
+  const preset = useGameStore((s) => s.fleetPresets[s.placing])
   const setFleetPreset = useGameStore((s) => s.setFleetPreset)
   const units = useMemo(() => fleetUnits(fleet), [fleet])
   const placedIds = useMemo(() => new Set(playerBoard.ships.map((s) => s.uid)), [playerBoard])

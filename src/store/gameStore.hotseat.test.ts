@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { FLEET, isFleetSunk, type Coord } from '../engine'
+import { FLEET_PRESETS } from '../engine'
 import { isHotSeat, placementBoard, useGameStore } from './gameStore'
 
 const s = () => useGameStore.getState()
@@ -189,5 +190,83 @@ describe('hot-seat (Two captains)', () => {
     const humanMisses = s().events.filter((e) => e.by === 'human' && e.result.outcome === 'miss').length
     expect(s().fogged.length).toBeGreaterThan(0)
     expect(s().fogged.length).toBeLessThan(humanMisses)
+  })
+})
+
+describe('hot-seat + Black Flag', () => {
+  beforeEach(() => s().reset())
+  const bf = { salvo: false, storm: false, blackFlag: true }
+
+  it('each captain picks their own fleet preset; nothing is drawn for the second captain', () => {
+    s().setPlayers({ human: { name: 'Anne' }, enemy: { name: 'Jack', kind: 'local' } })
+    s().startGame('medium', bf, 3)
+    expect(s().fleetPresets.enemy).toBe('classic')
+    expect(s().enemyBoard.ships).toHaveLength(0)
+    expect(s().opponent).toBeUndefined()
+    s().setFleetPreset('wolf-pack')
+    expect(s().fleetPresets.human).toBe('wolf-pack')
+    expect(s().fleets.human).toHaveLength(7)
+    s().autoPlacePlayerFleet()
+    s().confirmPlacement()
+    s().endHandoff()
+    expect(s().placing).toBe('enemy')
+    s().setFleetPreset('armada')
+    expect(s().fleetPresets).toEqual({ human: 'wolf-pack', enemy: 'armada' })
+    expect(s().fleets.enemy).toHaveLength(4)
+    expect(s().playerBoard.ships).toHaveLength(7) // the first captain's fleet is untouched
+    s().autoPlacePlayerFleet()
+    expect(s().enemyBoard.ships).toHaveLength(4)
+    s().confirmPlacement()
+    expect(s().phase).toBe('battle')
+    expect(s().treasure.human).toHaveLength(2)
+    expect(s().treasure.enemy).toHaveLength(2)
+    expect(FLEET_PRESETS.map((p) => p.id)).toContain('armada')
+  })
+
+  it('both captains own a Broadside and a Spyglass; the second captain fires them with by = enemy', () => {
+    startHotSeat(bf)
+    expect(s().powerShots).toEqual({ human: { broadside: true, spyglass: true }, enemy: { broadside: true, spyglass: true } })
+    // Anne's turn: Jack cannot use his power shots yet
+    expect(s().fireBroadside({ x: 2, y: 2 }, 'horizontal', 'enemy')).toEqual([])
+    expect(s().spyAt({ x: 0, y: 0 }, 'enemy')).toBeUndefined()
+    // Anne's Spyglass keeps the turn; her Broadside is the whole turn
+    expect(s().spyAt({ x: 0, y: 0 }, 'human')).toMatch(/ship|water/)
+    expect(s().turn).toBe('human')
+    expect(s().powerShots.human.spyglass).toBe(false)
+    const balls = s().fireBroadside({ x: 5, y: 5 }, 'horizontal', 'human')
+    expect(balls.length).toBeGreaterThan(0)
+    expect(s().enemyBoard.shots.length).toBe(balls.length)
+    const treasureHit = balls.some((b) => s().treasure.enemy.some((t) => t.x === b.coord.x && t.y === b.coord.y))
+    expect(s().turn).toBe(treasureHit ? 'human' : 'enemy')
+    if (treasureHit) return
+    s().beginHandoff('enemy')
+    s().endHandoff()
+    // Jack's own Broadside is still unspent and lands on Anne's board
+    expect(s().powerShots.enemy.broadside).toBe(true)
+    const jack = s().fireBroadside({ x: 5, y: 5 }, 'vertical', 'enemy')
+    expect(jack.length).toBeGreaterThan(0)
+    expect(s().playerBoard.shots.length).toBe(jack.length)
+    expect(s().powerShots.enemy.broadside).toBe(false)
+    expect(s().powerShots.human.broadside).toBe(false)
+    expect(s().events.filter((e) => e.kind === 'broadside' && e.by === 'enemy')).toHaveLength(jack.length)
+  })
+
+  it('a treasure chest keeps the deck for the captain who found it, with no AI turn in between', () => {
+    startHotSeat(bf, 5)
+    const chest = s().treasure.enemy[0]
+    const r = s().fireAt(chest, 'human')
+    expect(r?.outcome).toBe('miss')
+    expect(s().events.at(-1)?.kind).toBe('treasure')
+    expect(s().turn).toBe('human')
+    expect(s().bonusShots).toBe(1)
+    expect(s().handoff).toBeNull()
+    expect(s().enemyTurn()).toBeUndefined()
+    expect(s().playerBoard.shots).toHaveLength(0)
+    // the bonus shot spent, the deck passes
+    const cells = sweep()
+    let next = cells.next().value
+    while (s().treasure.enemy.some((t) => t.x === next.x && t.y === next.y)) next = cells.next().value
+    s().fireAt(next, 'human')
+    expect(s().turn).toBe('enemy')
   })
 })

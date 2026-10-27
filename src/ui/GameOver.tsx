@@ -46,7 +46,7 @@ export function GameOverScreen() {
           [
             'stat-black-flag',
             'Black Flag',
-            `${fleetPresetName(fleetPresets.human)} vs ${fleetPresetName(fleetPresets.enemy)} · ${treasureFound(events, 'human')}/${TREASURE_PER_BOARD} chests · ${[!powerShots.human.broadside && 'Broadside', !powerShots.human.spyglass && 'Spyglass'].filter(Boolean).join(' + ') || 'no power shots'} used`,
+            `${fleetPresetName(fleetPresets.human)} vs ${fleetPresetName(fleetPresets.enemy)} · ${hotSeat ? `${players.human.name} ${treasureFound(events, 'human')}/${TREASURE_PER_BOARD} · ${players.enemy.name} ${treasureFound(events, 'enemy')}/${TREASURE_PER_BOARD}` : `${treasureFound(events, 'human')}/${TREASURE_PER_BOARD}`} chests · ${[!powerShots.human.broadside && 'Broadside', !powerShots.human.spyglass && 'Spyglass'].filter(Boolean).join(' + ') || 'no power shots'} used`,
           ],
         ] as [string, string, string][])
       : []),

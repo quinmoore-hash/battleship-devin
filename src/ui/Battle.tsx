@@ -110,7 +110,7 @@ export function BattleScreen() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener(SKIP_CINEMATIC_EVENT, onSkipEvent)
     }
-  }, [busy, skip, setPendingTarget, blackFlag])
+  }, [busy, skip, setPendingTarget, blackFlag, perspective])
 
   const yourTurn = turn === perspective && (hotSeat || turn === 'human') && !busy && !handoff
   // while the director plays, the side panels step back so the cannonball / sinking is not hidden behind parchment

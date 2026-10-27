@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { startSinglePlayer } from './helpers'
 
 // Black Flag rules toggle: fleet picker, Broadside / Spyglass power shots and hidden treasure (BUG-540+).
 test.describe('Black Flag', () => {
@@ -8,7 +9,9 @@ test.describe('Black Flag', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/?no3d')
     await expect(page.getByTestId('main-menu')).toBeVisible()
+    await page.getByTestId('mode-single').click()
     await page.getByTestId('mode-black-flag').check()
+    await page.getByTestId('rules-next').click()
     await page.getByTestId('difficulty-easy').click()
 
     // fleet picker: Wolf pack gives seven ships with repeated classes
@@ -64,7 +67,7 @@ test.describe('Black Flag', () => {
 
   test('Black Flag off: no picker, no power shots (classic regression)', async ({ page }) => {
     await page.goto('/?no3d')
-    await page.getByTestId('difficulty-easy').click()
+    await startSinglePlayer(page, 'easy')
     await expect(page.getByTestId('placement')).toBeVisible()
     await expect(page.getByTestId('fleet-picker')).toHaveCount(0)
     await expect(page.getByTestId('placed-count')).toHaveText('0/5 placed')
