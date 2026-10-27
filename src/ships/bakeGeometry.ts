@@ -112,6 +112,7 @@ export function bakeObject(root: THREE.Object3D): THREE.Group {
     tmpM.decompose(c.position, c.quaternion, c.scale)
     c.updateMatrix()
     out.add(c)
+    return c
   }
 
   root.traverseVisible((o) => {
@@ -129,6 +130,14 @@ export function bakeObject(root: THREE.Object3D): THREE.Group {
     if (!mesh.geometry || !mesh.material) return
     if (Array.isArray(mesh.material)) {
       keepAsIs(o)
+      return
+    }
+    if (mesh.userData.bakeAsIs) {
+      // cloth (kit Flag / Sail): the vertex shader displaces from the plane's own local xy, so the
+      // geometry must stay in its own frame instead of being transformed into the ship's
+      const c = keepAsIs(o) as THREE.Mesh
+      c.customDepthMaterial = mesh.customDepthMaterial
+      c.castShadow = o.castShadow && triangleCount(mesh.geometry) >= SHADOW_MIN_TRIS
       return
     }
     sourceMeshes++
@@ -172,10 +181,12 @@ export function bakeObject(root: THREE.Object3D): THREE.Group {
 /** Merged parts smaller than this never cast shadows: the hull / deck / sails carry the silhouette, trim just costs a draw. */
 export const SHADOW_MIN_TRIS = 4000
 
+const triangleCount = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3
+
 function makeObject(b: Bucket, g: THREE.BufferGeometry) {
   g.computeBoundingSphere()
   const o = b.kind === 'lines' ? new THREE.LineSegments(g, b.material) : new THREE.Mesh(g, b.material)
-  const tris = (g.index ? g.index.count : g.attributes.position.count) / 3
+  const tris = triangleCount(g)
   o.castShadow = b.castShadow && b.kind === 'mesh' && tris >= SHADOW_MIN_TRIS
   o.receiveShadow = b.receiveShadow
   o.renderOrder = b.renderOrder

@@ -170,7 +170,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
             flag={
               i === 1 && lod < 2 ? (
                 navy ? (
-                  <FlagMesh at={mainTruck} width={0.42} height={0.05} livery={livery} set={flagSet} phase={phase + 1} seed={3} />
+                  <FlagMesh at={mainTruck} width={0.42} height={0.07} livery={livery} set={flagSet} phase={phase + 1} seed={3} />
                 ) : (
                   <FlagMesh at={mainTruck} width={0.46} height={0.24} livery={livery} set={flagSet} phase={phase + 1} />
                 )

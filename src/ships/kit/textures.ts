@@ -578,12 +578,12 @@ export function redEnsign(): THREE.Texture | null {
 
 /** Long swallow-tailed pennant for the masthead. */
 export function pennant(livery: 'pirate' | 'navy'): THREE.Texture | null {
-  return flagCanvas(`flag:pennant-${livery}`, 512, 64, (ctx) => {
+  return flagCanvas(`flag:pennant-${livery}`, 384, 64, (ctx) => {
     ctx.fillStyle = livery === 'pirate' ? '#8c1d1d' : '#f1ede4'
-    ctx.fillRect(0, 0, 512, 64)
+    ctx.fillRect(0, 0, 384, 64)
     if (livery === 'navy') {
       ctx.fillStyle = '#c8102e'
-      ctx.fillRect(0, 26, 512, 12)
+      ctx.fillRect(0, 26, 384, 12)
       ctx.fillStyle = '#1b3a7a'
       ctx.fillRect(0, 0, 60, 64)
     } else {

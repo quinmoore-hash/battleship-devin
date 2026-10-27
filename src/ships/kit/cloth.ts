@@ -55,7 +55,9 @@ vec3 clothPoint(vec2 p) {
     out3.z = (belly * gust + flap * uWind) * s;
   } else {
     float k = u;
-    float wave = sin(t * 3.1 + k * 6.5) * 0.11 * w * k * k + sin(t * 5.3 + k * 12.0 + v * 4.0) * 0.025 * w * k;
+    // narrow cloth (pennants) ripples: scale the wave by the aspect so a 6:1 ribbon doesn't corkscrew
+    float slim = clamp(h / w * 3.0, 0.3, 1.0);
+    float wave = (sin(t * 3.1 + k * 6.5) * 0.11 * w * k * k + sin(t * 5.3 + k * 12.0 + v * 4.0) * 0.025 * w * k) * slim;
     out3.z = wave * uWind;
     out3.y = p.y - k * k * 0.08 * w * (1.0 - 0.7 * uWind) - 0.015 * w * k * sin(t * 2.0 + k * 4.0) * uWind;
     out3.x = p.x - k * 0.04 * w * uWind;
