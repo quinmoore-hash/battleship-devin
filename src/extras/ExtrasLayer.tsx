@@ -9,7 +9,7 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 import { coordKey, coordLabel, type Difficulty } from '../engine'
 import { useDirector } from '../cinematics'
 import { usePerf } from '../perf'
-import { lostShots, useGameStore, type GameModes } from '../store/gameStore'
+import { isHotSeat, lostShots, useGameStore, type GameModes } from '../store/gameStore'
 import { PhotoMode, usePhotoEvent, usePhotoMode } from './photo'
 import { ReplayPlayer, useReplay, useReplayEvent } from './replay'
 import { bindStatsRecorder } from './stats'
@@ -134,8 +134,10 @@ function BattleStrip() {
   const salvo = useGameStore((s) => s.salvo)
   const events = useGameStore((s) => s.events)
   const turn = useGameStore((s) => s.turn)
+  const players = useGameStore((s) => s.players)
   const top = useBelowBattleTop()
   if (!modes.salvo && !modes.storm) return null
+  const hotSeat = isHotSeat(players)
   const left = salvo.size - salvo.pending.length
   const lost = lostShots(events).length
   const lostMine = lostShots(events, 'human').length
@@ -151,7 +153,12 @@ function BattleStrip() {
       {modes.storm && (
         <span className="xt-pill storm" data-testid="storm-status" data-lost={lost} data-lost-mine={lostMine}>
           Stormy seas · {lost} {lost === 1 ? 'shot' : 'shots'} lost in the storm
-          {lost > 0 && <small> yours {lostMine} · enemy {lost - lostMine}</small>}
+          {lost > 0 && (
+            <small>
+              {' '}
+              {hotSeat ? players.human.name : 'yours'} {lostMine} · {hotSeat ? players.enemy.name : 'enemy'} {lost - lostMine}
+            </small>
+          )}
         </span>
       )}
     </div>
