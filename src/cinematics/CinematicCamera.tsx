@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
-import { CAMERA_SHOTS, fitFov } from '../scene/CameraRig'
+import { CAMERA_SHOTS, battleFraming, fitFov } from '../scene/CameraRig'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { ownBoardOrigin } from './battery'
 import { director as defaultDirector, type ActiveCinematic, type Director } from './director'
@@ -49,7 +49,8 @@ function lerpPose(out: Pose, from: Pose, to: Pose, k: number) {
   out.fov = THREE.MathUtils.lerp(from.fov, to.fov, k)
 }
 
-const overviewPose: Pose = { position: overview.position, target: overview.target, fov: overview.fov }
+/** Where every cinematic returns to; `target`/`fov` are refreshed per frame from `battleFraming` (viewport-dependent). */
+const overviewPose: Pose = { position: overview.position, target: overview.target.clone(), fov: overview.fov }
 
 /**
  * The wanted camera pose for `active` at `beat` / `k`. `start` is the camera pose when the beat began, so
@@ -195,6 +196,7 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
     const s = director.store.getState()
     const active = s.active
     const camera = state.camera as THREE.PerspectiveCamera
+    battleFraming(camera.aspect, state.size.width, overviewPose)
     if (!active) {
       lastKey.current = ''
       shake.current = 0
