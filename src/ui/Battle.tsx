@@ -143,8 +143,14 @@ export function BattleScreen() {
   const treasureAgain = yourTurn && lastEvent?.by === 'human' && lastEvent.kind === 'treasure'
   const statusText = yourTurn
     ? treasureAgain
-      ? `Treasure at ${coordLabel(lastEvent.result.coord)} — fire again!`
-      : spyNote ?? (armed === 'broadside' ? `Broadside armed — pick the centre cell (${broadsideDir === 'horizontal' ? 'row' : 'column'}, R rotates)` : armed === 'spyglass' ? 'Spyglass armed — pick a cell to look at' : 'Your turn — fire at the enemy waters')
+      ? `Your turn — treasure at ${coordLabel(lastEvent.result.coord)}, fire again!`
+      : spyNote
+        ? `Your turn — ${spyNote}`
+        : armed === 'broadside'
+          ? `Your turn — Broadside armed, pick the centre cell (${broadsideDir === 'horizontal' ? 'row' : 'column'}, R rotates)`
+          : armed === 'spyglass'
+            ? 'Your turn — Spyglass armed, pick a cell to look at'
+            : 'Your turn — fire at the enemy waters'
     : beat.phase === 'intro'
       ? 'Battle stations! The fleets take position…'
       : beat.phase === 'enemy-aiming'
