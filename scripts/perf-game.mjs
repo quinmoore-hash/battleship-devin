@@ -78,8 +78,10 @@ try {
   await page.getByTestId('main-menu').waitFor({ timeout: 60_000 })
   await page.waitForFunction(() => (window.__perf?.stats.frames ?? 0) > 15, null, { timeout: 120_000 })
   await snap('menu')
+  await page.getByTestId('mode-single').click()
   // PERF_BLACK_FLAG=armada|wolf-pack|raiders|classic: Black Flag rules with that fleet preset (duplicate classes → more draw calls)
   if (BLACK_FLAG) await page.getByTestId('mode-black-flag').check()
+  await page.getByTestId('rules-next').click()
   await page.getByTestId('difficulty-easy').click()
   await page.getByTestId('placement').waitFor()
   if (BLACK_FLAG) await page.getByTestId(`fleet-preset-${BLACK_FLAG}`).click()
@@ -117,6 +119,8 @@ try {
   } else {
     await page.getByTestId('main-menu').waitFor({ timeout: 60_000 })
     await snap('menu-after-game')
+    await page.getByTestId('mode-single').click()
+    await page.getByTestId('rules-next').click()
     await page.getByTestId('difficulty-easy').click()
   }
   await page.getByTestId('placement').waitFor({ timeout: 60_000 })

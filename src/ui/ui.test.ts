@@ -25,6 +25,9 @@ describe('main menu', () => {
   it('renders three difficulty cards and starts placement', () => {
     ui()
     expect(screen.getByTestId('ui-root').dataset.phase).toBe('menu')
+    // step 1 who plays → step 2 rules → step 3 the wanted posters
+    fireEvent.click(screen.getByTestId('mode-single'))
+    fireEvent.click(screen.getByTestId('rules-next'))
     for (const d of ['easy', 'medium', 'hard']) expect(screen.getByTestId(`difficulty-${d}`)).toBeTruthy()
     fireEvent.click(screen.getByTestId('difficulty-hard'))
     expect(store().phase).toBe('placement')

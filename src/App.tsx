@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { bindGameAudio } from './audio'
-import { CinematicCamera, CinematicLayer, Letterbox, useDirector } from './cinematics'
-import { ExtrasLayer, MenuExtras, useGameTimeOfDay, useGameWeather } from './extras'
+import { CinematicCamera, CinematicLayer, Letterbox, director, useDirector } from './cinematics'
+import { ExtrasLayer, MenuRules, MenuStats, useGameTimeOfDay, useGameWeather } from './extras'
 import { OceanScene } from './scene'
 import { useGameStore } from './store/gameStore'
 import { GameUI } from './ui'
@@ -74,6 +74,9 @@ function Game() {
   const phase = useGameStore((s) => s.phase)
   const cinematic = useDirector((s) => s.busy)
   const inBattle = phase === 'battle' || phase === 'gameover'
+  // hot-seat: the director films from the active captain's side (always `human` in single player)
+  const perspective = useGameStore((s) => s.perspective)
+  useEffect(() => director.setPerspective(perspective), [perspective])
   useEffect(() => {
     const unbindCinematics = bindCinematics()
     const unbindAudio = bindGameAudio({ director: directorPlaysAudio })
@@ -92,7 +95,7 @@ function Game() {
         {inBattle && <CinematicLayer />}
         {inBattle && <CinematicCamera />}
       </OceanScene>
-      <GameUI menuExtras={<MenuExtras />} />
+      <GameUI menuExtras={{ rules: <MenuRules />, stats: <MenuStats /> }} />
       <ExtrasLayer />
       <Letterbox hint={false} />
       <QualityToast />

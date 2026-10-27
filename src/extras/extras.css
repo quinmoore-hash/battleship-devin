@@ -312,11 +312,11 @@
   gap: 12px;
   width: 100%;
 }
-.menu-extras > :first-child {
+.menu-extras > * {
   flex: 1 1 300px;
-  max-width: 400px;
+  max-width: 420px;
 }
-.menu-extras > :last-child {
+.menu-extras-stats > * {
   flex: 1 1 320px;
   max-width: 520px;
 }

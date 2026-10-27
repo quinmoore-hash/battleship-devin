@@ -117,6 +117,34 @@ export const STORM_LOST_CHANCE = 0.3
 export const lostShots = (events: readonly GameEvent[], by?: Player): GameEvent[] =>
   events.filter((e) => e.result.outcome === 'lost' && (by === undefined || e.by === by))
 
+/** Who sits behind a side of the table: the player at the keyboard or the AI opponent. */
+export type PlayerKind = 'local' | 'ai'
+
+export interface Captain {
+  name: string
+  kind: PlayerKind
+}
+
+/**
+ * Both sides of the table. `human` is always the local player at the keyboard (pirate livery, the near board);
+ * `enemy` is the AI in single player or, in a "Two captains" hot-seat game, the second local captain (navy
+ * livery, the far board). The engine keeps `Player = 'human' | 'enemy'` either way.
+ */
+export interface Players {
+  human: Captain
+  enemy: Captain
+}
+
+export const DEFAULT_PLAYERS: Players = { human: { name: 'Captain 1', kind: 'local' }, enemy: { name: 'Captain 2', kind: 'ai' } }
+
+/** True when both sides are local captains sharing one keyboard (hot-seat). */
+export const isHotSeat = (players: Players): boolean => players.enemy.kind === 'local'
+
+/** The board a side fires at. */
+export const targetBoardKey = (by: Player): 'playerBoard' | 'enemyBoard' => (by === 'human' ? 'enemyBoard' : 'playerBoard')
+/** The board a side owns. */
+export const ownBoardKey = (by: Player): 'playerBoard' | 'enemyBoard' => (by === 'human' ? 'playerBoard' : 'enemyBoard')
+
 export interface SalvoState {
   /** Shots the human has queued this turn, in firing order. Resolved once `pending.length === size`. */
   pending: Coord[]
@@ -134,6 +162,19 @@ export interface GameState {
   enemyBoard: Board
   turn: Player
   winner?: Player
+  /** Who sits on each side (see `Players`). Chosen in the menu; survives `reset()` like `modes`. */
+  players: Players
+  /** Hot-seat: the captain currently mustering their fleet (`human` in single player). */
+  placing: Player
+  /** Hot-seat: who places (and fires) first this game; `rematch()` swaps it. */
+  firstPlacer: Player
+  /**
+   * Hot-seat handoff curtain: the captain who must take the deck next, or null when nobody has to look away. The HUD
+   * and the 3D world hide both boards while it is set; only `endHandoff()` (the curtain's button) clears it.
+   */
+  handoff: Player | null
+  /** Hot-seat: the captain whose side the HUD / camera show. Always `human` in single player. */
+  perspective: Player
   events: GameEvent[]
   /** The events resolved by the most recent `fireAt` / `enemyTurn` (one shot in classic mode, a volley in salvo). */
   lastVolley: GameEvent[]
@@ -162,7 +203,15 @@ export interface GameState {
    * `reset()` returns to classic. `seed` makes the stormy-seas rolls deterministic (tests, demos).
    */
   startGame: (difficulty: Difficulty, modes?: Partial<GameModes>, seed?: number) => void
-  /** Black Flag: choose the human fleet preset (placement only; clears any ships already placed). */
+  /** New game with the same rules; in a hot-seat game the other captain places (and fires) first. */
+  rematch: () => void
+  /** Choose who sits on each side (menu only). Partial: `{ enemy: { kind: 'local' } }` keeps the names. */
+  setPlayers: (players: { human?: Partial<Captain>; enemy?: Partial<Captain> }) => void
+  /** Raise the handoff curtain for `to` (hot-seat). No-op in single player. */
+  beginHandoff: (to: Player) => void
+  /** The captain tapped "ready": drop the curtain and show their side. */
+  endHandoff: () => void
+  /** Black Flag: choose the placing captain's fleet preset (placement only; clears any ships already placed). */
   setFleetPreset: (preset: FleetPresetId) => void
   /** `uid` identifies the instance in a fleet that repeats a class (`fleetUnits`); defaults to the class id. */
   placePlayerShip: (spec: ShipSpec, origin: Coord, orientation: Orientation, uid?: string) => boolean
@@ -174,21 +223,24 @@ export interface GameState {
    * Salvo mode: returns `null` while the shot is only queued (see `salvo.pending`); when the volley is full every
    * queued shot resolves in order (all of them land in `events` / `lastVolley`) and the last result is returned.
    */
-  fireAt: (coord: Coord) => ShotResult | null | undefined
+  fireAt: (coord: Coord, by?: Player) => ShotResult | null | undefined
   /**
    * Black Flag — Broadside: fires the up-to-3 cells of `broadsideCells(center, orientation)` that are still unshot,
    * each through the pure `fire()`, as the whole turn (in salvo it replaces the volley). Once per game per side.
    * Returns the results (empty array when illegal: not your turn, already used, no unshot cell in the line).
    */
-  fireBroadside: (center: Coord, orientation: Orientation) => ShotResult[]
+  fireBroadside: (center: Coord, orientation: Orientation, by?: Player) => ShotResult[]
   /**
    * Black Flag — Spyglass: look at one unshot enemy cell. No shot, no turn spent. Once per game per side.
    * Returns what was seen, or undefined when illegal.
    */
-  spyAt: (coord: Coord) => 'ship' | 'water' | undefined
-  /** @internal shared tail of `fireAt` / `fireBroadside`. */
-  resolveHuman: (volley: Coord[], kind: GameEventKind, group?: number) => ShotResult | undefined
-  /** The enemy takes a turn (a whole volley in salvo mode). Returns the last result. Call after `fireAt` (UI controls the pacing). */
+  spyAt: (coord: Coord, by?: Player) => 'ship' | 'water' | undefined
+  /** @internal shared tail of `fireAt` / `fireBroadside`; `by` (default `human`) is the shooter — the second hot-seat captain passes `enemy`. */
+  resolveHuman: (volley: Coord[], kind: GameEventKind, group?: number, by?: Player) => ShotResult | undefined
+  /**
+   * The AI enemy takes a turn (a whole volley in salvo mode). Returns the last result. Call after `fireAt` (UI controls
+   * the pacing). A no-op (undefined) in a hot-seat game: the second captain fires with `fireAt(coord, 'enemy')`.
+   */
   enemyTurn: () => ShotResult | undefined
   /** Change the rules of the game being set up. Allowed in `menu` / `placement` only (ignored once the battle starts). */
   setModes: (modes: Partial<GameModes>) => void
@@ -273,6 +325,9 @@ const emptyPerPlayer = <T,>(): Record<Player, T[]> => ({ human: [], enemy: [] })
 
 export const other = (p: Player): Player => (p === 'human' ? 'enemy' : 'human')
 
+/** The board the captain `placing` is mustering on. */
+export const placementBoard = (s: Pick<GameState, 'placing' | 'playerBoard' | 'enemyBoard'>): Board => (s.placing === 'enemy' ? s.enemyBoard : s.playerBoard)
+
 /** The number of treasure chests `by` has uncovered so far. */
 export const treasureFound = (events: readonly GameEvent[], by: Player): number => events.filter((e) => e.by === by && e.kind === 'treasure').length
 
@@ -325,6 +380,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   playerBoard: createBoard(),
   enemyBoard: createBoard(),
   turn: 'human',
+  players: DEFAULT_PLAYERS,
+  placing: 'human',
+  firstPlacer: 'human',
+  handoff: null,
+  perspective: 'human',
   events: [],
   lastVolley: [],
   salvo: emptySalvo(),
@@ -340,25 +400,32 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((s) => {
       const rules = modes ? { ...DEFAULT_MODES, ...modes } : s.modes
       const rng = seededRng(seed ?? Math.floor(Math.random() * 0xffffffff))
-      // Black Flag: the enemy picks a random preset; the human picks in placement (classic until then)
-      const enemyPreset: FleetPresetId = rules.blackFlag ? FLEET_PRESETS[Math.floor(rng() * FLEET_PRESETS.length)].id : 'classic'
+      const hotSeat = isHotSeat(s.players)
+      const first = hotSeat ? s.firstPlacer : 'human'
+      // Black Flag: the AI enemy picks a random preset; local captains pick in placement (classic until then)
+      const enemyPreset: FleetPresetId = rules.blackFlag && !hotSeat ? FLEET_PRESETS[Math.floor(rng() * FLEET_PRESETS.length)].id : 'classic'
       const enemyFleet = presetFleet(enemyPreset)
       return {
         phase: 'placement',
         difficulty,
         modes: rules,
         playerBoard: createBoard(),
-        enemyBoard: randomPlacement(rng, enemyFleet),
+        // the second captain musters their own fleet; the AI's is drawn for it
+        enemyBoard: hotSeat ? createBoard() : randomPlacement(rng, enemyFleet),
         fleets: { human: [...FLEET], enemy: enemyFleet },
         fleetPresets: { human: 'classic', enemy: enemyPreset },
         powerShots: rules.blackFlag ? fullPowerShots() : noPowerShots(),
         treasure: emptyPerPlayer<Coord>(),
         spied: emptyPerPlayer<SpyMark>(),
         bonusShots: 0,
-        opponent: createOpponent(difficulty, rng),
+        opponent: hotSeat ? undefined : createOpponent(difficulty, rng),
         stormRng: rng,
         rng,
-        turn: 'human',
+        turn: first,
+        placing: first,
+        firstPlacer: first,
+        handoff: null,
+        perspective: first,
         winner: undefined,
         events: [],
         lastVolley: [],
@@ -366,18 +433,42 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }),
 
-  setFleetPreset: (preset) =>
+  rematch: () => {
+    const s = get()
+    if (isHotSeat(s.players)) set({ firstPlacer: other(s.firstPlacer) })
+    get().startGame(s.difficulty)
+  },
+
+  setPlayers: (patch) =>
     set((s) =>
-      s.phase === 'placement' && s.modes.blackFlag
-        ? { fleetPresets: { ...s.fleetPresets, human: preset }, fleets: { ...s.fleets, human: presetFleet(preset) }, playerBoard: createBoard(s.playerBoard.size) }
+      s.phase === 'menu'
+        ? {
+            players: {
+              human: { ...s.players.human, ...patch.human, kind: 'local' },
+              enemy: { ...s.players.enemy, ...patch.enemy },
+            },
+            firstPlacer: 'human',
+          }
         : {},
     ),
 
+  beginHandoff: (to) => set((s) => (isHotSeat(s.players) && (s.phase === 'placement' || s.phase === 'battle') ? { handoff: to } : {})),
+
+  endHandoff: () => set((s) => (s.handoff ? { handoff: null, perspective: s.phase === 'placement' ? s.placing : s.turn } : {})),
+
+  setFleetPreset: (preset) =>
+    set((s) => {
+      if (s.phase !== 'placement' || !s.modes.blackFlag) return {}
+      const key = ownBoardKey(s.placing)
+      return { fleetPresets: { ...s.fleetPresets, [s.placing]: preset }, fleets: { ...s.fleets, [s.placing]: presetFleet(preset) }, [key]: createBoard(s[key].size) }
+    }),
+
   placePlayerShip: (spec, origin, orientation, uid = spec.id) => {
-    const { playerBoard, phase } = get()
-    if (phase !== 'placement') return false
+    const s = get()
+    if (s.phase !== 'placement') return false
+    const key = ownBoardKey(s.placing)
     try {
-      set({ playerBoard: placeShip(playerBoard, spec, origin, orientation, uid) })
+      set({ [key]: placeShip(s[key], spec, origin, orientation, uid) })
       return true
     } catch {
       return false
@@ -385,24 +476,49 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   removePlayerShip: (uid) =>
-    set((s) => (s.phase === 'placement' ? { playerBoard: removeShip(s.playerBoard, uid) } : {})),
+    set((s) => {
+      if (s.phase !== 'placement') return {}
+      const key = ownBoardKey(s.placing)
+      return { [key]: removeShip(s[key], uid) }
+    }),
 
-  autoPlacePlayerFleet: () => set((s) => (s.phase === 'placement' ? { playerBoard: randomPlacement(s.rng ?? Math.random, s.fleets.human) } : {})),
+  autoPlacePlayerFleet: () => set((s) => (s.phase === 'placement' ? { [ownBoardKey(s.placing)]: randomPlacement(s.rng ?? Math.random, s.fleets[s.placing]) } : {})),
 
   confirmPlacement: () => {
-    const { playerBoard, enemyBoard, phase, fleets, modes, rng } = get()
-    if (phase !== 'placement' || !isFleetPlaced(playerBoard, fleets.human)) return
+    const s = get()
+    const { phase, fleets, modes, rng } = s
+    if (phase !== 'placement' || !isFleetPlaced(placementBoard(s), fleets[s.placing])) return
+    const hotSeat = isHotSeat(s.players)
+    if (hotSeat && !isFleetPlaced(s[ownBoardKey(other(s.placing))], fleets[other(s.placing)])) {
+      // first captain is done: curtain, then the other captain musters on the same screen
+      const next = other(s.placing)
+      set({ placing: next, handoff: next })
+      return
+    }
+    const first = s.firstPlacer
     const draw = rng ?? Math.random
     const treasure = modes.blackFlag
-      ? { human: treasureCells(playerBoard, draw, TREASURE_PER_BOARD), enemy: treasureCells(enemyBoard, draw, TREASURE_PER_BOARD) }
+      ? { human: treasureCells(s.playerBoard, draw, TREASURE_PER_BOARD), enemy: treasureCells(s.enemyBoard, draw, TREASURE_PER_BOARD) }
       : emptyPerPlayer<Coord>()
-    set({ phase: 'battle', turn: 'human', salvo: { pending: [], size: salvoSize(playerBoard) }, treasure, bonusShots: 0 })
+    set({
+      phase: 'battle',
+      turn: first,
+      perspective: first,
+      // the battle opens behind the curtain so the first captain's opponent cannot see the boards being revealed
+      handoff: hotSeat ? first : null,
+      salvo: { pending: [], size: salvoSize(s[ownBoardKey(first)]) },
+      treasure,
+      bonusShots: 0,
+    })
   },
 
-  fireAt: (coord) => {
-    const { phase, turn, enemyBoard, modes, salvo, playerBoard, bonusShots } = get()
-    if (phase !== 'battle' || turn !== 'human') return undefined
-    if (!inBounds(coord, enemyBoard.size) || hasBeenShot(enemyBoard, coord)) return undefined
+  fireAt: (coord, by = 'human') => {
+    const state = get()
+    const { phase, turn, modes, salvo, bonusShots } = state
+    if (phase !== 'battle' || turn !== by || state.handoff) return undefined
+    const targetBoard = state[targetBoardKey(by)]
+    const ownBoard = state[ownBoardKey(by)]
+    if (!inBounds(coord, targetBoard.size) || hasBeenShot(targetBoard, coord)) return undefined
 
     let volley: Coord[] = [coord]
     if (modes.salvo) {
@@ -410,66 +526,78 @@ export const useGameStore = create<GameState>((set, get) => ({
       const pending = [...salvo.pending, coord]
       // a treasure bonus volley is exactly the chests found; otherwise one shot per surviving ship —
       // never more than the unshot cells left, or the last volley could never fill (BUG-548)
-      const unshot = enemyBoard.size * enemyBoard.size - enemyBoard.shots.length
-      const size = Math.max(1, Math.min(bonusShots > 0 ? bonusShots : Math.min(salvo.size, salvoSize(playerBoard)), unshot))
+      const unshot = targetBoard.size * targetBoard.size - targetBoard.shots.length
+      const size = Math.max(1, Math.min(bonusShots > 0 ? bonusShots : Math.min(salvo.size, salvoSize(ownBoard)), unshot))
       if (pending.length < size) {
         set({ salvo: { pending, size } })
         return null
       }
       volley = pending
     }
-    return get().resolveHuman(volley, 'shot')
+    return get().resolveHuman(volley, 'shot', undefined, by)
   },
 
-  fireBroadside: (center, orientation) => {
-    const { phase, turn, enemyBoard, powerShots, modes } = get()
-    if (phase !== 'battle' || turn !== 'human' || !modes.blackFlag || !powerShots.human.broadside) return []
-    if (!inBounds(center, enemyBoard.size)) return []
-    const cells = broadsideCells(center, orientation, enemyBoard.size).filter((c) => !hasBeenShot(enemyBoard, c))
+  fireBroadside: (center, orientation, by = 'human') => {
+    const state = get()
+    const { phase, turn, powerShots, modes } = state
+    const targetBoard = state[targetBoardKey(by)]
+    if (phase !== 'battle' || turn !== by || state.handoff || !modes.blackFlag || !powerShots[by].broadside) return []
+    if (!inBounds(center, targetBoard.size)) return []
+    const cells = broadsideCells(center, orientation, targetBoard.size).filter((c) => !hasBeenShot(targetBoard, c))
     if (cells.length === 0) return []
-    set((s) => ({ powerShots: { ...s.powerShots, human: { ...s.powerShots.human, broadside: false } } }))
-    get().resolveHuman(cells, 'broadside', ++groupId)
+    set((s) => ({ powerShots: { ...s.powerShots, [by]: { ...s.powerShots[by], broadside: false } } }))
+    get().resolveHuman(cells, 'broadside', ++groupId, by)
     return get().lastVolley.map((e) => e.result)
   },
 
-  spyAt: (coord) => {
-    const { phase, turn, enemyBoard, powerShots, modes, events, spied } = get()
-    if (phase !== 'battle' || turn !== 'human' || !modes.blackFlag || !powerShots.human.spyglass) return undefined
-    if (!inBounds(coord, enemyBoard.size) || hasBeenShot(enemyBoard, coord)) return undefined
-    const ship = !!shipAt(enemyBoard, coord)
+  spyAt: (coord, by = 'human') => {
+    const state = get()
+    const { phase, turn, powerShots, modes, events, spied } = state
+    const targetBoard = state[targetBoardKey(by)]
+    if (phase !== 'battle' || turn !== by || state.handoff || !modes.blackFlag || !powerShots[by].spyglass) return undefined
+    if (!inBounds(coord, targetBoard.size) || hasBeenShot(targetBoard, coord)) return undefined
+    const ship = !!shipAt(targetBoard, coord)
     set({
-      powerShots: { ...powerShots, human: { ...powerShots.human, spyglass: false } },
-      spied: { ...spied, human: [...spied.human, { coord, ship }] },
-      events: [...events, { id: ++eventId, by: 'human', kind: 'spyglass', spied: ship ? 'ship' : 'water', result: { coord, outcome: 'miss' } }],
+      powerShots: { ...powerShots, [by]: { ...powerShots[by], spyglass: false } },
+      spied: { ...spied, [by]: [...spied[by], { coord, ship }] },
+      events: [...events, { id: ++eventId, by, kind: 'spyglass', spied: ship ? 'ship' : 'water', result: { coord, outcome: 'miss' } }],
     })
     return ship ? 'ship' : 'water'
   },
 
-  /** @internal Resolves the human's volley / Broadside line against the enemy board and advances the turn. */
-  resolveHuman: (volley, kind, group) => {
-    const { enemyBoard, modes, playerBoard, bonusShots, treasure } = get()
-    const { events } = get()
-    const r = resolveVolley(enemyBoard, volley, 'human', kind, treasure.enemy, group, undefined, stormRoll(get()))
+  /** @internal Resolves `by`'s volley / Broadside line against the other side's board and advances the turn. */
+  resolveHuman: (volley, kind, group, by = 'human') => {
+    const state = get()
+    const { modes, bonusShots, treasure, events } = state
+    const targetKey = targetBoardKey(by)
+    const targetBoard = state[targetKey]
+    const ownBoard = state[ownBoardKey(by)]
+    const next = other(by)
+    // stormy seas: the same lost-shot roll for both captains (and the single player)
+    const r = resolveVolley(targetBoard, volley, by, kind, treasure[next], group, undefined, stormRoll(state))
     const won = isFleetSunk(r.board)
     // treasure: the shooter fires again — the chests found become extra shots (salvo: a bonus volley of that size)
     const spent = bonusShots > 0 ? (modes.salvo ? bonusShots : 1) : 0
     const bonus = won ? 0 : Math.max(0, bonusShots - spent) + r.treasure
+    const keepsTurn = won || bonus > 0
+    // hot-seat: the next volley belongs to the other captain, whose own board is the one just fired at
+    const nextOwn = !keepsTurn && isHotSeat(state.players) ? r.board : ownBoard
     set({
-      enemyBoard: r.board,
+      [targetKey]: r.board,
       events: [...events, ...r.events],
       lastVolley: r.events,
-      salvo: { pending: [], size: bonus > 0 ? bonus : salvoSize(playerBoard) },
+      salvo: { pending: [], size: bonus > 0 ? bonus : salvoSize(nextOwn) },
       bonusShots: bonus,
-      turn: won || bonus > 0 ? 'human' : 'enemy',
+      turn: keepsTurn ? by : next,
       phase: won ? 'gameover' : 'battle',
-      winner: won ? 'human' : undefined,
+      winner: won ? by : undefined,
     })
     return r.last
   },
 
   enemyTurn: () => {
-    const { phase, turn, playerBoard, opponent, events, modes, powerShots, treasure, spied, difficulty } = get()
-    if (phase !== 'battle' || turn !== 'enemy' || !opponent) return undefined
+    const { phase, turn, playerBoard, opponent, events, modes, powerShots, treasure, spied, difficulty, players } = get()
+    if (phase !== 'battle' || turn !== 'enemy' || !opponent || isHotSeat(players)) return undefined
     let shots = modes.salvo ? salvoSize(get().enemyBoard) : 1
     let board = playerBoard
     const resolved: GameEvent[] = []
@@ -543,14 +671,19 @@ export const useGameStore = create<GameState>((set, get) => ({
   reset: () =>
     set((s) => ({
       phase: 'menu',
-      // the chosen rules survive "Menu" / "Play again" like the difficulty does (BUG-320)
+      // the chosen rules survive "Menu" / "Play again" like the difficulty does (BUG-320); so do the captains' names
       modes: s.modes,
+      players: s.players,
       playerBoard: createBoard(),
       enemyBoard: createBoard(),
       opponent: undefined,
       stormRng: undefined,
       rng: undefined,
       turn: 'human',
+      placing: 'human',
+      firstPlacer: 'human',
+      handoff: null,
+      perspective: 'human',
       winner: undefined,
       events: [],
       lastVolley: [],

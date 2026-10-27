@@ -47,7 +47,7 @@ export function logLines(events: readonly GameEvent[]): LogLine[] {
   return lines
 }
 
-export function ShotLog({ events }: { events: GameEvent[] }) {
+export function ShotLog({ events, names }: { events: GameEvent[]; names?: { human: string; enemy: string } }) {
   const shots = events.filter((e) => e.kind !== 'spyglass').length
   const recent = logLines(events).reverse().slice(0, 40)
   return (
@@ -62,7 +62,7 @@ export function ShotLog({ events }: { events: GameEvent[] }) {
         <ol>
           {recent.map((l) => (
             <li key={l.id} className={`${l.className} by-${l.by}`}>
-              <span className="who">{l.by === 'human' ? 'You' : 'Enemy'}</span>
+              <span className="who">{names ? names[l.by] : l.by === 'human' ? 'You' : 'Enemy'}</span>
               <span className="coord">{l.coord}</span>
               <span className="outcome">{l.outcome}</span>
             </li>

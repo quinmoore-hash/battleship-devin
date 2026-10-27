@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import * as THREE from 'three'
+import type { Player } from '../engine'
 import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
 import { CAMERA_SHOTS, battleFraming, fitFov } from '../scene/CameraRig'
 import { SHIPS, shipWorldTransform } from '../ships'
@@ -24,6 +25,7 @@ const playerCenter = boardCenter(BOARD_LAYOUT.player)
 const enemyCenter = boardCenter(BOARD_LAYOUT.enemy)
 const MIN_Y = 0.9
 const overview = CAMERA_SHOTS.battle
+const overviewFar = CAMERA_SHOTS['battle-far']
 
 /** Scratch vectors shared by the pure shot functions (one camera per scene). */
 const tmp = {
@@ -49,18 +51,24 @@ function lerpPose(out: Pose, from: Pose, to: Pose, k: number) {
   out.fov = THREE.MathUtils.lerp(from.fov, to.fov, k)
 }
 
-/** Where every cinematic returns to; `target`/`fov` are refreshed per frame from `battleFraming` (viewport-dependent). */
-const overviewPose: Pose = { position: overview.position, target: overview.target.clone(), fov: overview.fov }
+/** Where every cinematic returns to, per filmed side; `target`/`fov` are refreshed per frame from `battleFraming` (viewport-dependent). */
+const overviewPoses: Record<Player, Pose> = {
+  human: { position: overview.position, target: overview.target.clone(), fov: overview.fov },
+  enemy: { position: overviewFar.position, target: overviewFar.target.clone(), fov: overviewFar.fov },
+}
 
 /**
  * The wanted camera pose for `active` at `beat` / `k`. `start` is the camera pose when the beat began, so
  * eases run from wherever the camera actually was. Returns `cut` = true when the pose should be applied
- * without smoothing (a hard cut).
+ * without smoothing (a hard cut). `perspective` is the side the camera films from (hot-seat: the active captain);
+ * the overview / return shots and the victory orbit use that board.
  */
-export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null, k: number, start: Pose): boolean {
+export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null, k: number, start: Pose, perspective: Player = 'human'): boolean {
   const { event, plan } = active
+  const overviewPose = overviewPoses[perspective]
   if (event.type === 'shot' && plan) {
-    const enemy = plan.by === 'enemy'
+    // the AI fires from the unseen gun line (no shooter); a hot-seat captain's Navy ships are real and filmed like the pirates'
+    const enemy = plan.by === 'enemy' && plan.shooter === null
     const m = plan.muzzles
     const M = tmp.a.set(0, 0, 0)
     if (m.length) {
@@ -165,8 +173,8 @@ export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null
     return false
   }
   // victory: slow orbit over the fleet there is something to see — the pirates' (fireworks over it for a win,
-  // its burning wrecks for a loss; the Navy's winning fleet stays hidden)
-  const F = set(tmp.a, playerCenter)
+  // its burning wrecks for a loss; the Navy's winning fleet stays hidden). Hot-seat films the active side's board.
+  const F = set(tmp.a, perspective === 'enemy' ? enemyCenter : playerCenter)
   const hold = beat?.name === 'hold'
   const a = hold ? 0.8 + k * 0.5 : -0.6 + k * 1.4
   const r = hold ? 15 + k * 3 : 15
@@ -196,7 +204,8 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
     const s = director.store.getState()
     const active = s.active
     const camera = state.camera as THREE.PerspectiveCamera
-    battleFraming(camera.aspect, state.size.width, overviewPose)
+    battleFraming(camera.aspect, state.size.width, overviewPoses.human)
+    battleFraming(camera.aspect, state.size.width, overviewPoses.enemy, 'battle-far')
     if (!active) {
       lastKey.current = ''
       shake.current = 0
@@ -215,7 +224,7 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       smooth.current.target.copy(start.current.target)
       smooth.current.fov = camera.fov
     }
-    const cut = wantedPose(want.current, active, beat, k, start.current)
+    const cut = wantedPose(want.current, active, beat, k, start.current, s.perspective)
     const lambda = beat?.name === 'flight' ? 9 : beat?.name === 'impact' ? 5 : 14
     if (cut) {
       smooth.current.position.copy(want.current.position)

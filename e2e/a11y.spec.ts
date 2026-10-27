@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
+import { startSinglePlayer } from './helpers'
 
 const SERIOUS = ['serious', 'critical']
 
@@ -22,7 +23,7 @@ test.describe('accessibility', () => {
     await auditPage(page, 'settings')
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('settings')).toBeHidden()
-    await page.getByTestId('difficulty-easy').click()
+    await startSinglePlayer(page, 'easy')
     await expect(page.getByTestId('placement')).toBeVisible()
     await auditPage(page, 'placement')
     await page.getByTestId('auto-place').click()
@@ -34,7 +35,7 @@ test.describe('accessibility', () => {
   test('grids are keyboard-playable and every shot is announced', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/?no3d')
-    await page.getByTestId('difficulty-easy').click()
+    await startSinglePlayer(page, 'easy')
     await page.getByTestId('auto-place').click()
     await page.getByTestId('confirm-placement').click()
     const first = page.getByTestId('enemy-grid-0-0')
@@ -84,12 +85,14 @@ test.describe('accessibility', () => {
     const context = await browser.newContext({ viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true, reducedMotion: 'reduce' })
     const page = await context.newPage()
     await page.goto('/?no3d')
-    // the modes / stats panels sit in the menu flow below the title block, not pinned over it (BUG-311)
+    // the modes / stats panels sit in the menu flow below the title block, not pinned over it (BUG-311); the rules dock is step 2
+    await page.getByTestId('mode-single').click()
     const modes = page.getByTestId('extras-menu').locator('.xt-modes')
     expect(await modes.evaluate((el) => getComputedStyle(el).position)).toBe('static')
     const title = await page.locator('.menu-title').boundingBox()
     const modesBox = await modes.boundingBox()
     expect(modesBox!.y).toBeGreaterThan(title!.y + title!.height)
+    await page.getByTestId('rules-next').click()
     await page.getByTestId('difficulty-easy').click()
     await page.getByTestId('auto-place').click()
     await page.getByTestId('confirm-placement').click()
@@ -128,7 +131,7 @@ test.describe('accessibility', () => {
   test('the FPS watchdog lowers quality once and tells the player', async ({ page }) => {
     // ?gpu=medium pins the detected tier (headless SwiftShader would detect `low`, which cannot drop further)
     await page.goto('/?no3d&perf&gpu=medium')
-    await page.getByTestId('difficulty-easy').click()
+    await startSinglePlayer(page, 'easy')
     await page.getByTestId('auto-place').click()
     await page.getByTestId('confirm-placement').click()
     await expect(page.getByTestId('battle')).toBeVisible()

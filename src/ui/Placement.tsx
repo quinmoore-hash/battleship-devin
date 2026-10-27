@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, type DragEvent } from 'react'
 import { playSfx } from '../audio'
 import { FLEET_BY_ID, FLEET_PRESETS, fleetUnits, isFleetPlaced, uidClass, type Coord } from '../engine'
-import { useGameStore } from '../store/gameStore'
+import { isHotSeat, placementBoard, useGameStore } from '../store/gameStore'
 import { Grid, type GridCellInfo } from './Grid'
 import { Hint, WaxSeal } from './Ornaments'
 import { footprintAt } from './placementUtils'
@@ -12,13 +12,20 @@ import { isCoarsePointer, useUiStore } from './uiStore'
  * so the HTML chart and the 3D ghost always agree: hover a cell on either and both preview.
  */
 export function PlacementScreen() {
-  const playerBoard = useGameStore((s) => s.playerBoard)
+  // hot-seat: each captain musters on their own board in turn (`placing`); single player always the pirates'
+  const playerBoard = useGameStore(placementBoard)
+  const players = useGameStore((s) => s.players)
+  const placing = useGameStore((s) => s.placing)
+  const hotSeat = isHotSeat(players)
+  const captain = players[placing].name
   const placePlayerShip = useGameStore((s) => s.placePlayerShip)
   const removePlayerShip = useGameStore((s) => s.removePlayerShip)
   const autoPlace = useGameStore((s) => s.autoPlacePlayerFleet)
   const confirmPlacement = useGameStore((s) => s.confirmPlacement)
   const reset = useGameStore((s) => s.reset)
   const difficulty = useGameStore((s) => s.difficulty)
+  const humanBoard = useGameStore((s) => s.playerBoard)
+  const enemyBoard = useGameStore((s) => s.enemyBoard)
 
   const carrying = useUiStore((s) => s.carrying)
   const orientation = useUiStore((s) => s.orientation)
@@ -68,7 +75,7 @@ export function PlacementScreen() {
     (c: Coord, uid: string | null = useUiStore.getState().carrying) => {
       const s = uid ? FLEET_BY_ID[uidClass(uid)] : null
       if (!s || !uid) return
-      const f = footprintAt(useGameStore.getState().playerBoard, s, c, useUiStore.getState().orientation)
+      const f = footprintAt(placementBoard(useGameStore.getState()), s, c, useUiStore.getState().orientation)
       if (f.valid && placePlayerShip(s, f.origin, useUiStore.getState().orientation, uid)) {
         playSfx('place')
         setHover(null)
@@ -105,10 +112,10 @@ export function PlacementScreen() {
   }
 
   return (
-    <div className="placement hud" data-testid="placement">
+    <div className="placement hud" data-testid="placement" data-placing={placing}>
       <aside className="panel parchment tray-panel ink-in">
-        <h2 className="panel-title">
-          Muster the fleet <WaxSeal tone="teal" />
+        <h2 className="panel-title" data-testid="placement-title">
+          {hotSeat ? `${captain}, muster your fleet` : 'Muster the fleet'} <WaxSeal tone={placing === 'enemy' ? 'crimson' : 'teal'} />
         </h2>
         <p className="muted small">Pick a ship, hover your waters and click to anchor it. Drag ships on the water to move them.</p>
         {blackFlag && (
@@ -188,7 +195,7 @@ export function PlacementScreen() {
             {playerBoard.ships.length}/{units.length} placed
           </span>
           <button type="button" className="btn btn-crimson btn-big" data-testid="confirm-placement" disabled={!allPlaced} onClick={() => (playSfx('ui-click'), confirmPlacement())}>
-            Start battle
+            {hotSeat && !isFleetPlaced(placing === 'human' ? enemyBoard : humanBoard) ? 'Ready — pass the deck' : 'Start battle'}
           </button>
         </div>
         <button type="button" className="link-btn" data-testid="back-to-menu" onClick={() => (playSfx('ui-click'), reset())}>
@@ -197,7 +204,7 @@ export function PlacementScreen() {
       </aside>
 
       <section className="panel parchment chart-panel ink-in placement-chart" aria-label="Your waters">
-        <h2 className="panel-title small-title">Your waters · {difficulty}</h2>
+        <h2 className="panel-title small-title">{hotSeat ? `${captain}'s waters · ${placing === 'human' ? 'pirate' : 'navy'} colours` : `Your waters · ${difficulty}`}</h2>
         <Grid testId="player-grid" label="Your waters — place your fleet" cell={cellInfo} onCell={onCell} onHover={(c) => setHover(c ? { side: 'player', coord: c } : null)} onDrop={(c) => dropAt(c)} />
       </section>
 

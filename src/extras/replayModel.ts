@@ -3,12 +3,14 @@
  * placement: `boardsAt(snapshot, step)` rebuilds the state after the first `step` shots by re-firing them in order.
  */
 import { coordLabel, fire, FLEET, type Board, type Difficulty, type Player } from '../engine'
-import type { GameEvent, GameModes, GameState } from '../store/gameStore'
+import { isHotSeat, type GameEvent, type GameModes, type GameState, type Players } from '../store/gameStore'
 
 export interface ReplaySnapshot {
   difficulty: Difficulty
   winner?: Player
   modes?: GameModes
+  /** Hot-seat captains' names (absent / AI = "You" vs "Devin"). */
+  players?: Players
   /** Final boards (placement + every shot). */
   playerBoard: Board
   enemyBoard: Board
@@ -18,8 +20,9 @@ export interface ReplaySnapshot {
 export type ReplayBoards = Pick<ReplaySnapshot, 'playerBoard' | 'enemyBoard'>
 
 /** Captures what the replay needs from the store (safe to keep after the store resets). */
-export function snapshotFromState(state: Pick<GameState, 'difficulty' | 'winner' | 'modes' | 'playerBoard' | 'enemyBoard' | 'events'>): ReplaySnapshot {
+export function snapshotFromState(state: Pick<GameState, 'difficulty' | 'winner' | 'modes' | 'playerBoard' | 'enemyBoard' | 'events'> & Partial<Pick<GameState, 'players'>>): ReplaySnapshot {
   return {
+    players: state.players,
     difficulty: state.difficulty,
     winner: state.winner,
     modes: { ...state.modes },
@@ -68,12 +71,18 @@ export const stepIntervalMs = (speed: number): number => Math.max(40, Math.round
 
 const shipName = (id: string | undefined): string => FLEET.find((s) => s.id === id)?.name ?? id ?? 'ship'
 
+/** Display names of both sides: the captains' names in a hot-seat game, "you" / "Devin" against the AI. */
+export function sideNames(players?: Players): { human: string; enemy: string } {
+  return players && isHotSeat(players) ? { human: players.human.name, enemy: players.enemy.name } : { human: 'You', enemy: 'Devin' }
+}
+
 /** One-line caption for a shot, e.g. "Devin fires at B4 — hit the Sloop". */
-export function describeEvent(event: GameEvent): string {
+export function describeEvent(event: GameEvent, players?: Players): string {
+  const names = sideNames(players)
   const at = coordLabel(event.result.coord)
   const r = event.result
-  if (event.kind === 'spyglass') return `${event.by === 'human' ? 'You look' : 'Devin looks'} at ${at} — ${event.spied === 'ship' ? 'a ship!' : 'open water'}`
-  const who = (event.by === 'human' ? 'You fire' : 'Devin fires') + (event.kind === 'broadside' ? ' a broadside' : '')
+  if (event.kind === 'spyglass') return `${event.by === 'human' ? (names.human === 'You' ? 'You look' : `${names.human} looks`) : `${names.enemy} looks`} at ${at} — ${event.spied === 'ship' ? 'a ship!' : 'open water'}`
+  const who = (event.by === 'human' ? (names.human === 'You' ? 'You fire' : `${names.human} fires`) : `${names.enemy} fires`) + (event.kind === 'broadside' ? ' a broadside' : '')
   if (event.kind === 'treasure') return `${who} at ${at} — treasure! Fire again`
   if (r.outcome === 'lost') return `${who} at ${at} — lost in the storm`
   if (r.outcome === 'miss') return `${who} at ${at} — splash`

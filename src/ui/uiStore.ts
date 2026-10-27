@@ -90,9 +90,10 @@ export function resetInteraction() {
   useUiStore.setState({ hover: null, carrying: null, dragging: false, pendingTarget: null, orientation: 'horizontal' })
 }
 
-// Any phase change (new game, quit, game over) drops hover / carried ship / pending target.
+// Any phase change (new game, quit, game over) — or the deck passing to the other hot-seat captain — drops
+// hover / carried ship / pending target.
 useGameStore.subscribe((state, prev) => {
-  if (state.phase !== prev.phase) resetInteraction()
+  if (state.phase !== prev.phase || state.placing !== prev.placing || state.handoff !== prev.handoff) resetInteraction()
 })
 
 /** Touch-first device (phones / tablets): copy says "tap" instead of "click" / "hover" (BUG-312). Evaluated once per load. */

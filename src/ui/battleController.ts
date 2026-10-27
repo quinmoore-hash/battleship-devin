@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Coord, ShotResult } from '../engine'
-import { useGameStore } from '../store/gameStore'
+import { isHotSeat, useGameStore } from '../store/gameStore'
 import type { PowerFire } from './turnFlow'
 import { createTurnFlow, type TurnBeat, type TurnFlow } from './turnFlow'
 import { useUiStore } from './uiStore'
@@ -56,7 +56,9 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
     const { flow, busy, beat } = get()
     const game = useGameStore.getState()
     // a shot during the battle-start flyover skips it (the flow handles that); any other busy state ignores the click
-    if (!flow || (busy && beat.phase !== 'intro') || game.phase !== 'battle' || game.turn !== 'human') return
+    // hot-seat: the active captain (whose side is on screen) fires; single player: only the human
+    const shooter = isHotSeat(game.players) ? game.perspective : 'human'
+    if (!flow || (busy && beat.phase !== 'intro') || game.phase !== 'battle' || game.handoff || game.turn !== shooter) return
     useUiStore.getState().setPendingTarget(null)
     set({ busy: true })
     try {

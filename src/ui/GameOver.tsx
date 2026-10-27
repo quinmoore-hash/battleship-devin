@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { playSfx } from '../audio'
 import { useDirector } from '../cinematics'
-import { fleetPresetName, TREASURE_PER_BOARD, treasureFound, useGameStore } from '../store/gameStore'
+import { fleetPresetName, isHotSeat, TREASURE_PER_BOARD, treasureFound, useGameStore } from '../store/gameStore'
 import { Confetti } from './Confetti'
 import { Skull, WaxSeal } from './Ornaments'
 import { battleReport, captainRank, formatDuration } from './stats'
@@ -22,8 +22,11 @@ export function GameOverScreen() {
   const fleets = useGameStore((s) => s.fleets)
   const powerShots = useGameStore((s) => s.powerShots)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
-  const startGame = useGameStore((s) => s.startGame)
+  const rematch = useGameStore((s) => s.rematch)
   const reset = useGameStore((s) => s.reset)
+  const players = useGameStore((s) => s.players)
+  const hotSeat = isHotSeat(players)
+  const winnerName = winner ? players[winner].name : ''
   const battleStartedAt = useUiStore((s) => s.battleStartedAt)
   // the report inks in once the director has finished the last shot / sinking / victory flyover (instantly without the director)
   const flyover = useDirector((s) => s.busy)
@@ -32,12 +35,12 @@ export function GameOverScreen() {
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt])
 
   const rows: [string, string, string][] = [
-    ['stat-shots', 'Shots fired', String(report.shots)],
+    ['stat-shots', hotSeat ? `Shots fired by ${players.human.name}` : 'Shots fired', String(report.shots)],
     ['stat-accuracy', 'Accuracy', `${report.accuracy}%`],
     ...(modes.storm ? [['stat-lost-storm', 'Lost in storm (you · enemy)', `${report.lost} · ${report.enemyLost}`] as [string, string, string]] : []),
     ['stat-turns', 'Turns', String(report.turns)],
-    ['stat-sunk', 'Enemy ships sunk', `${report.shipsSunk}/${fleets.enemy.length}`],
-    ['stat-lost', 'Ships lost', `${report.shipsLost}/${fleets.human.length}`],
+    ['stat-sunk', hotSeat ? `${players.enemy.name}'s ships sunk` : 'Enemy ships sunk', `${report.shipsSunk}/${fleets.enemy.length}`],
+    ['stat-lost', hotSeat ? `${players.human.name}'s ships lost` : 'Ships lost', `${report.shipsLost}/${fleets.human.length}`],
     ...(modes.blackFlag
       ? ([
           [
@@ -56,10 +59,16 @@ export function GameOverScreen() {
       {won && !reducedMotion && !flyover && <Confetti />}
       <article key={flyover ? 'waiting' : 'shown'} className={`panel parchment report ink-in ${won ? 'report-won' : 'report-lost'}`}>
         <header className="report-head">
-          <span className="report-kicker">After-action report · {difficulty}</span>
-          <h2 className="report-title">{won ? 'Victory!' : 'Sunk!'}</h2>
+          <span className="report-kicker">After-action report · {hotSeat ? 'two captains' : difficulty}</span>
+          <h2 className="report-title" data-testid="report-title">
+            {hotSeat ? `${winnerName} rules the Caribbean` : won ? 'Victory!' : 'Sunk!'}
+          </h2>
           <p className="report-sub">
-            {won ? 'The enemy fleet rests on the seabed. The cove is yours, Captain.' : 'The enemy sent your last ship to the depths. Davy Jones sends his regards.'}
+            {hotSeat
+              ? `${winner ? players[winner === 'human' ? 'enemy' : 'human'].name : 'The other'}'s fleet rests on the seabed. The cove belongs to ${winnerName}.`
+              : won
+                ? 'The enemy fleet rests on the seabed. The cove is yours, Captain.'
+                : 'The enemy sent your last ship to the depths. Davy Jones sends his regards.'}
           </p>
           <p className="report-rank">
             Rank earned: <strong data-testid="rank">{captainRank(report, won)}</strong>
@@ -74,7 +83,7 @@ export function GameOverScreen() {
           ))}
         </dl>
         <div className="report-actions">
-          <button type="button" className="btn btn-crimson btn-big" data-testid="rematch" onClick={() => (playSfx('ui-click'), startGame(difficulty))}>
+          <button type="button" className="btn btn-crimson btn-big" data-testid="rematch" onClick={() => (playSfx('ui-click'), rematch())}>
             Rematch
           </button>
           <button type="button" className="btn btn-brass" data-testid="play-again" onClick={() => (playSfx('ui-click'), reset())}>

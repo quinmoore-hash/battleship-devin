@@ -48,6 +48,11 @@ export interface DirectorState {
   letterbox: boolean
   /** Monotonic counter of finished sequences (for UI and tests). */
   completed: number
+  /**
+   * Whose side the camera films from: the overview / return shots and the victory orbit use this board's side. Always
+   * `human` in single player; a hot-seat game sets it to the active captain (`setPerspective`).
+   */
+  perspective: Player
 }
 
 export interface DirectorOptions {
@@ -71,6 +76,8 @@ export interface Director extends CinematicDirector {
   readonly active: ActiveCinematic | null
   /** Point the director at other fleets than the game store's (demos, tests); `null` restores the default. */
   setFleets(source: (() => Fleets) | null): void
+  /** Film from this side of the table (hot-seat: the active captain). */
+  setPerspective(side: Player): void
 }
 
 const gameFleets = (): Fleets => {
@@ -98,6 +105,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     shake: 0,
     letterbox: false,
     completed: 0,
+    perspective: 'human',
   }))
   let nextId = 1
   let pending: { resolve: () => void } | null = null
@@ -180,6 +188,9 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     },
     get active() {
       return store.getState().active
+    },
+    setPerspective(side) {
+      if (store.getState().perspective !== side) store.setState({ perspective: side })
     },
     setFleets(source) {
       fleetsOf = source ?? defaultFleets

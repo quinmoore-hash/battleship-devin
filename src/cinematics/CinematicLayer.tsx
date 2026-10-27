@@ -63,7 +63,7 @@ export function CinematicLayer({ director = defaultDirector, livery = DEFAULT_LI
     <>
       {active?.event.type === 'shot' && active.plan && <ShotFx key={active.id} active={active} plan={active.plan} director={director} add={add} />}
       {active?.event.type === 'sink' && <SinkFx key={active.id} active={active} director={director} livery={livery} />}
-      {active?.event.type === 'victory' && <VictoryFx key={active.id} active={active} />}
+      {active?.event.type === 'victory' && <VictoryFx key={active.id} active={active} director={director} />}
       {residual.map((r) => (
         <ResidualFx key={r.id} fx={r} onDone={() => remove(r.id)} />
       ))}
@@ -238,15 +238,17 @@ const FIREWORK_COLORS = [
   ['#c6ff7a', '#ffffff', '#ffe066'],
 ]
 
-function VictoryFx({ active }: { active: ActiveCinematic }) {
+function VictoryFx({ active, director }: { active: ActiveCinematic; director: Director }) {
   const event = active.event as Extract<ActiveCinematic['event'], { type: 'victory' }>
-  const won = event.winner === 'human'
+  // single player celebrates / mourns the pirates' board; a hot-seat game celebrates on the winner's side (the director's perspective)
+  const perspective = useStore(director.store, (s) => s.perspective)
+  const won = event.winner === perspective
   const [bursts, setBursts] = useState<{ id: number; position: Vec3; colors: string[]; seed: number }[]>([])
   const next = useRef(0)
   const count = useRef(0)
   const rnd = useMemo(() => seededRandom(7 + active.id), [active.id])
-  const fleet = active.fleets.human
-  const origin = ownBoardOrigin('human')
+  const fleet = active.fleets[perspective]
+  const origin = ownBoardOrigin(perspective)
   const center = useMemo<Vec3>(() => [origin[0] + 5, origin[1], origin[2] + 5], [origin])
   const budget = active.seq.level === 'full' && active.seq.budget === 'high' ? FIREWORKS.high : FIREWORKS.low
   useFrame(() => {
