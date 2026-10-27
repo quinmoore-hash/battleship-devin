@@ -132,6 +132,26 @@ describe('stats: summarizeGame + recorder', () => {
     expect(summary).toEqual({ difficulty: 'hard', won: false, shots: 2, hits: 1, turns: 2, durationMs: 1234, modes: { salvo: true, storm: false, blackFlag: false } })
   })
 
+  it('stormy seas: shots lost in the storm count as neither shots nor hits (accuracy matches the report)', () => {
+    const summary = summarizeGame(
+      {
+        difficulty: 'easy',
+        winner: 'human',
+        modes: { salvo: false, storm: true },
+        events: [
+          { id: 1, by: 'human', result: { coord: { x: 0, y: 0 }, outcome: 'lost' } },
+          { id: 2, by: 'enemy', result: { coord: { x: 0, y: 0 }, outcome: 'lost' } },
+          { id: 3, by: 'human', result: { coord: { x: 0, y: 0 }, outcome: 'hit', shipId: 'sloop' } },
+          { id: 4, by: 'enemy', result: { coord: { x: 1, y: 0 }, outcome: 'miss' } },
+          { id: 5, by: 'human', result: { coord: { x: 1, y: 0 }, outcome: 'miss' } },
+        ],
+      },
+      10,
+    )
+    expect(summary).toMatchObject({ shots: 2, hits: 1, turns: 3 })
+    expect(accuracyOf(summary)).toBeCloseTo(0.5)
+  })
+
   it('records a game once when the store goes battle -> gameover, timing the battle phase', () => {
     let t = 1000
     const store = create<{ phase: string; difficulty: string; winner?: string; events: unknown[]; modes: unknown }>(() => ({

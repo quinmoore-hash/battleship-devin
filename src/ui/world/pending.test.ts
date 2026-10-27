@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { FLEET_BY_ID, type PlacedShip } from '../../engine'
 import type { GameEvent } from '../../store/gameStore'
-import { maskPendingHit, settledWrecks, visibleShots, withoutFogged } from './pending'
+import { maskPendingHit, settledWrecks, visibleShots } from './pending'
 
 const ship = (hits: { x: number; y: number }[], id = 'sloop'): PlacedShip => {
   const spec = FLEET_BY_ID[id as keyof typeof FLEET_BY_ID]
   const cells = Array.from({ length: spec.length }, (_, i) => ({ x: i, y: 0 }))
   return { spec, uid: spec.id, origin: { x: 0, y: 0 }, orientation: 'horizontal', cells, hits } as PlacedShip
 }
-const ev = (id: number, by: 'human' | 'enemy', x: number, y: number, outcome: 'hit' | 'miss' = 'hit'): GameEvent => ({ id, by, kind: 'shot', result: { coord: { x, y }, outcome } })
+const ev = (id: number, by: 'human' | 'enemy', x: number, y: number, outcome: 'hit' | 'miss' | 'lost' = 'hit'): GameEvent => ({ id, by, kind: 'shot', result: { coord: { x, y }, outcome } })
 
 describe('visibleShots', () => {
   const events = [ev(1, 'human', 1, 1), ev(2, 'enemy', 2, 2, 'miss'), ev(3, 'human', 3, 3)]
@@ -48,16 +48,10 @@ describe('settledWrecks', () => {
   })
 })
 
-describe('withoutFogged (BUG-315)', () => {
-  const shots = [ev(1, 'human', 1, 1).result, ev(2, 'human', 2, 2, 'miss').result, ev(3, 'human', 3, 3, 'miss').result]
-  it('drops fogged misses and keeps everything else in order', () => {
-    expect(withoutFogged(shots, ['2,2']).map((s) => s.coord.x)).toEqual([1, 3])
-    expect(withoutFogged(shots, ['2,2', '3,3']).map((s) => s.coord.x)).toEqual([1])
-  })
-  it('never hides a hit, even if its key is listed', () => {
-    expect(withoutFogged(shots, ['1,1']).map((s) => s.coord.x)).toEqual([1, 2, 3])
-  })
-  it('returns the same array when nothing is fogged', () => {
-    expect(withoutFogged(shots, [])).toBe(shots)
+describe('visibleShots: stormy seas', () => {
+  it('never shows a marker for a shot lost in the storm (the square is still unknown)', () => {
+    const events = [ev(1, 'human', 1, 1), ev(2, 'human', 2, 2, 'lost'), ev(3, 'human', 3, 3, 'miss'), ev(4, 'enemy', 2, 2, 'lost')]
+    expect(visibleShots(events, 'human', null).map((s) => s.coord.x)).toEqual([1, 3])
+    expect(visibleShots(events, 'enemy', null)).toEqual([])
   })
 })

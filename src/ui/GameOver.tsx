@@ -34,6 +34,7 @@ export function GameOverScreen() {
   const rows: [string, string, string][] = [
     ['stat-shots', 'Shots fired', String(report.shots)],
     ['stat-accuracy', 'Accuracy', `${report.accuracy}%`],
+    ...(modes.storm ? [['stat-lost-storm', 'Lost in storm (you · enemy)', `${report.lost} · ${report.enemyLost}`] as [string, string, string]] : []),
     ['stat-turns', 'Turns', String(report.turns)],
     ['stat-sunk', 'Enemy ships sunk', `${report.shipsSunk}/${fleets.enemy.length}`],
     ['stat-lost', 'Ships lost', `${report.shipsLost}/${fleets.human.length}`],

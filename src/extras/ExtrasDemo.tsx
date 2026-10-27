@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { coordLabel, enemyView, viewGrid, type Coord } from '../engine'
 import { OceanScene } from '../scene'
-import { foggedEnemyView, useGameStore, type GameModes } from '../store/gameStore'
+import { lostShots, useGameStore, type GameModes } from '../store/gameStore'
 import { Battlefield } from './Battlefield'
 import { simulateGame } from './demoGame'
 import { ModesPicker } from './ExtrasLayer'
@@ -59,12 +59,10 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
   const turn = useGameStore((s) => s.turn)
   const winner = useGameStore((s) => s.winner)
   const salvo = useGameStore((s) => s.salvo)
-  const fogged = useGameStore((s) => s.fogged)
   const events = useGameStore((s) => s.events)
   const lastVolley = useGameStore((s) => s.lastVolley)
   const playerBoard = useGameStore((s) => s.playerBoard)
   const enemyBoard = useGameStore((s) => s.enemyBoard)
-  const [showFog, setShowFog] = useState(false)
   const [seed, setSeed] = useState(1)
 
   const start = (m: Partial<GameModes> = modes) => {
@@ -100,9 +98,9 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
     }
   }
 
-  const enemyGrid = useMemo(() => viewGrid(foggedEnemyView(enemyBoard, fogged), enemyBoard), [enemyBoard, fogged])
+  const enemyGrid = useMemo(() => viewGrid(enemyView(enemyBoard), enemyBoard), [enemyBoard])
   const ownGrid = useMemo(() => viewGrid(enemyView(playerBoard), playerBoard), [playerBoard])
-  const fogSet = useMemo(() => new Set(fogged), [fogged])
+  const lost = useMemo(() => lostShots(events).length, [events])
   const pendingSet = useMemo(() => new Set(salvo.pending.map((c) => `${c.x},${c.y}`)), [salvo.pending])
   const boards = useMemo(() => ({ playerBoard, enemyBoard }), [playerBoard, enemyBoard])
 
@@ -134,10 +132,6 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
           <button type="button" className="xt-btn small" data-testid="sandbox-random-volley" disabled={phase !== 'battle' || turn !== 'human'} onClick={fireRandomVolley}>
             Fire random {modes.salvo ? 'volley' : 'shot'}
           </button>
-          <label className="xt-toggle inline">
-            <input type="checkbox" data-testid="sandbox-show-fog" checked={showFog} onChange={(e) => setShowFog(e.target.checked)} />
-            <span>reveal fogged misses</span>
-          </label>
         </div>
         <div className="xt-panel xt-status">
           {modes.salvo && (
@@ -146,8 +140,8 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
             </span>
           )}
           {modes.storm && (
-            <span className="xt-pill storm" data-testid="fog-status" data-fogged={fogged.length}>
-              {fogged.length} misses in fog
+            <span className="xt-pill storm" data-testid="storm-status" data-lost={lost}>
+              {lost} lost in the storm
             </span>
           )}
           <span className="xt-pill" data-testid="event-count">
@@ -171,22 +165,20 @@ function Sandbox({ quality }: { quality?: 'low' | 'high' }) {
             {enemyGrid.map((row, y) =>
               row.map((cell, x) => {
                 const key = `${x},${y}`
-                const fog = fogSet.has(key)
                 const queued = pendingSet.has(key)
                 return (
                   <button
                     key={key}
                     type="button"
-                    className={`xt-cell ${cell}${fog ? ' fog' : ''}${queued ? ' queued' : ''}${showFog && fog ? ' revealed' : ''}`}
+                    className={`xt-cell ${cell}${queued ? ' queued' : ''}`}
                     data-testid={`sandbox-enemy-${x}-${y}`}
                     data-state={cell}
-                    data-fog={fog || undefined}
                     data-queued={queued || undefined}
-                    disabled={phase !== 'battle' || turn !== 'human' || (cell !== 'unknown' && !fog) || queued}
-                    aria-label={`${coordLabel({ x, y })} ${fog ? 'fog' : cell}`}
+                    disabled={phase !== 'battle' || turn !== 'human' || cell !== 'unknown' || queued}
+                    aria-label={`${coordLabel({ x, y })} ${cell}`}
                     onClick={() => fire({ x, y })}
                   >
-                    {fog ? (showFog ? '•' : '') : STATE_GLYPH[cell]}
+                    {STATE_GLYPH[cell]}
                   </button>
                 )
               }),

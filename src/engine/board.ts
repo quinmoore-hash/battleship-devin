@@ -144,6 +144,12 @@ export function fire(board: Board, coord: Coord): { board: Board; result: ShotRe
   }
 }
 
+/** A shot swallowed by the storm: nothing to record on the board, the cell stays unknown. */
+export const lostShot = (coord: Coord): ShotResult => ({ coord, outcome: 'lost' })
+
+/** True when the shot reached the water: a lost shot tells the shooter nothing. */
+export const landed = (result: ShotResult): boolean => result.outcome !== 'lost'
+
 /** The attacker's knowledge of `board`. */
 export function enemyView(board: Board): EnemyBoardView {
   return {
@@ -163,6 +169,7 @@ export function viewGrid(view: EnemyBoardView, board?: Board): CellView[][] {
   )
   const sunkIds = new Set(view.shots.filter((s) => s.outcome === 'sunk').map(shotShipKey))
   for (const shot of view.shots) {
+    if (shot.outcome === 'lost') continue
     grid[shot.coord.y][shot.coord.x] =
       shot.outcome === 'miss' ? 'miss' : shot.shipId && sunkIds.has(shotShipKey(shot)) ? 'sunk' : 'hit'
   }

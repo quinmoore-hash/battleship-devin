@@ -1,11 +1,17 @@
-import { isSunk, type Board } from '../engine'
+import { isSunk, type Board, type ShotResult } from '../engine'
 import type { Player } from '../engine'
 import type { GameEvent } from '../store/gameStore'
 
+const isHit = (r: ShotResult): boolean => r.outcome === 'hit' || r.outcome === 'sunk'
+
 export interface BattleReport {
+  /** Every shot the player fired, including the ones the storm swallowed. */
   shots: number
   hits: number
   misses: number
+  /** Stormy seas: player shots lost in the storm (no hit or miss). Not counted in `accuracy`. */
+  lost: number
+  /** Hits per shot that reached the water. */
   accuracy: number
   /** Turns the player took: one per shot in classic, one per volley in salvo (BUG-316). */
   turns: number
@@ -13,7 +19,8 @@ export interface BattleReport {
   shipsLost: number
   enemyShots: number
   enemyHits: number
-  /** Longest run of consecutive player hits. */
+  enemyLost: number
+  /** Longest run of consecutive player hits (shots lost in the storm neither extend nor break it). */
   bestStreak: number
   /** Elapsed battle time in seconds (0 when unknown). */
   seconds: number
@@ -39,23 +46,28 @@ export function battleReport(events: readonly GameEvent[], playerBoard: Board, e
   // Spyglass looks are not shots
   const mine = events.filter((e) => e.by === 'human' && e.kind !== 'spyglass')
   const theirs = events.filter((e) => e.by === 'enemy' && e.kind !== 'spyglass')
-  const hits = mine.filter((e) => e.result.outcome !== 'miss').length
+  const hits = mine.filter((e) => isHit(e.result)).length
+  const lost = mine.filter((e) => e.result.outcome === 'lost').length
+  const landed = mine.length - lost
   let streak = 0
   let bestStreak = 0
   for (const e of mine) {
+    if (e.result.outcome === 'lost') continue
     streak = e.result.outcome === 'miss' ? 0 : streak + 1
     bestStreak = Math.max(bestStreak, streak)
   }
   return {
     shots: mine.length,
     hits,
-    misses: mine.length - hits,
-    accuracy: mine.length ? Math.round((hits / mine.length) * 100) : 0,
+    misses: landed - hits,
+    lost,
+    accuracy: landed ? Math.round((hits / landed) * 100) : 0,
     turns: countTurns(events, 'human'),
     shipsSunk: enemyBoard.ships.filter(isSunk).length,
     shipsLost: playerBoard.ships.filter(isSunk).length,
     enemyShots: theirs.length,
-    enemyHits: theirs.filter((e) => e.result.outcome !== 'miss').length,
+    enemyHits: theirs.filter((e) => isHit(e.result)).length,
+    enemyLost: theirs.filter((e) => e.result.outcome === 'lost').length,
     bestStreak,
     seconds: startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0,
   }

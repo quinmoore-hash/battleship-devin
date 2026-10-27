@@ -28,6 +28,7 @@ export function readView(view: EnemyBoardView): Knowledge {
   const sunkIds = new Set(view.shots.filter((s) => s.outcome === 'sunk').map(shotShipKey))
 
   for (const shot of view.shots) {
+    if (shot.outcome === 'lost') continue // stormy seas: never on the board, but be safe with foreign views
     const key = coordKey(shot.coord)
     taken.add(key)
     if (shot.outcome === 'miss') misses.add(key)

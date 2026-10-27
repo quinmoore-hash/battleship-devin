@@ -17,6 +17,11 @@ describe('layoutMarkers', () => {
     expect(m[0].position).toEqual([-4.5, 0.2, -12.5])
     expect(m[3].position).toEqual([2.5, 0.2, -11.5])
   })
+  it('gives a shot lost in the storm no marker at all', () => {
+    const m = layoutMarkers([{ coord: { x: 1, y: 1 }, outcome: 'lost' }, ...shots, { coord: { x: 0, y: 0 }, outcome: 'lost' }], origin)
+    expect(m).toHaveLength(4)
+    expect(m.map((x) => x.key)).not.toContain('1,1')
+  })
   it('upgrades earlier hits on a sunk ship to debris', () => {
     const kinds = layoutMarkers(shots, origin).map((m) => m.kind)
     expect(kinds).toEqual(['miss', 'sunk', 'sunk', 'hit'])

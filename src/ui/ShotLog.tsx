@@ -2,7 +2,7 @@ import { coordLabel, FLEET_BY_ID } from '../engine'
 import type { GameEvent } from '../store/gameStore'
 
 const word = (e: GameEvent): string =>
-  e.kind === 'treasure' ? 'treasure!' : e.result.outcome === 'sunk' && e.result.shipId ? `sank ${FLEET_BY_ID[e.result.shipId]?.name ?? 'a ship'}` : e.result.outcome
+  e.kind === 'treasure' ? 'treasure!' : e.result.outcome === 'lost' ? (e.by === 'human' ? 'lost in the storm — fire again' : 'lost in the storm') : e.result.outcome === 'sunk' && e.result.shipId ? `sank ${FLEET_BY_ID[e.result.shipId]?.name ?? 'a ship'}` : e.result.outcome
 
 /** One log line per event; the balls of a Black Flag Broadside collapse into one line ("Broadside D4–F4: miss, HIT, miss"). */
 export interface LogLine {

@@ -68,4 +68,19 @@ describe('MediumOpponent', () => {
     const next = opponent.nextShot(enemyView(board))
     expect(board.shots.map((s) => key(s.coord))).not.toContain(key(next))
   })
+
+  it('a shot lost in the storm teaches nothing: no targets are queued and the cell is asked for again', () => {
+    const opponent = new MediumOpponent(seededRng(4))
+    const board = placeShip(createBoard(), FLEET_BY_ID['galleon'], { x: 3, y: 4 }, 'horizontal')
+    const first = opponent.nextShot(enemyView(board))
+    opponent.observe({ coord: first, outcome: 'lost' })
+    // the board did not change, so the same hunt state → the AI is free to pick the very same cell again
+    const again = new MediumOpponent(seededRng(4)).nextShot(enemyView(board))
+    expect(again).toEqual(first)
+    // and a later real hit still works as before
+    const next = fire(board, { x: 4, y: 4 })
+    opponent.observe(next.result)
+    const follow = opponent.nextShot(enemyView(next.board))
+    expect(neighbors({ x: 4, y: 4 }).some((n) => key(n) === key(follow))).toBe(true)
+  })
 })

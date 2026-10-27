@@ -101,7 +101,9 @@ export function planShot(by: Player, result: ShotResult, shooters: readonly Plac
   let impact: Vec3 = cellCenter
   let normal: Vec3 = unit([from[0] - cellCenter[0], 0, from[2] - cellCenter[2]])
   let victim: ShotPlan['victim']
-  if (result.outcome !== 'miss') {
+  if (result.outcome === 'lost') {
+    impact = lostPoint(result.coord, cellCenter, normal)
+  } else if (result.outcome !== 'miss') {
     const ship = targets.find((s) => s.cells.some((c) => c.x === result.coord.x && c.y === result.coord.y))
     if (ship) {
       const pose = shipWorldTransform(ship, tgtOrigin)
@@ -127,3 +129,15 @@ export function planShot(by: Player, result: ShotResult, shooters: readonly Plac
 
 /** Water point a miss lands on: the target cell, offset a little past centre along the flight so the splash reads as "short/long". */
 export const missPoint = (plan: ShotPlan): Vec3 => plan.cellCenter
+
+/** How far (in cells) a shot lost in the storm goes astray: it never comes down on the target cell. */
+export const LOST_DRIFT = { along: 0.75, across: 0.45 } as const
+
+/**
+ * Where a shot lost in the storm comes down: blown long past the target cell (`normal` points back at the shooter) and
+ * pushed sideways by a deterministic amount per cell, so the muted splash never sits on the square and reads as "astray".
+ */
+export function lostPoint(coord: Coord, cellCenter: Vec3, normal: Vec3): Vec3 {
+  const side = ((coord.x * 7 + coord.y * 13) % 2 === 0 ? 1 : -1) * LOST_DRIFT.across
+  return [cellCenter[0] - normal[0] * LOST_DRIFT.along - normal[2] * side, cellCenter[1], cellCenter[2] - normal[2] * LOST_DRIFT.along + normal[0] * side]
+}

@@ -28,7 +28,7 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
         <dt>Salvo</dt>
         <dd>Each side fires one shot per surviving ship every turn; the volley resolves at once.</dd>
         <dt>Stormy seas</dt>
-        <dd>Fog swallows ~30% of your misses on the enemy chart: a fogged cell still reads as unknown — re-fire to find out.</dd>
+        <dd>30% of shots — yours and the enemy's — are lost in the storm: no hit or miss is shown and the square stays open; fire at it again.</dd>
         <dt>Black Flag</dt>
         <dd data-testid="howto-black-flag">
           <b>Pick your fleet</b> before placing: Classic (5·4·3·3·2), Armada (two Men-o’-War, Galleon, Frigate), Wolf pack (Frigate, two Brigantines, four Sloops) or Raiders (Galleon, two Frigates, Brigantine, two Sloops) — every preset covers 17 cells and the enemy picks one too; both fleets are shown.

@@ -21,6 +21,7 @@ export interface MarkerPlacement {
 /**
  * One marker per shot. When a ship sinks every earlier `hit` on it is upgraded to `sunk`
  * (the engine only flags the final shot), so wreck markers turn into debris as a group.
+ * Shots lost in the storm (stormy seas) never landed and get no marker.
  */
 export function layoutMarkers(shots: readonly ShotResult[], boardOrigin: Vec3, cellSize = 1): MarkerPlacement[] {
   const sunkShips = new Set<string>()
@@ -28,6 +29,7 @@ export function layoutMarkers(shots: readonly ShotResult[], boardOrigin: Vec3, c
   const seen = new Set<string>()
   const out: MarkerPlacement[] = []
   shots.forEach((s, index) => {
+    if (s.outcome === 'lost') return
     const key = coordKey(s.coord)
     if (seen.has(key)) return
     seen.add(key)

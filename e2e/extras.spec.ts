@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 // Extras flows run with the 3D scene disabled (see smoke.spec.ts); the 3D replay/photo canvases are covered by scene.spec.ts-style checks in the recording.
-test('salvo + stormy seas game: volleys queue, fog hides misses, replay and photo open from game over', async ({ page }) => {
+test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, replay and photo open from game over', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/?no3d')
   await expect(page.getByTestId('extras-menu')).toBeVisible()
@@ -15,27 +15,32 @@ test('salvo + stormy seas game: volleys queue, fog hides misses, replay and phot
 
   const salvo = page.getByTestId('salvo-status')
   await expect(salvo).toHaveAttribute('data-size', '5')
-  await expect(page.getByTestId('fog-status')).toBeVisible()
+  const storm = page.getByTestId('storm-status')
+  await expect(storm).toBeVisible()
 
   const grid = page.getByTestId('enemy-grid')
   const gameover = page.getByTestId('gameover')
   const yourTurn = page.getByTestId('status').filter({ hasText: 'Your turn' })
   // The first four shots of a five-ship volley only queue.
   for (let i = 1; i <= 4; i++) {
-    await grid.locator('button[data-state="unknown"]:not([data-queued]):not([data-fog])').first().click()
+    await grid.locator('button[data-state="unknown"]:not([data-queued])').first().click()
     await expect(salvo).toHaveAttribute('data-pending', String(i))
   }
-  await grid.locator('button[data-state="unknown"]:not([data-queued]):not([data-fog])').first().click()
+  await grid.locator('button[data-state="unknown"]:not([data-queued])').first().click()
   await expect(salvo).toHaveAttribute('data-pending', '0')
 
-  for (let i = 0; i < 120; i++) {
+  // ~30% of shots are lost in the storm and must be fired again, so a game takes more clicks than cells
+  for (let i = 0; i < 220; i++) {
     await expect(yourTurn.or(gameover)).toBeVisible()
     if (await gameover.isVisible()) break
-    const cell = grid.locator('button[data-state="unknown"]:not([data-queued]):not([data-fog])').first()
+    const cell = grid.locator('button[data-state="unknown"]:not([data-queued])').first()
     if ((await cell.count()) === 0) break
     await cell.click()
   }
   await expect(gameover).toBeVisible()
+  // the strip counted the lost shots and the report lists them
+  expect(Number(await storm.getAttribute('data-lost'))).toBeGreaterThan(0)
+  await expect(page.getByTestId('stat-lost-storm')).toBeVisible()
   // BUG-316: a salvo turn is a volley, not a shot
   const shots = Number(await page.getByTestId('stat-shots').textContent())
   const turns = Number(await page.getByTestId('stat-turns').textContent())

@@ -42,8 +42,8 @@ export function buildFrames(snapshot: ReplaySnapshot): ReplayBoards[] {
   const frames: ReplayBoards[] = [{ playerBoard: pristine(snapshot.playerBoard), enemyBoard: pristine(snapshot.enemyBoard) }]
   for (const event of snapshot.events) {
     const prev = frames[frames.length - 1]
-    if (event.kind === 'spyglass') {
-      frames.push(prev) // a look, not a shot: the boards do not change
+    if (event.kind === 'spyglass' || event.result.outcome === 'lost') {
+      frames.push(prev) // a look or a shot lost in the storm: the boards do not change
     } else if (event.by === 'human') {
       frames.push({ playerBoard: prev.playerBoard, enemyBoard: fire(prev.enemyBoard, event.result.coord).board })
     } else {
@@ -75,6 +75,7 @@ export function describeEvent(event: GameEvent): string {
   if (event.kind === 'spyglass') return `${event.by === 'human' ? 'You look' : 'Devin looks'} at ${at} — ${event.spied === 'ship' ? 'a ship!' : 'open water'}`
   const who = (event.by === 'human' ? 'You fire' : 'Devin fires') + (event.kind === 'broadside' ? ' a broadside' : '')
   if (event.kind === 'treasure') return `${who} at ${at} — treasure! Fire again`
+  if (r.outcome === 'lost') return `${who} at ${at} — lost in the storm`
   if (r.outcome === 'miss') return `${who} at ${at} — splash`
   if (r.outcome === 'sunk') return `${who} at ${at} — sunk the ${shipName(r.shipId)}!`
   return `${who} at ${at} — hit the ${shipName(r.shipId)}`

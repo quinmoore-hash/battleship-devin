@@ -1,4 +1,4 @@
-import { coordKey, type Coord, type PlacedShip, type Player, type ShotResult } from '../../engine'
+import type { Coord, PlacedShip, Player, ShotResult } from '../../engine'
 import type { GameEvent } from '../../store/gameStore'
 
 /** The shot the director is still flying: its marker, hit damage and (if it sank a ship) the wreck wait for impact. */
@@ -9,11 +9,14 @@ export interface PendingShot {
 
 const same = (a: Coord, b: Coord) => a.x === b.x && a.y === b.y
 
-/** Shots fired `by` one side, minus the one still in the air (BUG-214: markers used to pop before the ball landed). */
+/**
+ * Shots fired `by` one side that get a marker: minus the one still in the air (BUG-214: markers used to pop before the
+ * ball landed) and minus shots lost in the storm (stormy seas: nothing landed, the cell is still unknown).
+ */
 export function visibleShots(events: readonly GameEvent[], by: Player, pending: PendingShot | null): ShotResult[] {
   const out: ShotResult[] = []
   for (const e of events) {
-    if (e.by !== by) continue
+    if (e.by !== by || e.result.outcome === 'lost') continue
     if (pending && pending.by === by && same(e.result.coord, pending.target)) continue
     out.push(e.result)
   }
@@ -36,14 +39,4 @@ export function maskPendingHit(ships: PlacedShip[], target: Coord | null): Place
 /** Sunk ships whose sinking has finished playing (or was never animated), i.e. the ones that get flotsam. */
 export function settledWrecks(ships: PlacedShip[], sinkProgress: Partial<Record<string, number>>): PlacedShip[] {
   return ships.filter((s) => s.hits.length >= s.spec.length && (sinkProgress[s.uid] ?? 1) >= 1)
-}
-
-/**
- * Stormy seas: misses swallowed by the fog get no persistent 3D marker either (BUG-315) — the same `fogged` keys the
- * HTML chart hides via `foggedEnemyView`. Returns the same array when nothing is fogged.
- */
-export function withoutFogged(shots: readonly ShotResult[], fogged: readonly string[]): ShotResult[] {
-  if (fogged.length === 0) return shots as ShotResult[]
-  const hidden = new Set(fogged)
-  return shots.filter((s) => s.outcome !== 'miss' || !hidden.has(coordKey(s.coord)))
 }

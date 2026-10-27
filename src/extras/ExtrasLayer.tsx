@@ -1,15 +1,15 @@
 /**
  * Mounted next to `<GameUI>` in the main app. Adds, without touching `src/ui`:
  *  - stats recording + `<StatsPanel>` on the menu and game-over screens,
- *  - the salvo / stormy-seas mode picker on the menu and a salvo/fog status strip in battle,
+ *  - the salvo / stormy-seas mode picker on the menu and a salvo / storm status strip in battle,
  *  - the `battleship:replay` / `battleship:photo` listeners and the overlays (the report's buttons dispatch them),
- *  - a DOM shim that paints fog on hidden misses in the UI's enemy grid until `src/ui` adopts `foggedEnemyView`.
+ *  - a DOM shim that marks queued salvo shots on the UI's enemy grid.
  */
 import { useEffect, useLayoutEffect, useState } from 'react'
 import { coordKey, coordLabel, type Difficulty } from '../engine'
 import { useDirector } from '../cinematics'
 import { usePerf } from '../perf'
-import { useGameStore, type GameModes } from '../store/gameStore'
+import { lostShots, useGameStore, type GameModes } from '../store/gameStore'
 import { PhotoMode, usePhotoEvent, usePhotoMode } from './photo'
 import { ReplayPlayer, useReplay, useReplayEvent } from './replay'
 import { bindStatsRecorder } from './stats'
@@ -28,7 +28,7 @@ export function ExtrasLayer() {
   const flyover = useDirector((s) => s.busy)
   // replay / photo follow the detected tier instead of always rendering full detail (BUG-317)
   const quality = usePerf().quality
-  useStormFogShim()
+  useSalvoQueueShim()
 
   return (
     <>
@@ -83,7 +83,7 @@ export function ModesPicker({ className = '', onChange }: { className?: string; 
         <input type="checkbox" data-testid="mode-storm" checked={modes.storm} onChange={(e) => setModes({ storm: e.target.checked })} />
         <span>
           <b>Stormy seas</b>
-          <small>Fog swallows ~30% of your misses; the weather turns.</small>
+          <small>30% of shots are lost in the storm — no hit or miss shown; fire at the square again. Both sides.</small>
         </span>
       </label>
       <label className="xt-toggle">
@@ -123,11 +123,13 @@ function useBelowBattleTop(): number {
 function BattleStrip() {
   const modes = useGameStore((s) => s.modes)
   const salvo = useGameStore((s) => s.salvo)
-  const fogged = useGameStore((s) => s.fogged)
+  const events = useGameStore((s) => s.events)
   const turn = useGameStore((s) => s.turn)
   const top = useBelowBattleTop()
   if (!modes.salvo && !modes.storm) return null
   const left = salvo.size - salvo.pending.length
+  const lost = lostShots(events).length
+  const lostMine = lostShots(events, 'human').length
   return (
     <div className="xt-strip" style={{ top }} data-testid="extras-battle-strip">
       {modes.salvo && (
@@ -138,8 +140,9 @@ function BattleStrip() {
         </span>
       )}
       {modes.storm && (
-        <span className="xt-pill storm" data-testid="fog-status" data-fogged={fogged.length}>
-          Stormy seas · {fogged.length} {fogged.length === 1 ? 'miss' : 'misses'} lost in fog
+        <span className="xt-pill storm" data-testid="storm-status" data-lost={lost} data-lost-mine={lostMine}>
+          Stormy seas · {lost} {lost === 1 ? 'shot' : 'shots'} lost in the storm
+          {lost > 0 && <small> yours {lostMine} · enemy {lost - lostMine}</small>}
         </span>
       )}
     </div>
@@ -149,29 +152,25 @@ function BattleStrip() {
 const ENEMY_CELL_PREFIX = 'enemy-grid-'
 
 /**
- * Paints `data-fog` on the UI's enemy cells whose miss is hidden by the storm, and `data-queued` on queued salvo
- * shots. Attribute-only, so React's own updates are untouched; styled in extras.css.
+ * Paints `data-queued` on the UI's enemy cells that are queued in the current salvo volley. Attribute-only, so
+ * React's own updates are untouched; styled in extras.css.
  */
-function useStormFogShim() {
+function useSalvoQueueShim() {
   const phase = useGameStore((s) => s.phase)
-  const storm = useGameStore((s) => s.modes.storm)
   const salvoOn = useGameStore((s) => s.modes.salvo)
-  const fogged = useGameStore((s) => s.fogged)
   const pending = useGameStore((s) => s.salvo.pending)
   const enemyBoard = useGameStore((s) => s.enemyBoard)
   useEffect(() => {
-    if (phase !== 'battle' || (!storm && !salvoOn)) return
-    const fog = new Set(fogged)
+    if (phase !== 'battle' || !salvoOn) return
     const queued = new Set(pending.map(coordKey))
     const paint = () => {
       document.querySelectorAll<HTMLElement>(`[data-testid^="${ENEMY_CELL_PREFIX}"]`).forEach((el) => {
         const key = (el.dataset.testid ?? '').slice(ENEMY_CELL_PREFIX.length).replace('-', ',')
-        el.toggleAttribute('data-fog', fog.has(key))
         el.toggleAttribute('data-queued', queued.has(key))
       })
     }
     paint()
     const id = window.requestAnimationFrame(paint)
     return () => window.cancelAnimationFrame(id)
-  }, [phase, storm, salvoOn, fogged, pending, enemyBoard])
+  }, [phase, salvoOn, pending, enemyBoard])
 }

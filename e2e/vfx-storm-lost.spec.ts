@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-// BUG-315: in stormy seas the 3D enemy board must hide the same fogged misses the HTML chart hides —
-// a fogged miss gets its splash but no persistent buoy. Counts the buoy instances in the live scene via `window.__perf`.
-test('stormy seas: fogged misses leave no buoy on the 3D enemy board', async ({ page }) => {
+// Stormy seas: a shot lost in the storm leaves no marker anywhere — not on the HTML chart (the cell stays `unknown` and
+// re-fireable) and not on the 3D water (no buoy). Counts the buoy instances in the live scene via `window.__perf`.
+test('stormy seas: shots lost in the storm leave no chart mark and no buoy, and the square can be fired at again', async ({ page }) => {
   test.setTimeout(240_000)
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
@@ -18,12 +18,12 @@ test('stormy seas: fogged misses leave no buoy on the 3D enemy board', async ({ 
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
   await expect(page.getByTestId('battle')).toBeVisible()
-  await expect(page.getByTestId('fog-status')).toBeVisible()
+  const storm = page.getByTestId('storm-status')
+  await expect(storm).toBeVisible()
 
   const grid = page.getByTestId('enemy-grid')
   const gameover = page.getByTestId('gameover')
   const yourTurn = page.getByTestId('status').filter({ hasText: 'Your turn' })
-  const fogged = grid.locator('button[data-state="miss"][data-fog]')
   const buoys = () =>
     page.evaluate(() => {
       let n = 0
@@ -35,20 +35,27 @@ test('stormy seas: fogged misses leave no buoy on the 3D enemy board', async ({ 
       return n
     })
 
-  // fire until the fog has swallowed at least two misses (30% of misses; Easy keeps the game going)
-  for (let i = 0; i < 60 && (await fogged.count()) < 2; i++) {
+  // always fire at the first unknown cell: after a lost shot that is the same cell again (it must still be enabled)
+  let refired = false
+  let lastCell: string | null = null
+  for (let i = 0; i < 60 && Number((await storm.getAttribute('data-lost-mine')) ?? 0) < 2; i++) {
     await expect(yourTurn.or(gameover)).toBeVisible({ timeout: 30_000 })
     if (await gameover.isVisible()) break
-    await grid.locator('button[data-state="unknown"]:not([data-fog])').first().click()
+    const cell = grid.locator('button[data-state="unknown"]:enabled').first()
+    const id = await cell.getAttribute('data-testid')
+    if (id && id === lastCell) refired = true
+    lastCell = id
+    await cell.click()
   }
   await expect(yourTurn.or(gameover)).toBeVisible({ timeout: 30_000 })
-  const hidden = await fogged.count()
-  expect(hidden).toBeGreaterThanOrEqual(2)
+  const lostMine = Number(await storm.getAttribute('data-lost-mine'))
+  expect(lostMine).toBeGreaterThanOrEqual(2)
+  expect(refired).toBe(true)
+  await expect(page.getByTestId('shot-log')).toContainText('lost in the storm')
 
-  // chart: visible misses on both boards; water: every buoy on both boards
-  const shownEnemyMisses = await grid.locator('button[data-state="miss"]:not([data-fog])').count()
+  // chart: every landed shot has a mark, nothing else; water: exactly one buoy per miss on either board
+  const enemyMisses = await grid.locator('button[data-state="miss"]').count()
   const myMisses = await page.getByTestId('player-grid').locator('button[data-state="miss"]').count()
-  await expect.poll(buoys, { timeout: 20_000 }).toBe(shownEnemyMisses + myMisses)
-  expect(await buoys()).toBeLessThan(shownEnemyMisses + hidden + myMisses)
+  await expect.poll(buoys, { timeout: 20_000 }).toBe(enemyMisses + myMisses)
   expect(errors).toEqual([])
 })

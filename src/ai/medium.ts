@@ -50,7 +50,8 @@ export class MediumOpponent implements AiOpponent {
   }
 
   observe(result: ShotResult): void {
-    if (result.outcome === 'miss') return
+    // a miss teaches nothing the view does not already say; a shot lost in the storm teaches nothing at all
+    if (result.outcome === 'miss' || result.outcome === 'lost') return
     if (result.outcome === 'hit') {
       this.hits.push(result)
       for (const n of this.shuffled(neighbors(result.coord))) {

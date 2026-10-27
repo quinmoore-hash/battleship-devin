@@ -46,8 +46,9 @@ How a turn plays: place your fleet on the water (drag / click, R to rotate — t
 click the enemy waters. The cinematics director flies the camera to your firing ship, the broadside lands on the target
 (splash, or splinters and fire — a sunk ship rolls over in slow motion and leaves flotsam), the enemy aims and answers.
 Settings › Cinematics: `full` (default), `fast` (one ball, short cuts) or `off` (instant results); click, Space or Esc
-skips the current shot. Salvo, Stormy-seas and Black Flag rules are on the menu (tick any combination); the after-action
-report offers Replay and Photo mode.
+skips the current shot. Salvo, Stormy-seas and Black Flag rules are on the menu (tick any combination; Stormy seas: 30% of shots, yours
+and the enemy's, are lost in the storm — no hit or miss shown, fire at the square again); the after-action report offers
+Replay and Photo mode.
 
 **Black Flag** — pick your fleet before placing (Classic, Armada, Wolf pack or Raiders — all 17 cells; the enemy draws one too),
 two power shots per side per game under the enemy chart — **Broadside** (`B`, `R` rotates: a line of three cells, your whole

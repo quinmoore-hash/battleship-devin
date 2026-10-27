@@ -198,6 +198,8 @@ Turn pacing: `src/ui/turnFlow.ts` plays every beat as a `CinematicEvent` through
 (`setDirector`), else through a skippable `TimerDirector`. `activeDirector()` falls back to timers under `?no3d` / no
 WebGL (nothing to watch), and `effectiveLevel()` maps `full` → `fast` there. One turn is
 `intro?` → `fireAt` → shot (every shot of a salvo volley, `lastVolley`) → sink? → enemy aims → `enemyTurn` → shot(s) → sink?
+(Stormy seas: `fireAt` / `enemyTurn` roll `STORM_LOST_CHANCE` per shot with the seeded `stormRng`; a `lost` `ShotResult` is an
+event only — `fire()` is not called, the square stays unknown and re-fireable, markers/AI/replay ignore it)
 → `victory` when the game ended; `dispose()` lets a running victory flyover finish. While a ball is in the air the world
 shows the board *before* that shot (`src/ui/world/pending.ts`: `visibleShots`, `maskPendingHit`, `settledWrecks`), so
 markers, hull damage, the sunk reveal and flotsam appear at impact.

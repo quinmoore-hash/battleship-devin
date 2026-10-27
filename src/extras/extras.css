@@ -465,28 +465,11 @@
   justify-self: end;
 }
 
-/* storm fog + salvo queue painted onto the UI's enemy grid (attribute shim, see ExtrasLayer) */
-.cell-miss[data-fog] {
-  background: rgba(95, 211, 255, 0.16);
-}
-.cell-miss[data-fog]::after {
-  inset: 14%;
-  background: radial-gradient(circle at 35% 40%, rgba(230, 236, 240, 0.9), rgba(160, 175, 190, 0.55) 55%, transparent 72%);
-  filter: blur(0.6px);
-  animation: xt-fog-drift 4s ease-in-out infinite alternate;
-}
+/* salvo queue painted onto the UI's enemy grid (attribute shim, see ExtrasLayer) */
 .cell[data-queued] {
   outline: 2px solid var(--orange);
   outline-offset: -2px;
   box-shadow: 0 0 10px rgba(242, 140, 40, 0.8);
-}
-@keyframes xt-fog-drift {
-  from {
-    transform: translateX(-6%) scale(1);
-  }
-  to {
-    transform: translateX(6%) scale(1.08);
-  }
 }
 
 /* sandbox grids */
@@ -526,20 +509,6 @@
 }
 .xt-cell.sunk {
   background: var(--sunk);
-}
-.xt-cell.fog::after {
-  content: '';
-  position: absolute;
-  inset: 14%;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 40%, rgba(230, 236, 240, 0.9), rgba(160, 175, 190, 0.55) 55%, transparent 72%);
-  animation: xt-fog-drift 4s ease-in-out infinite alternate;
-}
-.xt-cell.fog.revealed {
-  background: rgba(74, 163, 207, 0.5);
-}
-.xt-cell.fog.revealed::after {
-  opacity: 0.45;
 }
 .xt-cell.queued {
   outline: 2px solid var(--orange);

@@ -111,7 +111,7 @@ export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null
         const n = set(tmp.n, plan.normal)
         const side = tmp.side.crossVectors(UP, n).normalize()
         if (enemy) side.negate()
-        const miss = plan.result.outcome === 'miss'
+        const miss = plan.result.outcome === 'miss' || plan.result.outcome === 'lost'
         // a real hull (the player's ship, or a revealed wreck) needs room: stay outside the rigging of its neighbours
         const hull = plan.victim ? SHIPS[plan.victim.ship.spec.id].anchors.hull : null
         const r = miss ? 5.5 : hull ? hull.beam * 1.2 + 3.4 : 3.6

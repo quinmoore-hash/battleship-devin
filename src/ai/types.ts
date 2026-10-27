@@ -8,7 +8,10 @@ export interface AiOpponent {
   readonly difficulty: Difficulty
   /** Choose the next cell to fire at. Must never return a cell already present in `view.shots`. */
   nextShot(view: EnemyBoardView): Coord
-  /** Called with the result of the shot returned by `nextShot`. */
+  /**
+   * Called with the result of the shot returned by `nextShot`. A `lost` result (stormy seas) means the shot never
+   * reached the water: the cell is still unknown and may come back from `nextShot` again.
+   */
   observe(result: ShotResult): void
   /**
    * Black Flag — Spyglass. Asked once per enemy turn while the look is unused: return the cell to look at, or

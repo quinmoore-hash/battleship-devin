@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { useDirector } from '../cinematics'
-import { broadsideCells, coordKey, coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, sameCoord, viewGrid, type Coord, type Orientation, type ShotResult } from '../engine'
+import { broadsideCells, coordKey, coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, sameCoord, viewGrid, type Coord, type Orientation, type Player, type ShotResult } from '../engine'
 import { treasureFound, useGameStore } from '../store/gameStore'
 import { SKIP_CINEMATIC_EVENT } from '../perf/a11y/A11yBootstrap'
 import { useBattleController } from './battleController'
@@ -15,6 +15,12 @@ import { battleReport, formatDuration } from './stats'
 import { isCoarsePointer, useUiStore } from './uiStore'
 
 const outcomeWord = (r: ShotResult) => (r.outcome === 'sunk' ? `sunk the ${r.shipId ? FLEET_BY_ID[r.shipId].name : 'ship'}!` : r.outcome === 'hit' ? 'a hit!' : 'a miss.')
+
+/** Status / announcer line for one shot. A shot lost in the storm says so plainly, or players read it as a bug. */
+const shotLine = (by: Player, r: ShotResult): string => {
+  if (r.outcome === 'lost') return by === 'human' ? `Lost in the storm — fire again at ${coordLabel(r.coord)}` : 'Enemy shot lost in the storm'
+  return `${by === 'human' ? 'You' : 'The enemy'} fired at ${coordLabel(r.coord)}: ${outcomeWord(r)}`
+}
 
 export function BattleScreen() {
   const playerBoard = useGameStore((s) => s.playerBoard)
@@ -159,11 +165,11 @@ export function BattleScreen() {
       : beat.phase === 'enemy-aiming'
       ? 'The enemy is aiming…'
       : beat.phase === 'player-shot' || beat.phase === 'player-sink'
-        ? `You fired at ${coordLabel(beat.result!.coord)}: ${outcomeWord(beat.result!)}`
+        ? shotLine('human', beat.result!)
         : beat.phase === 'enemy-shot' || beat.phase === 'enemy-sink'
-          ? `The enemy fired at ${coordLabel(beat.result!.coord)}: ${outcomeWord(beat.result!)}`
+          ? shotLine('enemy', beat.result!)
           : last
-            ? `${last.by === 'human' ? 'You' : 'The enemy'} fired at ${coordLabel(last.result.coord)}: ${outcomeWord(last.result)}`
+            ? shotLine(last.by, last.result)
             : 'Firing…'
 
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
@@ -222,7 +228,7 @@ export function BattleScreen() {
               {statusText}
             </p>
             <span className="sr-only" aria-live="assertive" data-testid="shot-announcer">
-              {last ? `${last.by === 'human' ? 'You' : 'The enemy'} fired at ${coordLabel(last.result.coord)}: ${outcomeWord(last.result)}` : ''}
+              {last ? shotLine(last.by, last.result) : ''}
             </span>
             {busy && cinematics !== 'off' && (
               <button type="button" className="link-btn skip-hint" data-testid="skip-cinematic" onClick={skip}>
