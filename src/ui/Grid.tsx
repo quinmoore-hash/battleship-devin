@@ -58,7 +58,8 @@ export function Grid({
     let best = Infinity
     for (let y = 0; y < size; y++)
       for (let x = 0; x < size; x++) {
-        const d = Math.abs(x - active.x) + Math.abs(y - active.y)
+        // ties: same row first, then the row below, so focus slides sideways instead of jumping up (BUG-504)
+        const d = Math.abs(x - active.x) + Math.abs(y - active.y) + (y === active.y ? 0 : y > active.y ? 0.25 : 0.5)
         if (d < best && !isDisabledAt({ x, y })) {
           best = d
           tabStop = { x, y }

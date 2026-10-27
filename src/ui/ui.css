@@ -1722,25 +1722,49 @@
   background: rgba(217, 169, 60, 0.12);
 }
 
-/* touch devices: 44 px targets; the board scrolls sideways inside its panel instead of clipping (a11y e2e) */
+/* touch devices: cells shrink to fit the panel (32–44 px targets), never a sideways scroll (a11y e2e, BUG-310) */
 @media (pointer: coarse) {
   /* every desktop `--cell` rule (incl. the [data-no3d='false'] 3D-layout ones) is beaten here so the row / column
-     labels use the same 44 px pitch as the cells (BUG-310) */
+     labels use the same pitch as the cells (BUG-310). Ten columns + row labels fit inside the panel instead of
+     scrolling sideways: 55 px is the chrome around the cells on a narrow screen (hud 8+8, panel 4+4 + 2+2 border,
+     row labels 14, wrap gap 2, 9 gaps × 1, 2 px slack) → 32 px cells at 375 px wide, 44 px from 495 px. */
   .ui-root .grid-wrap,
   .ui-root[data-no3d='true'] .battle .grid-wrap,
   .ui-root[data-no3d='true'] .placement .grid-wrap,
   .ui-root[data-no3d='false'] .battle .grid-wrap,
   .ui-root[data-no3d='false'] .placement .grid-wrap {
-    --cell: 44px;
+    --cell: clamp(32px, calc((100vw - 55px) / 10), 44px);
     max-width: 100%;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
+    overflow: visible;
+    gap: 2px;
   }
-  .chart-panel,
-  .charts .chart-panel,
-  .placement-chart {
+  /* beats `.ui-root[data-no3d='false'] .charts .chart-panel` (0.7rem side padding, max-content width) */
+  .ui-root .chart-panel,
+  .ui-root[data-no3d='false'] .charts .chart-panel,
+  .ui-root .placement-chart {
+    padding-left: 4px;
+    padding-right: 4px;
     width: 100%;
     max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .grid-rows {
+    width: 14px;
+  }
+  .grid-rows,
+  .grid-cols {
+    font-size: 0.7rem;
+  }
+  .ui-root .grid-wrap .grid-cols,
+  .ui-root .grid-wrap .grid {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .grid,
+  .grid-cols,
+  .grid-rows {
+    gap: 1px;
   }
   .ui-root .grid-wrap {
     width: auto;

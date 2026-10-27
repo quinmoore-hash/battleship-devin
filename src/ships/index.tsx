@@ -7,12 +7,13 @@
  *   SHIPS[id] -> ShipDefinition               model component + anchors (cannons, masts, impact points)
  *   shipWorldTransform(placed, boardOrigin)   position / rotationY of a placed ship
  */
-import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import type { PlacedShip, ShipId } from '../engine'
 import { LodGroup } from '../perf/LodShip'
-import { BakedShip, bakeKey, useBakeryActive } from './bake'
+import { BakedShip, bakeKey, holdBakes, useBakeryActive } from './bake'
+import { LiveShip } from './LiveShip'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
 import { sampleWaveHeight } from '../scene/waves'
 import { BRIGANTINE } from './brigantine'
@@ -41,59 +42,33 @@ export interface ShipProps extends ShipModelProps {
 }
 
 /**
- * A ship model. lod 0 (and a ship mid-sink) renders the live procedural model; lod ≥ 1 renders the
- * shared baked copy from `./bake` (one merged mesh per material) when a `<ShipBakery>` is mounted.
+ * A ship model. lod 0 renders the live procedural model (including the live sinking animation); lod ≥ 1
+ * renders the shared baked copy from `./bake` (one merged mesh per material) when a `<ShipBakery>` is
+ * mounted — a sinking ship too, posed by `<Fleet>` (a live lod-1 galleon is ~480 draws while it goes down,
+ * BUG-404), and a settled wreck as one collapsed silhouette mesh.
  */
-export function Ship({ id, staticWreck = false, ...rest }: ShipProps) {
+export function Ship({ id, staticWreck: _staticWreck, ...rest }: ShipProps) {
   const Model = SHIPS[id].Model
   const lod = rest.lod ?? 0
   const sink = rest.sinkProgress ?? 0
   const bakery = useBakeryActive()
-  const live = lod === 0 || (sink > 0 && sink < 1 && !staticWreck) || !bakery
+  const live = lod === 0 || !bakery
+  const wreck = sink >= 1
   const quality = rest.quality ?? 'high'
   const cells = rest.damage.length
   const intact = useMemo<CellDamage[]>(() => Array.from({ length: cells }, () => 'intact'), [cells])
   const element = useMemo(() => <Model livery={rest.livery} damage={intact} lod={lod} quality={quality} />, [Model, rest.livery, intact, lod, quality])
+  const livery = rest.livery
+  useEffect(() => holdBakes([1, 2].map((l) => bakeKey(id, livery, l, quality) + (wreck ? '|wreck' : ''))), [id, livery, quality, wreck])
   if (live)
     return (
       <LiveShip>
         <Model {...rest} />
       </LiveShip>
     )
-  return <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality)} element={element} />
+  return <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality) + (wreck ? '|wreck' : '')} element={element} wreck={wreck} />
 }
 
-/**
- * Wraps a live procedural model and disposes every geometry its subtree ever held when it unmounts
- * (lod 0 → baked, end of a sink, quit), unless another object in the scene still uses it — module-level
- * shared geometry is simply re-uploaded the next time a live model needs it. The ship models build their
- * geometry in `useMemo` (and rebuild some of it while sinking), so without this each live mount leaks
- * ~100–400 `renderer.info.memory.geometries` (BUG-323 / BUG-300).
- */
-function LiveShip({ children }: { children: ReactNode }) {
-  const group = useRef<THREE.Group>(null)
-  const scene = useThree((s) => s.scene)
-  const seen = useRef(new Set<THREE.BufferGeometry>())
-  useLayoutEffect(() => {
-    group.current?.traverse((o) => {
-      const g = (o as THREE.Mesh).geometry
-      if (g) seen.current.add(g)
-    })
-  })
-  useEffect(() => {
-    const geometries = seen.current
-    return () => {
-      const inUse = new Set<THREE.BufferGeometry>()
-      scene.traverse((o) => {
-        const g = (o as THREE.Mesh).geometry
-        if (g) inUse.add(g)
-      })
-      for (const g of geometries) if (!inUse.has(g)) g.dispose()
-      geometries.clear()
-    }
-  }, [scene])
-  return <group ref={group}>{children}</group>
-}
 
 /** Ships are modelled along +x (bow forward). Horizontal ships point toward +x; vertical ships point toward +z. */
 export const shipRotationY = (orientation: PlacedShip['orientation']): number =>

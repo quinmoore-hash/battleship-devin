@@ -91,9 +91,10 @@ html[data-colorblind='true'] .cell-ship {
   .ui-root .placement-body {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* 44 px targets where they fit; narrower phones shrink the cells to fit the panel instead of scrolling (BUG-310) */
   .ui-root .grid button {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--cell, 44px);
+    min-width: var(--cell, 44px);
   }
 }
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { runFpsProbe } from './probe'
 import { usePerfStore } from './store'
+import { useGameStore } from '../store/gameStore'
 import { frameStats, resetHistory, summarize } from './stats'
 import type * as THREE from 'three'
 import { dumpScene } from './PerfStats'
@@ -28,6 +29,7 @@ export function PerfBootstrap() {
       camera: () => perfRefs.camera,
       leaks: geometryLeaks,
       textureLeaks,
+      store: () => useGameStore,
     }
     return () => {
       delete window.__perf

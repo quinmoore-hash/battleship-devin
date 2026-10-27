@@ -99,3 +99,24 @@ describe('bakeObject', () => {
     expect(baked.children.filter((c) => (c as THREE.LineSegments).isLineSegments)).toHaveLength(1)
   })
 })
+
+describe('bakeObject collapse (settled wrecks)', () => {
+  it('merges every plain mesh into one silhouette draw in the wreck material, keeping instanced parts as-is', () => {
+    const root = new THREE.Group()
+    const wood = new THREE.MeshStandardMaterial({ color: 'brown' })
+    const cloth = new THREE.MeshStandardMaterial({ color: 'white', transparent: true })
+    const withUv = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), cloth)
+    const noUv = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).toNonIndexed(), wood)
+    noUv.geometry.deleteAttribute('uv')
+    const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), wood, 2)
+    root.add(withUv, noUv, inst)
+    const wreck = new THREE.MeshStandardMaterial({ color: 0x241a12 })
+    const baked = bakeObject(root, wreck)
+    const meshes = baked.children.filter((c) => (c as THREE.Mesh).isMesh && !(c as THREE.InstancedMesh).isInstancedMesh) as THREE.Mesh[]
+    expect(meshes).toHaveLength(1)
+    expect(meshes[0].material).toBe(wreck)
+    expect(Object.keys(meshes[0].geometry.attributes).sort()).toEqual(['normal', 'position'])
+    expect(bakeStats(baked).triangles).toBe(2 + 12 + 12 * 2)
+    expect(baked.children.some((c) => (c as THREE.InstancedMesh).isInstancedMesh)).toBe(true)
+  })
+})

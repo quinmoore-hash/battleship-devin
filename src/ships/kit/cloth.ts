@@ -48,7 +48,9 @@ vec3 clothPoint(vec2 p) {
     out3.y = h * 0.5 - (h * 0.5 - p.y) * s;
     out3.x = p.x * (0.9 + 0.1 * s);
     float edge = 1.0 - pow(abs(p.x) / (w * 0.5), 2.0);
-    float down = 1.0 - v;
+    // the normal probe samples v slightly past the head (v > 1): keep pow()'s base ≥ 0 — a negative base is
+    // undefined in GLSL and yields NaN on some drivers, which bloom then smears over the whole frame (BUG-223)
+    float down = clamp(1.0 - v, 0.0, 1.0);
     float belly = 0.22 * min(w, h * 1.6) * edge * pow(down, 0.7) * (1.0 - 0.55 * pow(down, 4.0));
     float flap = (0.012 * w * sin(t * 2.3 + u * 7.0 + v * 3.0) + 0.006 * w * sin(t * 4.7 + v * 9.0 - u * 4.0)) * (0.35 + 0.65 * down) * edge;
     float gust = 0.9 + 0.1 * sin(t * 0.7 + uPhase);
@@ -78,7 +80,9 @@ export function patchClothShader(shader: { vertexShader: string; fragmentShader:
       vec3 cP = clothPoint(cp);
       vec3 cDx = clothPoint(cp + vec2(e, 0.0)) - cP;
       vec3 cDy = clothPoint(cp + vec2(0.0, e)) - cP;
-      vec3 objectNormal = normalize(cross(cDx, cDy));
+      vec3 cN = cross(cDx, cDy);
+      // degenerate probe (flat cloth / zero wind): never normalize a zero vector (NaN)
+      vec3 objectNormal = dot(cN, cN) > 1e-12 ? normalize(cN) : vec3(0.0, 0.0, 1.0);
       #ifdef USE_TANGENT
       vec3 objectTangent = vec3( tangent.xyz );
       #endif

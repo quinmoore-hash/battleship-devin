@@ -86,7 +86,7 @@ export function summarize(): PerfSummary {
 
 declare global {
   interface Window {
-    __perf?: { stats: FrameStats; summary: () => PerfSummary; reset: () => void; tier: () => string; autoLower: () => boolean; dump: () => unknown[]; programs: () => unknown[]; scene: () => unknown; gl: () => unknown; camera: () => unknown; leaks: () => GeometryLeakRow[]; textureLeaks: () => GeometryLeakRow[] }
+    __perf?: { stats: FrameStats; summary: () => PerfSummary; reset: () => void; tier: () => string; autoLower: () => boolean; dump: () => unknown[]; programs: () => unknown[]; scene: () => unknown; gl: () => unknown; camera: () => unknown; leaks: () => GeometryLeakRow[]; textureLeaks: () => GeometryLeakRow[]; store: () => unknown }
   }
 }
 
