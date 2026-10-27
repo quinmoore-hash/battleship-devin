@@ -33,6 +33,8 @@ test('Sky & sea: URL params win for the visit; Stormy seas locks the weather on 
   await expect(root).toHaveAttribute('data-tod', 'dusk')
   await expect(root).toHaveAttribute('data-weather', 'squall')
 
+  // the rules dock is menu step 2; the Sky & sea corner picker stays on every step
+  await page.getByTestId('mode-single').click()
   await page.getByTestId('mode-storm').check()
   await expect(root).toHaveAttribute('data-weather', 'stormy')
   const weather = page.getByTestId('main-menu').getByTestId('skysea-weather')
