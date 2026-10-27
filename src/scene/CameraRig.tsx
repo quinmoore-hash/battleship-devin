@@ -146,7 +146,7 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
     const dt = Math.min(delta, 0.1)
     const camera = state.camera as THREE.PerspectiveCamera
     const shot = CAMERA_SHOTS[view]
-    const aim = isBattleView(view) ? battleFraming(camera.aspect, state.size.width, framing.current, view) : shot
+    const aim = view === 'battle' || view === 'battle-far' ? battleFraming(camera.aspect, state.size.width, framing.current, view) : shot
     const wanted = tmpPos.current
     if (view === 'menu') {
       const a = state.clock.elapsedTime * MENU_ORBIT.speed
