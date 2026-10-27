@@ -38,7 +38,13 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           <b>Hidden treasure</b>: two chests lie in the open water of each board, never under a ship or next to each other. Hit one and you fire again at once (in Salvo, one more shot in the volley; in the storm that shot can still be lost). The enemy captain uses the same powers — Easy never does, Medium and Hard fire their Broadside the turn after their first hit, and Hard looks through the Spyglass when one cell is far likelier than the rest.
         </dd>
         <dt>Two captains</dt>
-        <dd>Hot-seat: two players on one screen take turns at the chart.</dd>
+        <dd>
+          Hot-seat for two players on one laptop. Captain 1 sails under the black flag and musters first, Captain 2 commands the Royal Navy. After each
+          placement and after every broadside a parchment curtain hides both charts: pass the deck, and the next captain taps <em>when ready</em>{' '}
+          (only that button drops it — <kbd>Space</kbd> and <kbd>Esc</kbd> do nothing). The camera and the charts flip to the active captain's side; your
+          un-sunk ships are never shown to the other captain. Salvo, Stormy seas and Black Flag all apply to both captains. The winner is named on the
+          report; Rematch lets the other captain place first.
+        </dd>
         <dt>Sky &amp; sea (looks only)</dt>
         <dd data-testid="howto-sky-sea">
           Pick the time of day (Dawn, Noon, Golden hour, Dusk, Moonlit night) and the weather (Calm, Overcast, Squall)

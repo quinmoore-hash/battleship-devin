@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { is3dDisabled } from '../scene/flags'
@@ -6,7 +5,8 @@ import { selectSkyWeather, useGameStore } from '../store/gameStore'
 import { BattleScreen } from './Battle'
 import { GameOverScreen } from './GameOver'
 import { HowToPlayModal } from './HowToPlay'
-import { MainMenu } from './MainMenu'
+import { HandoffCurtain } from './HandoffCurtain'
+import { MainMenu, type MenuExtras } from './MainMenu'
 import { PlacementScreen } from './Placement'
 import { SettingsModal } from './SettingsPanel'
 import { UiContext, type UiModal } from './UiContext'
@@ -15,8 +15,12 @@ import './ui.css'
 export { GameWorld } from './world/GameWorld'
 export { setDirector, getDirector } from './turnFlow'
 
-export function GameUI({ menuExtras }: { menuExtras?: ReactNode } = {}) {
+export { type MenuExtras } from './MainMenu'
+
+export function GameUI({ menuExtras }: { menuExtras?: MenuExtras } = {}) {
   const phase = useGameStore((s) => s.phase)
+  // hot-seat curtain: both boards leave the DOM while the laptop changes hands
+  const handoff = useGameStore((s) => s.handoff)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const winner = useGameStore((s) => s.winner)
   const colorblind = useGameStore((s) => s.settings.colorblind)
@@ -38,7 +42,7 @@ export function GameUI({ menuExtras }: { menuExtras?: ReactNode } = {}) {
 
   return (
     <UiContext.Provider value={ctx}>
-      <div className="ui-root" data-testid="ui-root" data-phase={phase} data-reduced-motion={reducedMotion} data-colorblind={colorblind} data-no3d={is3dDisabled()} data-tod={timeOfDay} data-weather={weather}>
+      <div className="ui-root" data-testid="ui-root" data-phase={phase} data-handoff={handoff ?? undefined} data-reduced-motion={reducedMotion} data-colorblind={colorblind} data-no3d={is3dDisabled()} data-tod={timeOfDay} data-weather={weather}>
         {phase !== 'menu' && (
           <nav className="corner-nav">
             <button type="button" className="icon-btn" aria-label="How to play" title="How to play" data-testid="nav-how-to-play" onClick={() => (playSfx('ui-click'), setModal('how-to-play'))}>
@@ -51,10 +55,11 @@ export function GameUI({ menuExtras }: { menuExtras?: ReactNode } = {}) {
         )}
         <div className="phase" key={phase}>
           {phase === 'menu' && <MainMenu extras={menuExtras} />}
-          {phase === 'placement' && <PlacementScreen />}
+          {phase === 'placement' && !handoff && <PlacementScreen />}
           {phase === 'battle' && <BattleScreen />}
           {phase === 'gameover' && <GameOverScreen />}
         </div>
+        {handoff && <HandoffCurtain />}
         {modal === 'settings' && <SettingsModal onClose={closeModal} />}
         {modal === 'how-to-play' && <HowToPlayModal onClose={closeModal} />}
       </div>

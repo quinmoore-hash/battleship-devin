@@ -2,7 +2,7 @@ import type { CinematicDirector, CinematicEvent } from '../cinematics'
 import { CINEMATIC_TIMING } from '../cinematics'
 import type { Coord, Orientation, Difficulty, ShotResult } from '../engine'
 import { is3dDisabled } from '../scene/flags'
-import { useGameStore, type CinematicsLevel } from '../store/gameStore'
+import { isHotSeat, other, useGameStore, type CinematicsLevel } from '../store/gameStore'
 
 /**
  * Turn pacing for the battle screen. Every beat of a turn (the player's shot, a sinking, the enemy
@@ -25,7 +25,7 @@ export const AIM_DELAY: Record<Difficulty | 'reduced', [number, number]> = {
 export const TIMER_SCALE = 0.15
 export const OFF_DELAY_MS = 30
 
-export type TurnPhase = 'idle' | 'intro' | 'player-shot' | 'player-sink' | 'enemy-aiming' | 'enemy-shot' | 'enemy-sink' | 'victory' | 'done'
+export type TurnPhase = 'idle' | 'intro' | 'player-shot' | 'player-sink' | 'enemy-aiming' | 'enemy-shot' | 'enemy-sink' | 'handoff' | 'victory' | 'done'
 
 export interface TurnBeat {
   phase: TurnPhase
@@ -124,7 +124,11 @@ export interface TurnFlowOptions {
 export type PowerFire = { kind: 'broadside'; orientation: Orientation }
 
 export interface TurnFlow {
-  /** Fire at `coord` and play the whole turn (player shot → sink? → enemy aims → enemy shot → sink? → victory?). Resolves when input may resume. */
+  /**
+   * Fire at `coord` and play the whole turn (player shot → sink? → enemy aims → enemy shot → sink? → victory?). Resolves
+   * when input may resume. Hot-seat: the active captain's shot → sink? → the handoff curtain goes up for the other captain
+   * (no aim delay, no AI turn); input resumes once they dismiss it.
+   */
   /** `power: 'broadside'` fires the Black Flag Broadside line through `coord` instead of a single shot. */
   fire: (coord: Coord, power?: PowerFire) => Promise<ShotResult | undefined>
   /** Play the battle-start flyover (3D + real director only). A `fire()` during it skips it and proceeds. */
@@ -206,12 +210,36 @@ export function createTurnFlow({ onBeat, rng = Math.random }: TurnFlowOptions = 
     }
   }
 
+  /** Hot-seat turn: whoever's turn it is fires, the shot plays, then the deck passes to the other captain. */
+  const fireHotSeat = async (coord: Coord, power?: PowerFire) => {
+    const store = useGameStore.getState()
+    if (busy || store.phase !== 'battle' || store.handoff) return undefined
+    const by = store.turn
+    const result = power?.kind === 'broadside' ? store.fireBroadside(coord, power.orientation, by).at(-1) : store.fireAt(coord, by)
+    if (!result) return undefined
+    busy = true
+    try {
+      await playVolley(by === 'human' ? 'player' : 'enemy', volleyOf(by, result))
+      if (await maybeGameOver(result)) return result
+      // Black Flag treasure keeps the turn: no curtain, the same captain fires again
+      if (useGameStore.getState().phase === 'battle' && useGameStore.getState().turn !== by) {
+        beat('handoff', result)
+        useGameStore.getState().beginHandoff(other(by))
+      }
+      beat('done', result)
+      return result
+    } finally {
+      busy = false
+    }
+  }
+
   const fire = async (coord: Coord, power?: PowerFire) => {
     if (introPlaying) {
       activeDirector(timers).skip()
       await introPlaying
     }
     const store = useGameStore.getState()
+    if (isHotSeat(store.players)) return fireHotSeat(coord, power)
     if (busy || store.phase !== 'battle' || store.turn !== 'human') return undefined
     const result = power?.kind === 'broadside' ? store.fireBroadside(coord, power.orientation).at(-1) : store.fireAt(coord)
     if (!result) return undefined

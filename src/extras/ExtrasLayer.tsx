@@ -53,18 +53,27 @@ function GameOverLog({ difficulty }: { difficulty: Difficulty }) {
   )
 }
 
-/** Salvo / stormy-seas toggles. Uses `setModes`, so the UI's own `startGame(difficulty)` picks them up. */
-/** Mode checkboxes. Defaults to `setModes` (menu/placement); pass `onChange` to restart a running sandbox instead. */
-/** Menu-screen extras (mode picker + compact stats). Rendered by `<GameUI menuExtras>` so it flows below the posters instead of floating over them. */
-export function MenuExtras() {
+/**
+ * Menu-screen extras, rendered by `<GameUI menuExtras={{ rules, stats }}>` so they flow in the menu steps instead of
+ * floating over them: the Rules of engagement dock is step 2, the compact stats sit under step 1.
+ */
+export function MenuRules() {
   return (
-    <aside className="menu-extras" data-testid="extras-menu" aria-label="Game modes and statistics">
+    <aside className="menu-extras" data-testid="extras-menu" aria-label="Rules of engagement">
       <ModesPicker />
+    </aside>
+  )
+}
+
+export function MenuStats() {
+  return (
+    <aside className="menu-extras menu-extras-stats" data-testid="extras-menu-stats" aria-label="Statistics">
       <StatsPanel compact />
     </aside>
   )
 }
 
+/** Mode checkboxes. Defaults to `setModes` (menu/placement); pass `onChange` to restart a running sandbox instead. */
 export function ModesPicker({ className = '', onChange }: { className?: string; onChange?: (modes: Partial<GameModes>) => void }) {
   const modes = useGameStore((s) => s.modes)
   const storeSetModes = useGameStore((s) => s.setModes)

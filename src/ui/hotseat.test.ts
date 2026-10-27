@@ -1,0 +1,141 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { createElement } from 'react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { useGameStore } from '../store/gameStore'
+import { GameUI } from './index'
+
+const store = () => useGameStore.getState()
+const ui = () => render(createElement(GameUI))
+const cells = () => document.querySelectorAll('[data-state]')
+
+beforeEach(() => {
+  store().reset()
+  store().setPlayers({ enemy: { kind: 'ai' } })
+  store().updateSettings({ reducedMotion: true, cinematics: 'off' })
+})
+afterEach(() => cleanup())
+
+describe('menu steps', () => {
+  it('walks Single player → rules → posters with back buttons, and Two captains → rules → names', () => {
+    ui()
+    expect(screen.getByTestId('menu-step').dataset.step).toBe('1')
+    expect(screen.queryByTestId('difficulty-easy')).toBeNull()
+    fireEvent.click(screen.getByTestId('mode-single'))
+    expect(screen.getByTestId('menu-step').dataset.step).toBe('2')
+    fireEvent.click(screen.getByTestId('menu-back'))
+    expect(screen.getByTestId('menu-step').dataset.step).toBe('1')
+    fireEvent.click(screen.getByTestId('mode-two'))
+    expect(store().players.enemy.kind).toBe('local')
+    fireEvent.click(screen.getByTestId('rules-next'))
+    expect(screen.getByTestId('captain-names')).toBeTruthy()
+    expect(screen.queryByTestId('difficulty-easy')).toBeNull()
+    fireEvent.click(screen.getByTestId('menu-back'))
+    fireEvent.click(screen.getByTestId('menu-back'))
+    fireEvent.click(screen.getByTestId('mode-single'))
+    expect(store().players.enemy.kind).toBe('ai')
+    fireEvent.click(screen.getByTestId('rules-next'))
+    expect(screen.getByTestId('difficulty-hard')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('difficulty-hard'))
+    expect(store().phase).toBe('placement')
+    expect(store().opponent).toBeDefined()
+  })
+
+  it('names default to Captain 1 / Captain 2 and start a hot-seat placement for Captain 1', () => {
+    ui()
+    fireEvent.click(screen.getByTestId('mode-two'))
+    fireEvent.click(screen.getByTestId('rules-next'))
+    expect((screen.getByTestId('captain-1-name') as HTMLInputElement).value).toBe('Captain 1')
+    fireEvent.change(screen.getByTestId('captain-1-name'), { target: { value: 'Anne Bonny' } })
+    fireEvent.change(screen.getByTestId('captain-2-name'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByTestId('names-start'))
+    expect(store().phase).toBe('placement')
+    expect(store().players).toEqual({ human: { name: 'Anne Bonny', kind: 'local' }, enemy: { name: 'Captain 2', kind: 'local' } })
+    expect(store().opponent).toBeUndefined()
+    expect(screen.getByTestId('placement-title').textContent).toContain('Anne Bonny')
+  })
+})
+
+describe('hot-seat curtain', () => {
+  beforeEach(() => {
+    store().setPlayers({ human: { name: 'Anne' }, enemy: { name: 'Jack', kind: 'local' } })
+    store().startGame('medium', { salvo: false, storm: false }, 1)
+  })
+
+  it('hides both boards between placements and before the battle; only its button dismisses it', () => {
+    ui()
+    fireEvent.click(screen.getByTestId('auto-place'))
+    expect(cells().length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByTestId('confirm-placement'))
+    expect(store().handoff).toBe('enemy')
+    const curtain = screen.getByTestId('handoff')
+    expect(curtain.dataset.captain).toBe('enemy')
+    expect(screen.getByTestId('handoff-name').textContent).toBe('Jack')
+    expect(screen.queryByTestId('placement')).toBeNull()
+    expect(cells().length).toBe(0)
+    // Space / Escape do nothing; Enter / click on the button does
+    fireEvent.keyDown(screen.getByTestId('handoff-ready'), { key: ' ' })
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' })
+    expect(store().handoff).toBe('enemy')
+    fireEvent.click(screen.getByTestId('handoff-ready'))
+    expect(store().handoff).toBeNull()
+    expect(screen.getByTestId('placement').dataset.placing).toBe('enemy')
+    expect(screen.getByTestId('placement-title').textContent).toContain('Jack')
+    expect(store().enemyBoard.ships).toHaveLength(0)
+    fireEvent.click(screen.getByTestId('auto-place'))
+    expect(store().enemyBoard.ships).toHaveLength(5)
+    fireEvent.click(screen.getByTestId('confirm-placement'))
+    expect(store().phase).toBe('battle')
+    expect(store().handoff).toBe('human')
+    expect(screen.getByTestId('battle').getAttribute('aria-hidden')).toBe('true')
+    expect(cells().length).toBe(0)
+    expect(screen.queryByTestId('enemy-grid')).toBeNull()
+    fireEvent.click(screen.getByTestId('handoff-ready'))
+    expect(screen.getByTestId('enemy-grid')).toBeTruthy()
+    expect(screen.getByTestId('your-waters-title').textContent).toContain('Anne')
+    expect(screen.getByTestId('enemy-waters-title').textContent).toContain('Jack')
+    expect(screen.getByTestId('status').textContent).toContain("Anne's turn")
+    // Anne's own ships show on her chart; Jack's chart shows none of his un-sunk ships
+    expect(document.querySelectorAll('[data-testid^="player-grid-"][data-state="ship"]').length).toBe(17)
+    expect(document.querySelectorAll('[data-testid^="enemy-grid-"][data-state="ship"]').length).toBe(0)
+  })
+
+  it('after a shot the curtain rises for the other captain and the HUD flips sides', async () => {
+    ui()
+    fireEvent.click(screen.getByTestId('auto-place'))
+    fireEvent.click(screen.getByTestId('confirm-placement'))
+    fireEvent.click(screen.getByTestId('handoff-ready'))
+    fireEvent.click(screen.getByTestId('auto-place'))
+    fireEvent.click(screen.getByTestId('confirm-placement'))
+    fireEvent.click(screen.getByTestId('handoff-ready'))
+    expect(store().turn).toBe('human')
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('enemy-grid-0-0'))
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(store().events).toHaveLength(1)
+    expect(store().events[0].by).toBe('human')
+    expect(store().turn).toBe('enemy')
+    expect(store().handoff).toBe('enemy')
+    expect(cells().length).toBe(0)
+    expect(screen.getByTestId('handoff-name').textContent).toBe('Jack')
+    // clicks cannot reach a chart while the curtain is up
+    expect(screen.queryByTestId('enemy-grid-1-0')).toBeNull()
+    fireEvent.click(screen.getByTestId('handoff-ready'))
+    expect(store().perspective).toBe('enemy')
+    expect(screen.getByTestId('battle').dataset.perspective).toBe('enemy')
+    expect(screen.getByTestId('your-waters-title').textContent).toContain('Jack')
+    expect(screen.getByTestId('status').textContent).toContain("Jack's turn")
+    // Anne's shot is on Jack's own chart now; his chart of Anne's waters is still blank
+    expect(screen.getByTestId('player-grid-0-0').dataset.state).not.toBe('unknown')
+    expect(document.querySelectorAll('[data-testid^="enemy-grid-"]:not([data-state="unknown"])').length).toBe(0)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('enemy-grid-5-5'))
+      await new Promise((r) => setTimeout(r, 200))
+    })
+    expect(store().events.map((e) => e.by)).toEqual(['human', 'enemy'])
+    expect(store().playerBoard.shots).toHaveLength(1)
+    expect(store().handoff).toBe('human')
+  })
+})

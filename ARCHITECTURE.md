@@ -61,7 +61,7 @@ createOpponent(difficulty, rng?) => AiOpponent;  describeStrategy(difficulty);  
 ### store (`src/store/gameStore.ts`)
 `useGameStore` with `phase`, `difficulty`, `playerBoard`, `enemyBoard`, `turn`, `winner`, `events`, `settings`
 (`sfxVolume`, `musicVolume`, `reducedMotion`, `cinematics: 'full' | 'fast' | 'off'`) and actions `startGame`,
-`placePlayerShip(spec, origin, orientation, uid?)`, `removePlayerShip(uid)`, `autoPlacePlayerFleet`, `confirmPlacement`, `fireAt`,
+`placePlayerShip(spec, origin, orientation, uid?)`, `removePlayerShip(uid)`, `autoPlacePlayerFleet`, `confirmPlacement`, `fireAt(coord, by?)`,
 `enemyTurn`, `updateSettings`, `reset`. The game loop controls pacing: after the human fires, it awaits the cinematic
 (or a timer when cinematics are off) and then calls `enemyTurn()` — unless `turn` is still `'human'` (treasure).
 
@@ -73,11 +73,24 @@ Actions: `fireBroadside(center, orientation) -> ShotResult[]` (skips shot/off-bo
 each ball fogs separately in the storm), `spyAt(coord) -> 'ship' | 'water'` (no shot, no turn). `GameEvent` is
 `{ id, by, result, kind: 'shot' | 'broadside' | 'spyglass' | 'treasure', group?, spied? }`; a treasure hit keeps the turn
 (`bonusShots`; in Salvo it is +1 shot in the volley). Replay / stats skip `spyglass` events (they are not shots).
+**Two captains (hot-seat).** `Player = 'human' | 'enemy'` stays the engine's vocabulary; `players: { human: {name, kind:'local'},
+enemy: {name, kind:'local'|'ai'} }` (`setPlayers`, menu only; `isHotSeat(players)`) says who sits on each side. In a hot-seat
+game `startGame` leaves `enemyBoard` empty and creates no `opponent`; `placing` is the captain mustering (the placement actions
+target `placementBoard(state)`), `confirmPlacement` raises the curtain for the other captain instead of starting the battle until
+both fleets are placed, `fireAt(coord, by)` resolves for either side (`by` defaults to `'human'`; the turn flow passes `turn`),
+`enemyTurn()` is a no-op, `firstPlacer` places *and fires* first and `rematch()` swaps it. `handoff: Player | null` is the
+curtain (`beginHandoff(to)` / `endHandoff()` — the only way down; both `fireAt` and the controllers refuse input while it is set)
+and `perspective: Player` is the side the HUD / 3D world / director film from (`endHandoff` sets it to `turn`; always `human`
+in single player). Black Flag in a hot-seat game: `setFleetPreset` targets the `placing` captain (no preset is drawn for a local
+`enemy`), `fireBroadside(center, orientation, by?)` / `spyAt(coord, by?)` / `resolveHuman(volley, kind, group?, by?)` take the shooter the
+same way `fireAt` does, `powerShots` / `treasure` / `spied` are already per `Player`; a treasure hit keeps the deck (no curtain).
 
 ### scene (`src/scene`)
 `<OceanScene quality? timeOfDay? view? interactive? cameraOverride? dressing? weather?>{children}</OceanScene>` full-screen Canvas with
 WebGL fallback (`?no3d` forces the fallback). `<BoardGrid origin size cellSize highlight? onCellPointerMove? onCellClick? color?>`,
-`<CameraRig view interactive? override?>` with `CameraView = 'menu' | 'placement' | 'battle' | 'gameover'` (`override` = a cinematic owns the
+`<CameraRig view interactive? override?>` with `CameraView = 'menu' | 'placement' | 'battle' | 'battle-far' | 'gameover' | 'handoff'`
+(`battle-far` = the battle shot mirrored to the Navy side for the second hot-seat captain — `SceneContents` picks it from the store's
+`perspective`; `handoff` = open sea and sky only while the curtain is up; `override` = a cinematic owns the
 camera: the rig stops writing position/target/fov and disables orbit, then damps back when it flips off), `computeAtmosphere`,
 `sampleWaveHeight/Normal`, layout helpers above, `<SceneDemo>` (`?scene-demo`). Perf knobs (set by `OceanScene` from
 `usePerf()`): `<Lighting shadowSize?>` (0 = no shadow pass), `<Water waves?>`, `<Effects enabled?>` (lazy chunk).
@@ -164,7 +177,7 @@ See `types.ts`: `CinematicEvent` (`shot`, `sink`, `battle-start`, `victory`), `C
 `CINEMATIC_TIMING`.
 ```tsx
 director.play(event, level): Promise<void>   // shared instance; resolves when the sequence ends (at once for 'off')
-director.skip(); director.busy; director.setFleets(() => ({ human, enemy }) | null)
+director.skip(); director.busy; director.setFleets(() => ({ human, enemy }) | null); director.setPerspective('human' | 'enemy')
 createDirector({ fleets?, reducedMotion?, autoTick?, audio? })   // isolated instance (tests, demos)
 useDirector((s) => s.busy | s.firing | s.sinkProgress | s.impacted | s.letterbox | s.timeScale)
 <CinematicLayer />      // inside <OceanScene>: cannonballs, flashes, splashes, hull impacts, sink water fx, fireworks/wrecks
@@ -174,6 +187,8 @@ const cine = useBattleCinematics()   // plays a sequence for every new store eve
 pickBattery(ships, target, ownOrigin, targetOrigin), planShot(by, result, shooters, targets), buildSequence(event, level, reducedMotion)
 ```
 Pass `firing={useDirector((s) => s.firing)}` and `sinkProgress={useDirector((s) => s.sinkProgress)}` to both `<Fleet>`s.
+`perspective` (set by `App` from the store) is the side the overview / return shots and the victory orbit + fireworks film from;
+a hot-seat captain's shot is filmed like the pirates' (real muzzles), only the AI fires from the unseen gun line (`plan.shooter === null`).
 Shot audio: the `fire` beat starts one `playCinematicAudio` timeline (fire → whistle → impact) whose `flightMs` is the
 fire→impact beat distance; a skip before impact cancels it and plays the impact cue at once.
 Enemy shots fire from an unseen gun line past the far edge of the Navy waters (showing the real ship would leak its
@@ -200,7 +215,16 @@ WebGL (nothing to watch), and `effectiveLevel()` maps `full` → `fast` there. O
 `intro?` → `fireAt` → shot (every shot of a salvo volley, `lastVolley`) → sink? → enemy aims → `enemyTurn` → shot(s) → sink?
 (Stormy seas: `fireAt` / `enemyTurn` roll `STORM_LOST_CHANCE` per shot with the seeded `stormRng`; a `lost` `ShotResult` is an
 event only — `fire()` is not called, the square stays unknown and re-fireable, markers/AI/replay ignore it)
-→ `victory` when the game ended; `dispose()` lets a running victory flyover finish. While a ball is in the air the world
+→ `victory` when the game ended; `dispose()` lets a running victory flyover finish. Hot-seat (`isHotSeat(players)`): the active
+captain's `fireAt(coord, turn)` → shot(s) → sink? → `beginHandoff(other)` (beat `handoff`) — no aim delay, no AI turn; the
+`<HandoffCurtain>` (`src/ui/HandoffCurtain.tsx`, mounted by `<GameUI>` whenever `handoff` is set, HTML so `?no3d` works) is the
+only thing on screen: `<PlacementScreen>` unmounts, `<BattleScreen>` renders an empty `aria-hidden` root (the turn flow survives)
+and `<GameWorld>` draws nothing, so no `[data-state]` cell or ship mesh exists until the next captain taps the button.
+`<BattleScreen>` / `<BattleWorld>` render the `perspective` side as "own" (ships revealed, `player-grid`) and the other as the
+target (`enemy-grid`, un-sunk ships hidden) — the test ids never change sides. `<MainMenu>` is three steps (`data-step`
+`mode` → `rules` → `foe` | `names`): `mode-single` / `mode-two`, the Rules of engagement dock (`menuExtras.rules`, from the extras
+module), `rules-next`, `menu-back`, the posters, `captain-1-name` / `captain-2-name` / `names-start`; `menuExtras.stats` sits under
+step 1 and `menuExtras.corner` is a slot for small corner controls. While a ball is in the air the world
 shows the board *before* that shot (`src/ui/world/pending.ts`: `visibleShots`, `maskPendingHit`, `settledWrecks`), so
 markers, hull damage, the sunk reveal and flotsam appear at impact.
 Game over dispatches `window` events `battleship:replay` and `battleship:photo` for the extras module; the report waits
@@ -220,7 +244,10 @@ Demo routes (`?…-demo`) are lazy chunks; the game bundle is split into `three`
 `postprocessing` (loaded on `high` only) and the app.
 
 ## Test hooks the e2e suite depends on
-`ui-root[data-phase]`, `ocean-canvas`, `ocean-fallback`, `main-menu`, `difficulty-{easy|medium|hard}`, `placement`,
+`ui-root[data-phase]`, `ocean-canvas`, `ocean-fallback`, `main-menu[data-step]`, `mode-{single|two}`, `rules-next`, `menu-back`,
+`difficulty-{easy|medium|hard}` (menu step 3 — e2e reaches it through `startSinglePlayer()` in `e2e/helpers.ts`), `captain-{1|2}-name`,
+`names-start`, `handoff[data-captain]`, `handoff-name`, `handoff-ready`, `placement[data-placing]`, `placement-title`,
+`battle[data-perspective]`, `your-waters-title`, `enemy-waters-title`, `report-title`, `placement`,
 `auto-place`, `confirm-placement`, `battle`, `enemy-grid`, `enemy-grid-{x}-{y}[data-state]`, `player-grid`, `status`
 (contains "Your turn" when the human may fire), `gameover[data-winner]`, `play-again`, `rematch`, `quit`, `quit-confirm`,
 `nav-settings`, `nav-how-to-play`. Also used: `ship-tray-{uid}[data-placed][aria-pressed]`, `placed-count`, `rotate`,

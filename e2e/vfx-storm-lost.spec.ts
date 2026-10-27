@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { startSinglePlayer } from './helpers'
 
 // Stormy seas: a shot lost in the storm leaves no marker anywhere — not on the HTML chart (the cell stays `unknown` and
 // re-fireable) and not on the 3D water (no buoy). Counts the buoy instances in the live scene via `window.__perf`.
@@ -13,8 +14,7 @@ test('stormy seas: shots lost in the storm leave no chart mark and no buoy, and 
   await page.getByTestId('open-settings').click()
   await page.getByTestId('setting-cinematics-off').click()
   await page.getByTestId('settings-close').click()
-  await page.getByTestId('mode-storm').check()
-  await page.getByTestId('difficulty-easy').click()
+  await startSinglePlayer(page, 'easy', ['storm'])
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
   await expect(page.getByTestId('battle')).toBeVisible()

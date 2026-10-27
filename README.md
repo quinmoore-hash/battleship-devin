@@ -13,6 +13,14 @@ the camera zooms in as masts snap and the hull slides under.
 
 The fleet: Man-o’-War (5), Galleon (4), Frigate (3), Brigantine (3), Sloop (2).
 
+**Menu flow:** step 1 *Single player* (hunt the Royal Navy) or *Two captains* (hot-seat on one laptop) → step 2 *Rules of
+engagement* checkboxes (Salvo, Stormy seas, …; any combination, none = classic) → step 3 the Wanted posters (single player)
+or the captains' names (two captains). **Two captains:** Captain 1 (pirate colours) musters first, then a full-screen
+parchment curtain asks you to pass the deck to Captain 2 (Royal Navy colours) — both charts and all ships leave the
+screen while it is up, and only its button (click / tap / Enter) drops it. The curtain comes back after every broadside;
+the HUD and the 3D camera flip to the active captain's side and nobody ever sees the other's un-sunk ships. The report
+names the winner, *Rematch* lets the other captain place first, *Menu* returns to step 1.
+
 ## Play
 
 Deployed from `main` to GitHub Pages: https://quinmoore-hash.github.io/battleship-devin/

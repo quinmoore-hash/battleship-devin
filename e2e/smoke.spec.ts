@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { startSinglePlayer } from './helpers'
 
 // Flow tests run with the 3D scene disabled: headless CI has no GPU and software WebGL
 // makes the whole page crawl. scene.spec.ts covers the canvas itself.
@@ -9,7 +10,7 @@ for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     await page.goto('/?no3d')
     await expect(page.getByTestId('ocean-fallback')).toBeVisible()
     await expect(page.getByTestId('main-menu')).toBeVisible()
-    await page.getByTestId(`difficulty-${difficulty}`).click()
+    await startSinglePlayer(page, difficulty)
 
     await expect(page.getByTestId('placement')).toBeVisible()
     await expect(page.getByTestId('confirm-placement')).toBeDisabled()

@@ -832,6 +832,12 @@
   display: grid;
   gap: 0.6rem;
   align-content: start;
+  /* Black Flag fleets (picker + 7-ship tray) outgrow a 700px-tall viewport: scroll the tray, never clip the Ready button (BUG-568) */
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 .tray {
   list-style: none;
@@ -1064,6 +1070,14 @@
 }
 .ui-root[data-no3d='false'] .battle-body .side-left {
   grid-row: 1 / span 2;
+  /* two Black Flag fleets (up to 12 rows) are taller than a 700px viewport: scroll instead of growing up over the status plaque (BUG-569) */
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  /* `end` alignment would clip the top of an overflowing panel beyond scroll reach; `safe` falls back to start when it overflows */
+  align-content: safe end;
 }
 .ui-root[data-no3d='false'] .charts {
   grid-column: 3;
@@ -1968,3 +1982,169 @@
     justify-content: center;
   }
 }
+
+/* ---------- two captains: handoff curtain ---------- */
+.handoff {
+  display: grid;
+  place-items: center;
+  z-index: 8;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(5, 20, 30, 0.35), rgba(3, 10, 18, 0.92) 75%),
+    var(--paper-tex);
+  pointer-events: auto;
+}
+.handoff-card {
+  width: min(560px, calc(100vw - 32px));
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+  padding: 1.6rem 1.6rem 1.8rem;
+  text-align: center;
+}
+.handoff-kicker {
+  font-family: var(--font-display);
+  font-style: italic;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.handoff-title {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: clamp(1.7rem, 4.5vw, 2.6rem);
+  line-height: 1.1;
+}
+.handoff-title strong {
+  color: var(--crimson);
+}
+.handoff-sub {
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--ink-soft);
+}
+.handoff-seal {
+  position: absolute;
+  right: -14px;
+  bottom: -16px;
+}
+
+/* ---------- menu steps ---------- */
+.menu-steps {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.85rem;
+  color: rgba(243, 234, 214, 0.8);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.menu-steps i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--brass-light);
+  display: inline-block;
+}
+.menu-steps i.on {
+  background: var(--brass-light);
+}
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 300px));
+  gap: clamp(12px, 2vw, 28px);
+  justify-content: center;
+  width: 100%;
+}
+.mode-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 1.1rem 1rem 1.2rem;
+  min-height: 150px;
+  text-align: center;
+  font-family: var(--font-display);
+}
+.mode-card .mode-name {
+  font-family: var(--font-title);
+  font-size: clamp(1.4rem, 2.6vw, 1.9rem);
+  line-height: 1.1;
+}
+.mode-card .mode-how {
+  font-style: italic;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+.menu-step-head {
+  text-align: center;
+  color: var(--foam);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  display: grid;
+  gap: 0.2rem;
+}
+.menu-step-head h2 {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: clamp(1.5rem, 3.4vw, 2.3rem);
+}
+.menu-step-head p {
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  color: rgba(243, 234, 214, 0.85);
+}
+.names-card {
+  width: min(520px, calc(100vw - 32px));
+  display: grid;
+  gap: 0.8rem;
+}
+.names-card label {
+  display: grid;
+  gap: 0.25rem;
+  font-family: var(--font-display);
+}
+.names-card label small {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.names-card input {
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 2px solid var(--brass-dark);
+  background: rgba(255, 250, 235, 0.7);
+  color: var(--ink);
+}
+.names-card input:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 1px;
+}
+.btn-ghost-light {
+  background: rgba(243, 234, 214, 0.08);
+  color: var(--foam);
+  border-color: rgba(243, 234, 214, 0.55);
+  box-shadow: none;
+}
+.names-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.menu .link-btn.menu-back {
+  color: rgba(243, 234, 214, 0.85);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+@media (max-width: 640px) {
+  .mode-cards {
+    grid-template-columns: minmax(0, 340px);
+  }
+  .mode-card {
+    min-height: 0;
+  }
+}
+

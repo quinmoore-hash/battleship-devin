@@ -1,13 +1,13 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { FLEET_BY_ID, hasBeenShot, isSunk, uidClass, type Coord, type PlacedShip } from '../../engine'
+import { FLEET_BY_ID, hasBeenShot, isSunk, uidClass, type Coord, type PlacedShip, type Player } from '../../engine'
 import { useDirector } from '../../cinematics'
 import { usePerf } from '../../perf/store'
 import { BoardGrid } from '../../scene/BoardGrid'
 import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
 import { Fleet, Ship } from '../../ships'
-import { useGameStore } from '../../store/gameStore'
+import { isHotSeat, other, placementBoard, useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
 import { ShotMarkers } from '../../vfx/markers'
 import { Flotsam, placedShipSeed } from '../../vfx/sinking'
@@ -35,8 +35,17 @@ const LIFT = 0.45
 export function GameWorld() {
   const phase = useGameStore((s) => s.phase)
   const quality = useGameStore((s) => s.settings.quality)
+  // hot-seat curtain: nothing of either board is drawn while the laptop changes hands
+  const handoff = useGameStore((s) => s.handoff)
   // low = cheap ocean + low ship detail; medium = cheap ocean, full ships; high/auto = everything.
   const shipQuality = quality === 'low' ? 'low' : 'high'
+  if (handoff) {
+    return (
+      <group>
+        <ReadyProbe />
+      </group>
+    )
+  }
   return (
     <group>
       <ReadyProbe />
@@ -76,7 +85,9 @@ function ReadyProbe() {
 
 function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
   const placementLod = usePlacementLod()
-  const playerBoard = useGameStore((s) => s.playerBoard)
+  // hot-seat: the second captain musters the Navy fleet on the same near board
+  const playerBoard = useGameStore(placementBoard)
+  const livery = useGameStore((s) => (s.placing === 'enemy' ? 'navy' : 'pirate'))
   const removePlayerShip = useGameStore((s) => s.removePlayerShip)
   const placePlayerShip = useGameStore((s) => s.placePlayerShip)
   const hover = useUiStore((s) => s.hover)
@@ -120,7 +131,7 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
         return
       }
       if (s && h?.side === 'player') {
-        const f = footprintAt(useGameStore.getState().playerBoard, s, h.coord, o, grab)
+        const f = footprintAt(placementBoard(useGameStore.getState()), s, h.coord, o, grab)
         if (f.valid) {
           placePlayerShip(s, f.origin, o)
           setCarrying(null)
@@ -166,10 +177,10 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
       />
       {playerBoard.ships.map((ship) => (
         <group key={ship.uid} onPointerDown={(e) => pickUp(ship, e)} onPointerOver={() => (document.body.style.cursor = 'grab')} onPointerOut={() => (document.body.style.cursor = '')}>
-          <Fleet ships={[ship]} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={placementLod} />
+          <Fleet ships={[ship]} livery={livery} boardOrigin={PLAYER.origin} quality={quality} lod={placementLod} />
         </group>
       ))}
-      {spec && footprint && <Ghost id={spec.id} footprint={footprint} orientation={orientation} quality={quality} />}
+      {spec && footprint && <Ghost id={spec.id} footprint={footprint} orientation={orientation} quality={quality} livery={livery} />}
     </group>
   )
 }
@@ -179,10 +190,11 @@ interface GhostProps {
   footprint: ReturnType<typeof footprintAt>
   orientation: 'horizontal' | 'vertical'
   quality: 'low' | 'high'
+  livery?: 'pirate' | 'navy'
 }
 
 /** The carried ship, floating above the water with a tinted footprint showing whether it can be dropped. */
-function Ghost({ id, footprint, orientation, quality }: GhostProps) {
+function Ghost({ id, footprint, orientation, quality, livery = 'pirate' }: GhostProps) {
   const placementLod = usePlacementLod()
   const ref = useRef<THREE.Group>(null)
   const cells = footprint.cells
@@ -207,7 +219,7 @@ function Ghost({ id, footprint, orientation, quality }: GhostProps) {
   return (
     <group>
       <group ref={ref} position={[x, PLAYER.origin[1] + LIFT, z]} rotation-y={rotationY}>
-        <Ship id={id} livery="pirate" damage={Array.from({ length: spec.length }, () => 'intact' as const)} quality={quality} lod={placementLod} sails={0.4} />
+        <Ship id={id} livery={livery} damage={Array.from({ length: spec.length }, () => 'intact' as const)} quality={quality} lod={placementLod} sails={0.4} />
       </group>
       {cells.map((c) => {
         const p = cellToWorld(c, PLAYER.origin, PLAYER.cellSize)
@@ -222,6 +234,10 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const enemyBoard = useGameStore((s) => s.enemyBoard)
   const events = useGameStore((s) => s.events)
   const turn = useGameStore((s) => s.turn)
+  const hotSeat = useGameStore((s) => isHotSeat(s.players))
+  // whose side of the table we look from: always the pirates' in single player, the active captain's in hot-seat
+  const perspective: Player = useGameStore((s) => s.perspective)
+  const foeSide = other(perspective)
   const hover = useUiStore((s) => s.hover)
   const pending = useUiStore((s) => s.pendingTarget)
   const setHover = useUiStore((s) => s.setHover)
@@ -237,8 +253,8 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const inFlight: PendingShot | null = active?.event.type === 'shot' && !impacted ? { by: active.event.by, target: active.event.target } : null
   const pendingKey = inFlight ? `${inFlight.by}:${inFlight.target.x},${inFlight.target.y}` : ''
   /* eslint-disable react-hooks/exhaustive-deps -- pendingKey stands in for the pending object */
-  const myShots = useMemo(() => visibleShots(events, 'human', inFlight), [events, pendingKey])
-  const theirShots = useMemo(() => visibleShots(events, 'enemy', inFlight), [events, pendingKey])
+  const humanShots = useMemo(() => visibleShots(events, 'human', inFlight), [events, pendingKey])
+  const enemyShots = useMemo(() => visibleShots(events, 'enemy', inFlight), [events, pendingKey])
   const playerShips = useMemo(() => maskPendingHit(playerBoard.ships, inFlight?.by === 'enemy' ? inFlight.target : null), [playerBoard, pendingKey])
   const enemyShips = useMemo(() => maskPendingHit(enemyBoard.ships, inFlight?.by === 'human' ? inFlight.target : null), [enemyBoard, pendingKey])
   /* eslint-enable react-hooks/exhaustive-deps */
@@ -246,24 +262,32 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   // player's man-o'-war does not go under when the enemy's does (BUG-361)
   const playerSink = useMemo(() => sinkFor(playerShips, sinkProgress), [playerShips, sinkProgress])
   const enemySink = useMemo(() => sinkFor(enemyShips, sinkProgress), [enemyShips, sinkProgress])
-  const sunkEnemy = useMemo(() => enemyShips.filter(isSunk), [enemyShips])
   const playerWrecks = useMemo(() => settledWrecks(playerShips, sinkProgress), [playerShips, sinkProgress])
   const enemyWrecks = useMemo(() => settledWrecks(enemyShips, sinkProgress), [enemyShips, sinkProgress])
+  // each side's un-sunk ships are hidden from the other: only the perspective's own fleet is revealed (all at game over)
+  const ownSide = {
+    human: { ships: playerShips, origin: PLAYER.origin, livery: 'pirate' as const, sink: playerSink, wrecks: playerWrecks, shotsOnIt: enemyShots, rope: PLAYER_ROPE },
+    enemy: { ships: enemyShips, origin: ENEMY.origin, livery: 'navy' as const, sink: enemySink, wrecks: enemyWrecks, shotsOnIt: humanShots, rope: ENEMY_ROPE },
+  }
+  const own = ownSide[perspective]
+  const foe = ownSide[foeSide]
+  const sunkFoe = useMemo(() => foe.ships.filter(isSunk), [foe.ships])
+  const foeBoard = perspective === 'human' ? enemyBoard : playerBoard
   // distance LOD, capped by the perf tier (medium shows at most one lod-0 ship per board unless the camera is close)
   const lod = perf.lod === 2 ? 2 : 'auto'
-  const canAim = !over && turn === 'human' && !busy
+  const canAim = !over && turn === perspective && (hotSeat || turn === 'human') && !busy
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
-  const targetShot = target ? hasBeenShot(enemyBoard, target) : false
+  const targetShot = target ? hasBeenShot(foeBoard, target) : false
 
   useEffect(() => () => void (document.body.style.cursor = ''), [])
 
   return (
     <group>
-      <BoardGrid origin={PLAYER.origin} color={PLAYER_ROPE} labels />
+      <BoardGrid origin={own.origin} color={own.rope} labels={perspective === 'human' ? true : 'far'} />
       <BoardGrid
-        origin={ENEMY.origin}
-        color={ENEMY_ROPE}
-        labels="far"
+        origin={foe.origin}
+        color={foe.rope}
+        labels={perspective === 'human' ? 'far' : true}
         highlight={canAim ? target : null}
         highlightColor={targetShot ? '#8a8a8a' : pending ? '#ffcc33' : '#e2473b'}
         onCellPointerMove={(c) => {
@@ -271,18 +295,18 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
           document.body.style.cursor = c && canAim ? 'crosshair' : ''
         }}
         onCellClick={(c: Coord) => {
-          if (canAim && !hasBeenShot(enemyBoard, c)) requestFire(c, lastPointerType)
+          if (canAim && !hasBeenShot(foeBoard, c)) requestFire(c, lastPointerType)
         }}
       />
-      <Fleet ships={playerShips} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={lod} firing={firing} sinkProgress={playerSink} />
-      <Fleet ships={enemyShips} livery="navy" revealed={over} boardOrigin={ENEMY.origin} quality={quality} lod={lod} firing={firing} sinkProgress={enemySink} />
-      <ShotMarkers shots={theirShots} boardOrigin={PLAYER.origin} fires={false} />
-      <ShotMarkers shots={myShots} boardOrigin={ENEMY.origin} fires={!over} />
+      <Fleet ships={own.ships} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={lod} firing={firing} sinkProgress={own.sink} />
+      <Fleet ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} quality={quality} lod={lod} firing={firing} sinkProgress={foe.sink} />
+      <ShotMarkers shots={own.shotsOnIt} boardOrigin={own.origin} fires={false} />
+      <ShotMarkers shots={foe.shotsOnIt} boardOrigin={foe.origin} fires={!over} />
       {/* permanent light slots: fires + muzzle/impact flashes borrow these so the scene's light count never changes (no shader recompiles mid-battle) */}
       <FireLights />
       <FlashLights />
-      <DamageLayer ships={playerShips} boardOrigin={PLAYER.origin} fires smoke breachSide="both" />
-      <DamageLayer ships={over ? enemyShips : sunkEnemy} boardOrigin={ENEMY.origin} fires={false} smoke breachSide={null} />
+      <DamageLayer ships={own.ships} boardOrigin={own.origin} fires smoke breachSide="both" />
+      <DamageLayer ships={over ? foe.ships : sunkFoe} boardOrigin={foe.origin} fires={false} smoke breachSide={null} />
       {playerWrecks.map((s) => (
         <Flotsam key={`p-${s.uid}`} cells={s.cells} boardOrigin={PLAYER.origin} seed={placedShipSeed(s)} livery="pirate" />
       ))}

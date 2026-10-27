@@ -2,7 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import { Component, useEffect, useMemo, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/gameStore'
-import { CameraRig, type CameraView } from './CameraRig'
+import { CameraRig, isBattleView, type CameraView } from './CameraRig'
 import { lazy, Suspense } from 'react'
 
 // post-processing is only used on the high tier, so its 80 kB gzip chunk loads on demand
@@ -30,7 +30,7 @@ if (typeof window !== 'undefined' && !THREE.getConsoleFunction()) {
 }
 
 export { BoardGrid, type BoardGridProps } from './BoardGrid'
-export { CameraRig, CAMERA_SHOTS, type CameraRigProps, type CameraView } from './CameraRig'
+export { CameraRig, CAMERA_SHOTS, isBattleView, type CameraRigProps, type CameraView } from './CameraRig'
 export {
   BOARD_LAYOUT,
   boardBounds,
@@ -151,7 +151,11 @@ function SceneContents({
 }: Required<Pick<OceanSceneProps, 'quality' | 'timeOfDay' | 'dressing' | 'weather'>> & Pick<OceanSceneProps, 'children' | 'view' | 'interactive' | 'cameraOverride' | 'onLightning'>) {
   const perf = usePerf()
   const phase = useGameStore((s) => s.phase)
-  const activeView = view ?? PHASE_VIEW[phase] ?? 'menu'
+  // hot-seat: the curtain shows open sea only; the second captain's battle is filmed from the far side
+  const handoff = useGameStore((s) => s.handoff)
+  const perspective = useGameStore((s) => s.perspective)
+  const phaseView: CameraView = handoff ? 'handoff' : phase === 'battle' && perspective === 'enemy' ? 'battle-far' : (PHASE_VIEW[phase] ?? 'menu')
+  const activeView = view ?? phaseView
   const atmosphere = useMemo(() => computeAtmosphere(timeOfDay, weather), [timeOfDay, weather])
   useEffect(() => setLanternGlow(atmosphere.lanternGlow), [atmosphere])
   const lightning = useLightning(atmosphere.lightning ? atmosphere.storm : 0, onLightning)
@@ -167,7 +171,7 @@ function SceneContents({
       <ShipBakery />
       {dressing && <BayDressing atmosphere={atmosphere} quality={quality} />}
       <Rain storm={atmosphere.rain} quality={quality} />
-      <CameraRig view={activeView} interactive={interactive ?? activeView === 'battle'} override={cameraOverride} />
+      <CameraRig view={activeView} interactive={interactive ?? isBattleView(activeView)} override={cameraOverride} />
       {children}
       {perf.postprocessing && quality !== 'low' && (
         <Suspense fallback={null}>

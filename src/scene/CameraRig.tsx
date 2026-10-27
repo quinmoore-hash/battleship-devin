@@ -5,7 +5,8 @@ import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { BOARD_LAYOUT, boardCenter } from './layout'
 
-export type CameraView = 'menu' | 'placement' | 'battle' | 'gameover'
+/** `battle-far` = the battle shot mirrored to the far (Navy) side for the second hot-seat captain; `handoff` = sky and open sea only, no board in frame. */
+export type CameraView = 'menu' | 'placement' | 'battle' | 'battle-far' | 'gameover' | 'handoff'
 
 const playerCenter = boardCenter(BOARD_LAYOUT.player)
 const enemyCenter = boardCenter(BOARD_LAYOUT.enemy)
@@ -35,12 +36,25 @@ export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target:
     target: new THREE.Vector3(0, 0.3, midZ - 5),
     fov: 42,
   },
+  'battle-far': {
+    // the battle shot mirrored across midZ; target/fov come from battleFraming(…, 'battle-far') per viewport
+    position: new THREE.Vector3(0, 16.5, enemyCenter[2] - 21.5),
+    target: new THREE.Vector3(0, 0.3, midZ + 5),
+    fov: 42,
+  },
   gameover: {
     position: new THREE.Vector3(-21, 6, enemyCenter[2] + 17),
     target: new THREE.Vector3(2, 1.2, enemyCenter[2] + 1),
     fov: 40,
   },
+  handoff: {
+    position: new THREE.Vector3(-4, 4.5, midZ),
+    target: new THREE.Vector3(120, 14, midZ + 20),
+    fov: 46,
+  },
 }
+
+export const isBattleView = (view: CameraView): boolean => view === 'battle' || view === 'battle-far'
 
 const MENU_ORBIT = { radius: 36, height: 11, speed: 0.045 }
 
@@ -51,6 +65,8 @@ function hudSidePx(width: number): number {
 /** Half-width of the player board including its row labels, and the z of its near label row. */
 const NEAR_HALF_WIDTH = 6.2
 const NEAR_LABEL_Z = playerCenter[2] + 5.7
+/** The same for the far (Navy) board seen from `battle-far`. */
+const FAR_LABEL_Z = enemyCenter[2] - 5.7
 
 /**
  * Battle overview framing for a viewport (BUG-530): the camera position is fixed, the vertical fov is the
@@ -58,9 +74,11 @@ const NEAR_LABEL_Z = playerCenter[2] + 5.7
  * row at ~92% of the half-height so the whole player board stays on screen. `fov` is the landscape design
  * value — callers run it through `fitFov` like every other shot.
  */
-export function battleFraming(aspect: number, width: number, out: { target: THREE.Vector3; fov: number }) {
-  const pos = CAMERA_SHOTS.battle.position
-  const dNear = pos.z - NEAR_LABEL_Z
+export function battleFraming(aspect: number, width: number, out: { target: THREE.Vector3; fov: number }, view: 'battle' | 'battle-far' = 'battle') {
+  const pos = CAMERA_SHOTS[view].position
+  // `battle-far` films the second captain's (far) board from beyond it, looking +z: the geometry is the mirror image
+  const dir = view === 'battle' ? 1 : -1
+  const dNear = dir * (pos.z - (view === 'battle' ? NEAR_LABEL_Z : FAR_LABEL_Z))
   const slant = Math.hypot(dNear, pos.y)
   let design = 46
   if (aspect >= 1) {
@@ -70,7 +88,7 @@ export function battleFraming(aspect: number, width: number, out: { target: THRE
   }
   const half = THREE.MathUtils.degToRad(fitFov(design, aspect) / 2)
   const centre = Math.atan(pos.y / dNear) - 0.88 * half
-  out.target.set(0, 0.3, pos.z - (pos.y - 0.3) / Math.tan(centre))
+  out.target.set(0, 0.3, pos.z - dir * ((pos.y - 0.3) / Math.tan(centre)))
   out.fov = design
   return out
 }
@@ -92,7 +110,7 @@ export interface CameraRigProps {
  * view change mid-flight simply re-targets. In battle the player may orbit and zoom within
  * limits once the camera has arrived; polar angle is clamped so you can never see under the water.
  */
-export function CameraRig({ view, interactive = view === 'battle', override = false }: CameraRigProps) {
+export function CameraRig({ view, interactive = isBattleView(view), override = false }: CameraRigProps) {
   const get = useThree((s) => s.get)
   const controls = useRef<OrbitControlsImpl>(null)
   const target = useRef(new THREE.Vector3().copy(CAMERA_SHOTS[view].target))
@@ -128,7 +146,7 @@ export function CameraRig({ view, interactive = view === 'battle', override = fa
     const dt = Math.min(delta, 0.1)
     const camera = state.camera as THREE.PerspectiveCamera
     const shot = CAMERA_SHOTS[view]
-    const aim = view === 'battle' ? battleFraming(camera.aspect, state.size.width, framing.current) : shot
+    const aim = view === 'battle' || view === 'battle-far' ? battleFraming(camera.aspect, state.size.width, framing.current, view) : shot
     const wanted = tmpPos.current
     if (view === 'menu') {
       const a = state.clock.elapsedTime * MENU_ORBIT.speed

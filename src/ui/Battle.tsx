@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { useDirector } from '../cinematics'
 import { broadsideCells, coordKey, coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, sameCoord, viewGrid, type Coord, type Orientation, type Player, type ShotResult } from '../engine'
-import { treasureFound, useGameStore } from '../store/gameStore'
+import { isHotSeat, other, treasureFound, useGameStore } from '../store/gameStore'
 import { SKIP_CINEMATIC_EVENT } from '../perf/a11y/A11yBootstrap'
 import { useBattleController } from './battleController'
 import { FleetStatus } from './FleetStatus'
@@ -17,9 +17,13 @@ import { isCoarsePointer, useUiStore } from './uiStore'
 const outcomeWord = (r: ShotResult) => (r.outcome === 'sunk' ? `sunk the ${r.shipId ? FLEET_BY_ID[r.shipId].name : 'ship'}!` : r.outcome === 'hit' ? 'a hit!' : 'a miss.')
 
 /** Status / announcer line for one shot. A shot lost in the storm says so plainly, or players read it as a bug. */
-const shotLine = (by: Player, r: ShotResult): string => {
-  if (r.outcome === 'lost') return by === 'human' ? `Lost in the storm — fire again at ${coordLabel(r.coord)}` : 'Enemy shot lost in the storm'
-  return `${by === 'human' ? 'You' : 'The enemy'} fired at ${coordLabel(r.coord)}: ${outcomeWord(r)}`
+const shotLine = (by: Player, r: ShotResult, who: (side: Player) => string = (side) => (side === 'human' ? 'You' : 'The enemy'), hotSeat = false): string => {
+  if (r.outcome === 'lost') {
+    // hot-seat: the deck passes after a lost shot too, so name the captain instead of "fire again"
+    if (hotSeat) return `${who(by)}'s shot at ${coordLabel(r.coord)} was lost in the storm`
+    return by === 'human' ? `Lost in the storm — fire again at ${coordLabel(r.coord)}` : 'Enemy shot lost in the storm'
+  }
+  return `${who(by)} fired at ${coordLabel(r.coord)}: ${outcomeWord(r)}`
 }
 
 export function BattleScreen() {
@@ -38,6 +42,17 @@ export function BattleScreen() {
   const [spyNote, setSpyNote] = useState<string | null>(null)
   const reset = useGameStore((s) => s.reset)
   const startGame = useGameStore((s) => s.startGame)
+  // hot-seat ("Two captains"): the HUD shows the active captain's side; the curtain (`handoff`) hides both charts
+  const players = useGameStore((s) => s.players)
+  const hotSeat = isHotSeat(players)
+  const perspective = useGameStore((s) => s.perspective)
+  const handoff = useGameStore((s) => s.handoff)
+  const foeSide = other(perspective)
+  const me = hotSeat ? players[perspective].name : 'You'
+  const foeName = hotSeat ? players[foeSide].name : 'The enemy'
+  const turnWord = hotSeat ? `${me}'s turn` : 'Your turn'
+  const ownBoard = perspective === 'human' ? playerBoard : enemyBoard
+  const foeBoard = perspective === 'human' ? enemyBoard : playerBoard
 
   const start = useBattleController((s) => s.start)
   const stop = useBattleController((s) => s.stop)
@@ -83,7 +98,7 @@ export function BattleScreen() {
       }
       if (!blackFlag || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement | null)?.closest('input, textarea')) return
       const k = e.key.toLowerCase()
-      const power = useGameStore.getState().powerShots.human
+      const power = useGameStore.getState().powerShots[perspective]
       if (k === 'b' && power.broadside) setArmed((a) => (a === 'broadside' ? 'shot' : 'broadside'))
       if (k === 'g' && power.spyglass) setArmed((a) => (a === 'spyglass' ? 'shot' : 'spyglass'))
       if (k === 'r') setBroadsideDir((o) => (o === 'horizontal' ? 'vertical' : 'horizontal'))
@@ -95,9 +110,9 @@ export function BattleScreen() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener(SKIP_CINEMATIC_EVENT, onSkipEvent)
     }
-  }, [busy, skip, setPendingTarget, blackFlag])
+  }, [busy, skip, setPendingTarget, blackFlag, perspective])
 
-  const yourTurn = turn === 'human' && !busy
+  const yourTurn = turn === perspective && (hotSeat || turn === 'human') && !busy && !handoff
   // while the director plays, the side panels step back so the cannonball / sinking is not hidden behind parchment
   const cinematic = useDirector((s) => s.busy)
   const active = useDirector((s) => s.active)
@@ -115,19 +130,26 @@ export function BattleScreen() {
               ? 'human'
               : 'enemy'
             : null
+  const nameOf = (side: 'human' | 'enemy') => players[side].name
   const turnLabel = yourTurn
-    ? 'Your turn'
+    ? hotSeat
+      ? `${me}'s turn`
+      : 'Your turn'
     : beat.phase === 'intro'
       ? 'Battle stations'
-      : sideInPlay === 'human'
-        ? 'Your broadside'
-        : sideInPlay === 'enemy'
-          ? 'Enemy turn'
-          : beat.phase === 'victory'
-            ? 'Battle over'
-            : turn === 'human'
-              ? 'Reloading'
-              : 'Enemy turn'
+      : beat.phase === 'handoff' || handoff
+        ? 'Change of watch'
+        : hotSeat && sideInPlay
+          ? `${nameOf(sideInPlay)}'s broadside`
+          : sideInPlay === 'human'
+            ? 'Your broadside'
+            : sideInPlay === 'enemy'
+              ? 'Enemy turn'
+              : beat.phase === 'victory'
+                ? 'Battle over'
+                : turn === 'human'
+                  ? 'Reloading'
+                  : 'Enemy turn'
   const touch = isCoarsePointer()
 
   // first-play hint: gone after the first shot or ~12 s, not pinned over the action for the whole game (BUG-307)
@@ -138,45 +160,48 @@ export function BattleScreen() {
     const t = setTimeout(() => dismissHint('battle'), 12_000)
     return () => clearTimeout(t)
   }, [battleHintSeen, events.length, dismissHint])
-  const enemyCells = useMemo(() => viewGrid(enemyView(enemyBoard)), [enemyBoard])
-  const playerView = useMemo(() => viewGrid(enemyView(playerBoard), playerBoard), [playerBoard])
-  const ownCells = useMemo(() => new Set(playerBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [playerBoard])
+  const enemyCells = useMemo(() => viewGrid(enemyView(foeBoard)), [foeBoard])
+  const playerView = useMemo(() => viewGrid(enemyView(ownBoard), ownBoard), [ownBoard])
+  const ownCells = useMemo(() => new Set(ownBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [ownBoard])
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt, tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const chestsBy = (by: 'human' | 'enemy') => new Set(events.filter((e) => e.kind === 'treasure' && e.by === by).map((e) => coordKey(e.result.coord)))
-  const treasureCells = useMemo(() => chestsBy('human'), [events]) // eslint-disable-line react-hooks/exhaustive-deps
-  const enemyChests = useMemo(() => chestsBy('enemy'), [events]) // eslint-disable-line react-hooks/exhaustive-deps
-  const spiedByMe = useMemo(() => new Map(spied.human.map((m) => [coordKey(m.coord), m.ship])), [spied])
-  const treasureFoundByMe = treasureFound(events, 'human')
+  const treasureCells = useMemo(() => chestsBy(perspective), [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  const enemyChests = useMemo(() => chestsBy(foeSide), [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  const spiedByMe = useMemo(() => new Map(spied[perspective].map((m) => [coordKey(m.coord), m.ship])), [spied])
+  const treasureFoundByMe = treasureFound(events, perspective)
   const lastEvent = events[events.length - 1]
-  const treasureAgain = yourTurn && lastEvent?.by === 'human' && lastEvent.kind === 'treasure'
+  const treasureAgain = yourTurn && lastEvent?.by === perspective && lastEvent.kind === 'treasure'
+  const who = (side: 'human' | 'enemy') => (hotSeat ? nameOf(side) : side === 'human' ? 'You' : 'The enemy')
   const statusText = yourTurn
     ? treasureAgain
-      ? `Your turn — treasure at ${coordLabel(lastEvent.result.coord)}, fire again!`
+      ? `${turnWord} — treasure at ${coordLabel(lastEvent.result.coord)}, fire again!`
       : spyNote
-        ? `Your turn — ${spyNote}`
+        ? `${turnWord} — ${spyNote}`
         : armed === 'broadside'
-          ? `Your turn — Broadside armed, pick the centre cell (${broadsideDir === 'horizontal' ? 'row' : 'column'}, R rotates)`
+          ? `${turnWord} — Broadside armed, pick the centre cell (${broadsideDir === 'horizontal' ? 'row' : 'column'}, R rotates)`
           : armed === 'spyglass'
-            ? 'Your turn — Spyglass armed, pick a cell to look at'
-            : 'Your turn — fire at the enemy waters'
+            ? `${turnWord} — Spyglass armed, pick a cell to look at`
+            : hotSeat ? `${me}'s turn — fire at ${foeName}'s waters` : 'Your turn — fire at the enemy waters'
     : beat.phase === 'intro'
       ? 'Battle stations! The fleets take position…'
-      : beat.phase === 'enemy-aiming'
-      ? 'The enemy is aiming…'
-      : beat.phase === 'player-shot' || beat.phase === 'player-sink'
-        ? shotLine('human', beat.result!)
-        : beat.phase === 'enemy-shot' || beat.phase === 'enemy-sink'
-          ? shotLine('enemy', beat.result!)
-          : last
-            ? shotLine(last.by, last.result)
-            : 'Firing…'
+      : beat.phase === 'handoff' || handoff
+        ? `Pass the deck to ${nameOf(handoff ?? foeSide)}`
+        : beat.phase === 'enemy-aiming'
+          ? 'The enemy is aiming…'
+          : beat.phase === 'player-shot' || beat.phase === 'player-sink'
+            ? shotLine('human', beat.result!, who, hotSeat)
+            : beat.phase === 'enemy-shot' || beat.phase === 'enemy-sink'
+              ? shotLine('enemy', beat.result!, who, hotSeat)
+              : last
+                ? shotLine(last.by, last.result, who, hotSeat)
+                : 'Firing…'
 
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
   const enemyCell = (c: Coord): GridCellInfo => {
     const state = enemyCells[c.y][c.x]
     const key = coordKey(c)
-    const aimed = target && (armed === 'broadside' ? broadsideCells(target, broadsideDir, enemyBoard.size).some((b) => sameCoord(b, c)) : target.x === c.x && target.y === c.y)
+    const aimed = target && (armed === 'broadside' ? broadsideCells(target, broadsideDir, foeBoard.size).some((b) => sameCoord(b, c)) : target.x === c.x && target.y === c.y)
     const seen = spiedByMe.get(key)
     const chest = treasureCells.has(key)
     const extra = chest ? ' cell-treasure' : seen === undefined ? '' : seen ? ' cell-spied cell-spied-ship' : ' cell-spied cell-spied-water'
@@ -196,8 +221,8 @@ export function BattleScreen() {
   const onEnemyCell = (c: Coord) => {
     if (!yourTurn) return
     if (armed === 'spyglass') {
-      if (hasBeenShot(enemyBoard, c)) return playSfx('miss')
-      const seen = spyAt(c)
+      if (hasBeenShot(foeBoard, c)) return playSfx('miss')
+      const seen = spyAt(c, perspective)
       if (!seen) return playSfx('miss')
       playSfx('ui-click')
       setSpyNote(`Spyglass ${coordLabel(c)} — ${seen === 'ship' ? 'a ship!' : 'open water.'}`)
@@ -206,17 +231,20 @@ export function BattleScreen() {
     }
     setSpyNote(null)
     if (armed === 'broadside') {
-      if (!broadsideCells(c, broadsideDir, enemyBoard.size).some((b) => !hasBeenShot(enemyBoard, b))) return playSfx('miss')
+      if (!broadsideCells(c, broadsideDir, foeBoard.size).some((b) => !hasBeenShot(foeBoard, b))) return playSfx('miss')
       setArmed('shot')
       void fire(c, { kind: 'broadside', orientation: broadsideDir })
       return
     }
-    if (hasBeenShot(enemyBoard, c)) return playSfx('miss')
+    if (hasBeenShot(foeBoard, c)) return playSfx('miss')
     void fire(c)
   }
 
+  // the curtain is up: nothing of either chart stays in the DOM (the HUD root stays mounted so the turn flow survives)
+  if (handoff) return <div className="battle hud" data-testid="battle" data-handoff={handoff} data-cinematic="false" aria-hidden />
+
   return (
-    <div className="battle hud" data-testid="battle" data-cinematic={cinematic ? 'true' : 'false'}>
+    <div className="battle hud" data-testid="battle" data-cinematic={cinematic ? 'true' : 'false'} data-perspective={perspective}>
       <header className="battle-top">
         <div className={`panel parchment status-panel ${yourTurn ? 'is-yours' : 'is-theirs'}`}>
           <CompassRose size={64} heading={yourTurn || sideInPlay === 'human' ? 0 : beat.phase === 'enemy-aiming' ? 170 : 180} />
@@ -228,7 +256,7 @@ export function BattleScreen() {
               {statusText}
             </p>
             <span className="sr-only" aria-live="assertive" data-testid="shot-announcer">
-              {last ? shotLine(last.by, last.result) : ''}
+              {last ? shotLine(last.by, last.result, who, hotSeat) : ''}
             </span>
             {busy && cinematics !== 'off' && (
               <button type="button" className="link-btn skip-hint" data-testid="skip-cinematic" onClick={skip}>
@@ -237,7 +265,7 @@ export function BattleScreen() {
             )}
           </div>
           <div className="status-meta">
-            <span>{difficulty}</span>
+            <span>{hotSeat ? 'two captains' : difficulty}</span>
             <span data-testid="battle-clock">{formatDuration(report.seconds)}</span>
             <span>{report.accuracy}% acc.</span>
           </div>
@@ -254,20 +282,20 @@ export function BattleScreen() {
 
       <div className="battle-body">
         <aside className="panel parchment side-panel side-left ink-in">
-          <FleetStatus board={playerBoard} side="player" title="Your fleet" fleet={fleets.human} />
-          <FleetStatus board={enemyBoard} side="enemy" title="Enemy fleet" fleet={fleets.enemy} />
+          <FleetStatus board={ownBoard} side="player" title={hotSeat ? `${me}'s fleet` : 'Your fleet'} fleet={fleets[perspective]} />
+          <FleetStatus board={foeBoard} side="enemy" title={hotSeat ? `${foeName}'s fleet` : 'Enemy fleet'} fleet={fleets[foeSide]} />
         </aside>
 
         <section className="charts">
           <div className="panel parchment chart-panel chart-enemy" aria-label="Enemy waters">
-            <h2 className="panel-title small-title">
-              Enemy waters <span className="spyglass" aria-hidden>◎</span>
+            <h2 className="panel-title small-title" data-testid="enemy-waters-title">
+              {hotSeat ? `${foeName}'s waters` : 'Enemy waters'} <span className="spyglass" aria-hidden>◎</span>
               <span className="target-readout">{target && yourTurn ? `Target ${coordLabel(target)}` : '—'}</span>
             </h2>
             <Grid testId="enemy-grid" label="Enemy waters — fire" cell={enemyCell} onCell={onEnemyCell} onHover={(c) => setHover(c ? { side: 'enemy', coord: c } : null)} disabled={!yourTurn} lockResolved />
             {blackFlag && (
               <PowerShots
-                power={powerShots.human}
+                power={powerShots[perspective]}
                 armed={armed}
                 orientation={broadsideDir}
                 treasure={treasureFoundByMe}
@@ -289,19 +317,22 @@ export function BattleScreen() {
             )}
           </div>
           <div className="panel parchment chart-panel chart-player" aria-label="Your waters">
-            <h2 className="panel-title small-title">Your waters</h2>
+            <h2 className="panel-title small-title" data-testid="your-waters-title">
+              {hotSeat ? `${me}'s waters` : 'Your waters'}
+            </h2>
             <Grid testId="player-grid" label="Your waters" cell={playerCell} disabled />
           </div>
         </section>
 
         <aside className="panel parchment side-panel side-right ink-in">
           <h2 className="panel-title small-title">Captain's log</h2>
-          <ShotLog events={events} />
+          <ShotLog events={events} names={hotSeat ? { human: players.human.name, enemy: players.enemy.name } : undefined} />
         </aside>
       </div>
 
       <Hint id="battle" seen={hintsSeen.includes('battle')} onDismiss={dismissHint}>
-        {touch ? 'Tap the enemy waters to aim your spyglass, tap again to fire.' : 'Hover the enemy waters to aim your spyglass, click to fire.'} The enemy fleet stays hidden until a ship goes down.
+        {touch ? 'Tap the enemy waters to aim your spyglass, tap again to fire.' : 'Hover the enemy waters to aim your spyglass, click to fire.'}{' '}
+        {hotSeat ? 'After every broadside the deck passes to the other captain — nobody peeks.' : 'The enemy fleet stays hidden until a ship goes down.'}
       </Hint>
 
       {quitting && (

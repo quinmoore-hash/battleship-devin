@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { startSinglePlayer } from './helpers'
 
 test('settings expose cinematics, quality, mute and colorblind markers and persist them', async ({ page }) => {
   await page.goto('/?no3d')
@@ -19,7 +20,7 @@ test('settings expose cinematics, quality, mute and colorblind markers and persi
 
 test('battle HUD: compass status, captain’s log, restart, skip hint and quit confirm', async ({ page }) => {
   await page.goto('/?no3d')
-  await page.getByTestId('difficulty-easy').click()
+  await startSinglePlayer(page, 'easy')
   await expect(page.getByTestId('hint-placement')).toBeVisible()
   await page.getByTestId('hint-placement').getByRole('button').click()
   await expect(page.getByTestId('hint-placement')).toHaveCount(0)
@@ -54,7 +55,7 @@ test('game over report has time, rank, and dispatches replay / photo events for 
   await page.getByTestId('open-settings').click()
   await page.getByTestId('setting-cinematics-off').click()
   await page.getByTestId('settings-close').click()
-  await page.getByTestId('difficulty-easy').click()
+  await startSinglePlayer(page, 'easy')
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
   const grid = page.getByTestId('enemy-grid')
@@ -89,7 +90,7 @@ test('touch targeting on the HTML chart stays one-tap; the 3D confirm button app
   const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })
   const page = await ctx.newPage()
   await page.goto('/?no3d')
-  await page.getByTestId('difficulty-easy').click()
+  await startSinglePlayer(page, 'easy')
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
   await expect(page.getByTestId('fire-confirm')).toHaveCount(0)

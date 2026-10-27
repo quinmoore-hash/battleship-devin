@@ -14,7 +14,7 @@ import { useGameStore } from '../store/gameStore'
 import { usePerf } from '../perf'
 import { Battlefield } from './Battlefield'
 import { createOverlayStore, useOverlay, useWindowEvent } from './overlay'
-import { REPLAY_SPEEDS, battlefieldLod, buildFrames, clampStep, describeEvent, shotCounts, snapshotFromState, stepIntervalMs, type ReplaySnapshot, type ReplaySpeed } from './replayModel'
+import { REPLAY_SPEEDS, battlefieldLod, buildFrames, clampStep, describeEvent, shotCounts, snapshotFromState, stepIntervalMs, type ReplaySnapshot, type ReplaySpeed, sideNames } from './replayModel'
 import './extras.css'
 
 export const REPLAY_EVENT = 'battleship:replay'
@@ -109,7 +109,9 @@ export function ReplayPlayer({ snapshot, onClose, autoPlay = true, initialSpeed 
   const lod = battlefieldLod('replay', perf.lod, q)
   const event = step > 0 ? snapshot.events[step - 1] : null
   const counts = shotCounts(snapshot.events, step)
-  const outcome = snapshot.winner === 'human' ? 'Victory' : snapshot.winner === 'enemy' ? 'Defeat' : 'Unfinished'
+  const names = sideNames(snapshot.players)
+  const hotSeat = names.human !== 'You'
+  const outcome = hotSeat && snapshot.winner ? `${names[snapshot.winner]} wins` : snapshot.winner === 'human' ? 'Victory' : snapshot.winner === 'enemy' ? 'Defeat' : 'Unfinished'
 
   return (
     <div className="xt-overlay" data-testid="replay-player" data-step={step} data-total={total} data-playing={playing}>
@@ -133,10 +135,10 @@ export function ReplayPlayer({ snapshot, onClose, autoPlay = true, initialSpeed 
 
       <section className="xt-panel xt-replay-controls" aria-label="Replay controls">
         <p className="xt-caption" data-testid="replay-caption" aria-live="polite">
-          {event ? describeEvent(event) : 'Fleets in position — press play'}
+          {event ? describeEvent(event, snapshot.players) : 'Fleets in position — press play'}
           <span className="xt-muted">
             {' '}
-            · you {counts.human} · Devin {counts.enemy}
+            · {names.human === 'You' ? 'you' : names.human} {counts.human} · {names.enemy} {counts.enemy}
           </span>
         </p>
         <div className="xt-transport">

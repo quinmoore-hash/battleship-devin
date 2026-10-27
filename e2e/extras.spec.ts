@@ -1,14 +1,19 @@
 import { expect, test } from '@playwright/test'
+import { startSinglePlayer } from './helpers'
 
 // Extras flows run with the 3D scene disabled (see smoke.spec.ts); the 3D replay/photo canvases are covered by scene.spec.ts-style checks in the recording.
 test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, replay and photo open from game over', async ({ page }) => {
   test.setTimeout(240_000) // a stormy game re-fires ~30% of its shots, so it is longer than a classic one (BUG-309)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/?no3d')
-  await expect(page.getByTestId('extras-menu')).toBeVisible()
+  await expect(page.getByTestId('extras-menu-stats')).toBeVisible()
   await expect(page.getByTestId('stats-panel')).toContainText('No battles yet')
+  // the Rules of engagement dock is menu step 2
+  await page.getByTestId('mode-single').click()
+  await expect(page.getByTestId('extras-menu')).toBeVisible()
   await page.getByTestId('mode-salvo').check()
   await page.getByTestId('mode-storm').check()
+  await page.getByTestId('rules-next').click()
   await page.getByTestId('difficulty-easy').click()
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
@@ -76,9 +81,11 @@ test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, repla
 
   await page.getByTestId('play-again').click()
   await expect(page.getByTestId('stats-panel')).toContainText('1 / 1')
-  // BUG-320: the modes survive "Menu"
+  // BUG-320: the modes survive "Menu" (the rules dock is menu step 2)
+  await page.getByTestId('mode-single').click()
   await expect(page.getByTestId('mode-salvo')).toBeChecked()
   await expect(page.getByTestId('mode-storm')).toBeChecked()
+  await page.getByTestId('menu-back').click()
   // "Clear log" asks in-app first, then wipes battleship-devin.stats (BUG-321)
   await page.getByTestId('stats-clear').click()
   await page.getByTestId('stats-clear-no').click()
@@ -92,7 +99,7 @@ test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, repla
 test('classic game keeps one shot per turn with both modes off', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/?no3d')
-  await page.getByTestId('difficulty-easy').click()
+  await startSinglePlayer(page, 'easy')
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
   await expect(page.getByTestId('battle')).toBeVisible()

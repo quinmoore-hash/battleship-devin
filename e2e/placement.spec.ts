@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
+import { startSinglePlayer } from './helpers'
 
 test('a ship can be placed manually, rotated, picked back up and re-placed', async ({ page }) => {
   await page.goto('/?no3d')
-  await page.getByTestId('difficulty-medium').click()
+  await startSinglePlayer(page, 'medium')
   await expect(page.getByTestId('placement')).toBeVisible()
 
   // Kelp Carrier (5) is pre-selected; hovering previews a horizontal footprint.
@@ -64,7 +65,7 @@ test('settings and how-to-play modals open from the menu and the corner nav', as
   await page.getByTestId('settings-close').click()
   await expect(page.getByTestId('ui-root')).toHaveAttribute('data-reduced-motion', 'true')
 
-  await page.getByTestId('difficulty-easy').click()
+  await startSinglePlayer(page, 'easy')
   await page.getByTestId('nav-settings').click()
   await expect(page.getByTestId('settings')).toBeVisible()
 })
@@ -72,7 +73,7 @@ test('settings and how-to-play modals open from the menu and the corner nav', as
 test('mobile layout (375px) keeps the whole flow usable', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 740 })
   await page.goto('/?no3d')
-  await page.getByTestId('difficulty-easy').click()
+  await startSinglePlayer(page, 'easy')
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
   await expect(page.getByTestId('battle')).toBeVisible()
