@@ -63,7 +63,7 @@ export function Sail({ width, height, livery, set = 1, torn = 0, phase = 0, lod 
   const bundleR = 0.012 + (1 - set) * Math.min(0.06, height * 0.07)
   return (
     <group rotation-y={Math.PI / 2}>
-      <mesh ref={ref} geometry={geom} material={mats.material} customDepthMaterial={mats.depth} position={[0, -height / 2, 0]} castShadow receiveShadow visible={torn < 1} frustumCulled={false} />
+      <mesh ref={ref} geometry={geom} material={mats.material} customDepthMaterial={mats.depth} position={[0, -height / 2, 0]} castShadow receiveShadow visible={torn < 1} frustumCulled={false} userData={{ bakeAsIs: true }} />
       {bundle && (
         <group position={[0, -bundleR * 0.6, -0.02]}>
           <mesh material={m.canvasFurled} rotation-z={Math.PI / 2} castShadow>

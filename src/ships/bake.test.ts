@@ -63,6 +63,30 @@ describe('bakeObject', () => {
     expect(kept.position.z).toBeCloseTo(4)
     expect(bakeStats(baked).triangles).toBe(12 + 12 * 5)
   })
+  it('keeps `userData.bakeAsIs` cloth meshes in their own frame with the depth material, no shadow', () => {
+    const root = new THREE.Group()
+    const cloth = new THREE.MeshStandardMaterial()
+    cloth.onBeforeCompile = () => {}
+    const depth = new THREE.MeshDepthMaterial()
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.12, 10, 2), cloth)
+    flag.userData.bakeAsIs = true
+    flag.customDepthMaterial = depth
+    flag.castShadow = true
+    const pivot = new THREE.Group()
+    pivot.position.set(1, 3, 0)
+    pivot.rotation.y = Math.PI
+    pivot.add(flag)
+    root.add(pivot, box(new THREE.MeshStandardMaterial()))
+    const baked = bakeObject(root)
+    expect(baked.children).toHaveLength(2)
+    const kept = baked.children.find((c) => (c as THREE.Mesh).material === cloth) as THREE.Mesh
+    expect(kept.geometry).toBe(flag.geometry)
+    expect(kept.position.x).toBeCloseTo(1)
+    expect(kept.position.y).toBeCloseTo(3)
+    expect(kept.quaternion.angleTo(pivot.quaternion)).toBeCloseTo(0)
+    expect(kept.customDepthMaterial).toBe(depth)
+    expect(kept.castShadow).toBe(false)
+  })
   it('separates geometries with different attribute layouts and line segments', () => {
     const root = new THREE.Group()
     const mat = new THREE.MeshStandardMaterial()

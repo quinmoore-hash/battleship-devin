@@ -35,7 +35,8 @@ export function Flag({ position, livery, width = 0.5, height = 0.3, phase = 0, k
   const m = shipMaterials(livery)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const w = kind === 'pennant' ? width * 2.4 : width
-  const h = kind === 'pennant' ? height * 0.3 : height
+  // a pennant is long and narrow but still cloth: never thinner than 6:1 or it is sub-pixel at battle distance
+  const h = kind === 'pennant' ? Math.max(height * 0.3, w / 6) : height
   const geom = flagGeometry(w, h, lod)
   const uniforms = useMemo(() => makeClothUniforms(w, h, 'flag'), [w, h])
   const base = useMemo(() => {
@@ -60,7 +61,7 @@ export function Flag({ position, livery, width = 0.5, height = 0.3, phase = 0, k
       <mesh material={m.rope} position={[0, 0, 0]}>
         <cylinderGeometry args={[0.006, 0.006, h + 0.04, 4]} />
       </mesh>
-      <mesh geometry={geom} material={mats.material} customDepthMaterial={mats.depth} position={[w / 2, 0, 0]} castShadow frustumCulled={false} />
+      <mesh geometry={geom} material={mats.material} customDepthMaterial={mats.depth} position={[w / 2, 0, 0]} castShadow frustumCulled={false} userData={{ bakeAsIs: true }} />
     </group>
   )
 }
