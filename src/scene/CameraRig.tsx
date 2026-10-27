@@ -46,15 +46,15 @@ const MENU_ORBIT = { radius: 36, height: 11, speed: 0.045 }
 
 /** Width of the side HUD (fleet panel + enemy-waters column, gaps, padding) the boards must clear — mirrors ui.css `.battle-body`. */
 function hudSidePx(width: number): number {
-  return width <= 900 ? 0 : width <= 1100 ? 470 : 560
+  return width <= 900 ? 0 : width <= 1100 ? 490 : 580
 }
 /** Half-width of the player board including its row labels, and the z of its near label row. */
-const NEAR_HALF_WIDTH = 5.7
+const NEAR_HALF_WIDTH = 6.2
 const NEAR_LABEL_Z = playerCenter[2] + 5.7
 
 /**
  * Battle overview framing for a viewport (BUG-530): the camera position is fixed, the vertical fov is the
- * narrowest (30°–44°) at which the near board still clears the side HUD, and the pitch keeps the near label
+ * narrowest (30°–46°) at which the near board still clears the side HUD, and the pitch keeps the near label
  * row at ~92% of the half-height so the whole player board stays on screen. `fov` is the landscape design
  * value — callers run it through `fitFov` like every other shot.
  */
@@ -62,11 +62,11 @@ export function battleFraming(aspect: number, width: number, out: { target: THRE
   const pos = CAMERA_SHOTS.battle.position
   const dNear = pos.z - NEAR_LABEL_Z
   const slant = Math.hypot(dNear, pos.y)
-  let design = 44
+  let design = 46
   if (aspect >= 1) {
     const free = Math.max(0.3, (width - hudSidePx(width)) / width)
     const hHalf = Math.atan(NEAR_HALF_WIDTH / slant) / free
-    design = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalf) / aspect)), 30, 44)
+    design = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalf) / aspect)), 30, 46)
   }
   const half = THREE.MathUtils.degToRad(fitFov(design, aspect) / 2)
   const centre = Math.atan(pos.y / dNear) - 0.92 * half
