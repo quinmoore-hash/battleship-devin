@@ -17,8 +17,6 @@ async function passDeck(page: Page, to: string, thorough = false) {
 }
 
 test('two captains: hot-seat game to victory with curtains, flipped HUD, named winner and a rematch that swaps who places first', async ({ page }) => {
-  // up to ~200 turns, each with a curtain: slow on the shared CI runner (BUG-309 class)
-  test.setTimeout(420_000)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/?no3d')
   await startTwoCaptains(page, { human: 'Anne', enemy: 'Jack' })
@@ -32,6 +30,14 @@ test('two captains: hot-seat game to victory with curtains, flipped HUD, named w
   await expect(page.getByTestId('placement-title')).toContainText('Jack')
   await expect(page.getByTestId('placed-count')).toHaveText('0/5 placed')
   await page.getByTestId('auto-place').click()
+  await expect(page.getByTestId('placed-count')).toHaveText('5/5 placed')
+  // the test peeks at Jack's chart so Anne can win in the minimum 17 shots (keeps this spec cheap on CI — BUG-309 class)
+  const jackCells: string[] = []
+  for (const cell of await page.getByTestId('player-grid').locator('button[data-state="ship"]').all()) {
+    const id = await cell.getAttribute('data-testid')
+    if (id) jackCells.push(id.replace('player-grid-', ''))
+  }
+  expect(jackCells).toHaveLength(17)
   await page.getByTestId('confirm-placement').click()
   await passDeck(page, 'Anne', true)
 
@@ -43,20 +49,20 @@ test('two captains: hot-seat game to victory with curtains, flipped HUD, named w
 
   const gameover = page.getByTestId('gameover')
   const grid = page.getByTestId('enemy-grid')
-  let turn: 'Anne' | 'Jack' = 'Anne'
-  for (let i = 0; i < 200; i++) {
-    if (await gameover.isVisible()) break
-    await expect(page.getByTestId('status')).toContainText(`${turn}'s turn`)
+  for (const [i, cell] of jackCells.entries()) {
+    // Anne fires at one of Jack's ships
+    await page.getByTestId(`enemy-grid-${cell}`).click()
+    if (i === jackCells.length - 1) break
+    await passDeck(page, 'Jack', i === 0)
+    await expect(battle).toHaveAttribute('data-perspective', 'enemy')
+    await expect(page.getByTestId('status')).toContainText("Jack's turn")
+    // Jack fires back at Anne's waters (16 shots cannot sink her five ships)
     await grid.locator('button[data-state="unknown"]').first().click()
-    const next = turn === 'Anne' ? 'Jack' : 'Anne'
-    await expect(gameover.or(page.getByTestId('handoff'))).toBeVisible()
-    if (await gameover.isVisible()) break
-    await passDeck(page, next, i < 2)
-    await expect(battle).toHaveAttribute('data-perspective', next === 'Anne' ? 'human' : 'enemy')
-    turn = next
+    await passDeck(page, 'Anne')
+    await expect(battle).toHaveAttribute('data-perspective', 'human')
   }
   await expect(gameover).toBeVisible()
-  await expect(page.getByTestId('report-title')).toHaveText(/^(Anne|Jack) rules the Caribbean$/)
+  await expect(page.getByTestId('report-title')).toHaveText('Anne rules the Caribbean')
   await expect(page.getByTestId('report-replay')).toBeVisible()
 
   // rematch: Jack places first this time
