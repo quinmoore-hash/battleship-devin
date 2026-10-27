@@ -832,6 +832,11 @@
   display: grid;
   gap: 0.6rem;
   align-content: start;
+  /* Black Flag fleets (picker + 7-ship tray) outgrow a 700px-tall viewport: scroll the tray, never clip the Ready button (BUG-568) */
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .tray {
   list-style: none;
@@ -1064,6 +1069,11 @@
 }
 .ui-root[data-no3d='false'] .battle-body .side-left {
   grid-row: 1 / span 2;
+  /* two Black Flag fleets (up to 12 rows) are taller than a 700px viewport: scroll instead of growing up over the status plaque (BUG-569) */
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .ui-root[data-no3d='false'] .charts {
   grid-column: 3;
