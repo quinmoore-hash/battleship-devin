@@ -7,8 +7,8 @@
  *   SHIPS[id] -> ShipDefinition               model component + anchors (cannons, masts, impact points)
  *   shipWorldTransform(placed, boardOrigin)   position / rotationY of a placed ship
  */
-import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { useMemo, useRef, type ReactNode } from 'react'
 import type * as THREE from 'three'
 import type { PlacedShip, ShipId } from '../engine'
 import { LodGroup } from '../perf/LodShip'
