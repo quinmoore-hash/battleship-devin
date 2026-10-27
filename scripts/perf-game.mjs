@@ -16,6 +16,7 @@ const SHOT_DIR = process.env.PERF_SHOT_DIR ?? ''
 const CINE = process.env.PERF_CINEMATICS ?? 'off'
 const TRACE = process.env.PERF_TRACE === '1'
 const REMATCH_SHOTS = Number(process.env.PERF_REMATCH_SHOTS ?? 5)
+const BLACK_FLAG = process.env.PERF_BLACK_FLAG ?? ''
 
 let preview
 if (!process.env.PERF_URL) {
@@ -77,10 +78,13 @@ try {
   await page.getByTestId('main-menu').waitFor({ timeout: 60_000 })
   await page.waitForFunction(() => (window.__perf?.stats.frames ?? 0) > 15, null, { timeout: 120_000 })
   await snap('menu')
+  // PERF_BLACK_FLAG=armada|wolf-pack|raiders|classic: Black Flag rules with that fleet preset (duplicate classes → more draw calls)
+  if (BLACK_FLAG) await page.getByTestId('mode-black-flag').check()
   await page.getByTestId('difficulty-easy').click()
   await page.getByTestId('placement').waitFor()
+  if (BLACK_FLAG) await page.getByTestId(`fleet-preset-${BLACK_FLAG}`).click()
   await page.getByTestId('auto-place').click()
-  await page.getByTestId('placed-count').filter({ hasText: /5/ }).waitFor({ timeout: 30_000 }).catch(() => {})
+  await page.getByTestId('placed-count').filter({ hasText: /^(\d+)\/\1 / }).waitFor({ timeout: 30_000 }).catch(() => {})
   await snap('placement-5-ships')
   if (process.env.PERF_STOP === 'placement') throw new Error('stop')
   await page.getByTestId('confirm-placement').click()

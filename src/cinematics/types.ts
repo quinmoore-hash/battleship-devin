@@ -11,6 +11,8 @@ import type { Side } from '../ships/types'
 /** Which ship fires and from which battery. Chosen by the director (nearest ship with that side facing the target). */
 export interface Battery {
   shipId: ShipId
+  /** The firing ship's `PlacedShip.uid` (keys `firing`; equals `shipId` in a classic fleet). */
+  uid: string
   side: Side
   /** Cell indices along the ship whose cannons fire (a broadside may use several). */
   cells: number[]
@@ -20,7 +22,8 @@ export type CinematicEvent =
   /** `by` fires at `target`; `result` is already known so the director can pre-stage the impact. */
   | { type: 'shot'; by: Player; target: Coord; result: ShotResult; battery?: Battery }
   /** Played right after the `shot` that sank it. Zoom-in + slow-mo sinking of `shipId` on `owner`'s board. */
-  | { type: 'sink'; owner: Player; shipId: ShipId }
+  /** `uid` = the sinking `PlacedShip.uid` (defaults to `shipId`: classic fleets never repeat a class). */
+  | { type: 'sink'; owner: Player; shipId: ShipId; uid?: string }
   | { type: 'battle-start' }
   | { type: 'victory'; winner: Player }
 

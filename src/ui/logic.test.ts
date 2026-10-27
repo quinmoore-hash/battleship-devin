@@ -58,7 +58,7 @@ describe('stats', () => {
 
 describe('stats: salvo turns (BUG-316)', () => {
   it('counts one turn per volley, not per shot', () => {
-    const e = (id: number, by: 'human' | 'enemy'): GameEvent => ({ id, by, result: { coord: { x: id % 10, y: Math.floor(id / 10) }, outcome: 'miss' } })
+    const e = (id: number, by: 'human' | 'enemy'): GameEvent => ({ id, by, kind: 'shot', result: { coord: { x: id % 10, y: Math.floor(id / 10) }, outcome: 'miss' } })
     const salvo = [e(1, 'human'), e(2, 'human'), e(3, 'human'), e(4, 'enemy'), e(5, 'enemy'), e(6, 'human'), e(7, 'human')]
     expect(countTurns(salvo, 'human')).toBe(2)
     expect(countTurns(salvo, 'enemy')).toBe(1)

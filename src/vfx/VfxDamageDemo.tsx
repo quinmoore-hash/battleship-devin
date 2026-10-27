@@ -18,7 +18,7 @@ import { GridBuoys, ShotMarkers } from './markers'
 function placed(id: PlacedShip['spec']['id'], origin: Coord, orientation: PlacedShip['orientation']): PlacedShip {
   const spec = FLEET_BY_ID[id]
   const cells = Array.from({ length: spec.length }, (_, i) => (orientation === 'horizontal' ? { x: origin.x + i, y: origin.y } : { x: origin.x, y: origin.y + i }))
-  return { spec, origin, orientation, cells, hits: [] }
+  return { spec, uid: spec.id, origin, orientation, cells, hits: [] }
 }
 
 interface Burst {

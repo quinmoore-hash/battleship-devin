@@ -40,7 +40,7 @@ export function pickBattery(ships: readonly PlacedShip[], target: Coord, ownOrig
     })
     .sort((a, b) => a.d - b.d)
   const cells = [...new Set(scored.slice(0, maxGuns).map((g) => g.cell))].sort((a, b) => a - b)
-  return { shipId: best.ship.spec.id, side: best.side, cells }
+  return { shipId: best.ship.spec.id, uid: best.ship.uid, side: best.side, cells }
 }
 
 export interface ShotPlan {
@@ -90,7 +90,7 @@ export function planShot(by: Player, result: ShotResult, shooters: readonly Plac
   const chosen = battery ?? pickBattery(shooters, result.coord, ownOrigin, tgtOrigin, maxGuns)
   let shooter: ShipPose | null = null
   let muzzles: WorldMuzzle[] = []
-  const firing = chosen ? shooters.find((s) => s.spec.id === chosen.shipId) : undefined
+  const firing = chosen ? shooters.find((s) => s.uid === chosen.uid) : undefined
   if (chosen && firing) {
     shooter = shipWorldTransform(firing, ownOrigin)
     muzzles = batteryMuzzles(SHIPS[firing.spec.id].anchors, shooter, chosen.side, chosen.cells).slice(0, maxGuns)

@@ -24,14 +24,14 @@ export interface MarkerPlacement {
  */
 export function layoutMarkers(shots: readonly ShotResult[], boardOrigin: Vec3, cellSize = 1): MarkerPlacement[] {
   const sunkShips = new Set<string>()
-  for (const s of shots) if (s.outcome === 'sunk' && s.shipId) sunkShips.add(s.shipId)
+  for (const s of shots) if (s.outcome === 'sunk' && s.shipId) sunkShips.add(s.shipUid ?? s.shipId)
   const seen = new Set<string>()
   const out: MarkerPlacement[] = []
   shots.forEach((s, index) => {
     const key = coordKey(s.coord)
     if (seen.has(key)) return
     seen.add(key)
-    const kind: MarkerKind = s.outcome === 'miss' ? 'miss' : s.shipId && sunkShips.has(s.shipId) ? 'sunk' : 'hit'
+    const kind: MarkerKind = s.outcome === 'miss' ? 'miss' : s.shipId && sunkShips.has(s.shipUid ?? s.shipId) ? 'sunk' : 'hit'
     out.push({
       key,
       kind,

@@ -27,6 +27,7 @@ export function countTurns(events: readonly GameEvent[], by: Player): number {
   let turns = 0
   let prev: Player | null = null
   for (const e of events) {
+    if (e.kind === 'spyglass') continue
     if (e.by === by && prev !== by) turns++
     prev = e.by
   }
@@ -35,8 +36,9 @@ export function countTurns(events: readonly GameEvent[], by: Player): number {
 
 /** Pure summary of a finished (or running) battle for the HUD and the game-over report. */
 export function battleReport(events: readonly GameEvent[], playerBoard: Board, enemyBoard: Board, startedAt: number | null, now = Date.now()): BattleReport {
-  const mine = events.filter((e) => e.by === 'human')
-  const theirs = events.filter((e) => e.by === 'enemy')
+  // Spyglass looks are not shots
+  const mine = events.filter((e) => e.by === 'human' && e.kind !== 'spyglass')
+  const theirs = events.filter((e) => e.by === 'enemy' && e.kind !== 'spyglass')
   const hits = mine.filter((e) => e.result.outcome !== 'miss').length
   let streak = 0
   let bestStreak = 0

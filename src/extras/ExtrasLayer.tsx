@@ -86,6 +86,13 @@ export function ModesPicker({ className = '', onChange }: { className?: string; 
           <small>Fog swallows ~30% of your misses; the weather turns.</small>
         </span>
       </label>
+      <label className="xt-toggle">
+        <input type="checkbox" data-testid="mode-black-flag" checked={modes.blackFlag} onChange={(e) => setModes({ blackFlag: e.target.checked })} />
+        <span>
+          <b>Black Flag</b>
+          <small>Pick your fleet, two power shots each, hidden treasure.</small>
+        </span>
+      </label>
     </section>
   )
 }

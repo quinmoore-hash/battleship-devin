@@ -1,7 +1,7 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { FLEET_BY_ID, hasBeenShot, isSunk, type Coord, type PlacedShip, type ShipId } from '../../engine'
+import { FLEET_BY_ID, hasBeenShot, isSunk, uidClass, type Coord, type PlacedShip } from '../../engine'
 import { useDirector } from '../../cinematics'
 import { usePerf } from '../../perf/store'
 import { BoardGrid } from '../../scene/BoardGrid'
@@ -53,11 +53,11 @@ function usePlacementLod(): Lod {
 }
 
 /** Only the sink entries that belong to ships of this fleet that are actually sunk. */
-export function sinkFor(ships: PlacedShip[], sink: Partial<Record<ShipId, number>>): Partial<Record<ShipId, number>> {
-  const out: Partial<Record<ShipId, number>> = {}
+export function sinkFor(ships: PlacedShip[], sink: Partial<Record<string, number>>): Partial<Record<string, number>> {
+  const out: Partial<Record<string, number>> = {}
   for (const ship of ships) {
-    const p = sink[ship.spec.id]
-    if (p !== undefined && ship.hits.length >= ship.spec.length) out[ship.spec.id] = p
+    const p = sink[ship.uid]
+    if (p !== undefined && ship.hits.length >= ship.spec.length) out[ship.uid] = p
   }
   return out
 }
@@ -90,7 +90,7 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
   // Where the ship was grabbed and when: a release on the same cell without moving is a click → keep carrying.
   const grabRef = useRef<{ cell: Coord; at: number; moved: boolean } | null>(null)
 
-  const spec = carrying ? FLEET_BY_ID[carrying] : null
+  const spec = carrying ? FLEET_BY_ID[uidClass(carrying)] : null
   const cell = hover?.side === 'player' ? hover.coord : null
   const footprint = useMemo(() => (spec && cell ? footprintAt(playerBoard, spec, cell, orientation, grab) : null), [spec, cell, playerBoard, orientation, grab])
 
@@ -143,8 +143,8 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
     const idx = Math.max(0, ship.cells.findIndex((c) => c.x === Math.floor(e.point.x - PLAYER.origin[0]) && c.y === Math.floor(e.point.z - PLAYER.origin[2])))
     setGrab(idx)
     grabRef.current = { cell: ship.cells[idx], at: performance.now(), moved: false }
-    removePlayerShip(ship.spec.id)
-    setCarrying(ship.spec.id, ship.orientation)
+    removePlayerShip(ship.uid)
+    setCarrying(ship.uid, ship.orientation)
     setDragging(true)
     setHover({ side: 'player', coord: ship.cells[idx] })
   }
@@ -165,7 +165,7 @@ function PlacementWorld({ quality }: { quality: 'low' | 'high' }) {
         }}
       />
       {playerBoard.ships.map((ship) => (
-        <group key={ship.spec.id} onPointerDown={(e) => pickUp(ship, e)} onPointerOver={() => (document.body.style.cursor = 'grab')} onPointerOut={() => (document.body.style.cursor = '')}>
+        <group key={ship.uid} onPointerDown={(e) => pickUp(ship, e)} onPointerOver={() => (document.body.style.cursor = 'grab')} onPointerOut={() => (document.body.style.cursor = '')}>
           <Fleet ships={[ship]} livery="pirate" boardOrigin={PLAYER.origin} quality={quality} lod={placementLod} />
         </group>
       ))}
@@ -286,10 +286,10 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
       <DamageLayer ships={playerShips} boardOrigin={PLAYER.origin} fires smoke breachSide="both" />
       <DamageLayer ships={over ? enemyShips : sunkEnemy} boardOrigin={ENEMY.origin} fires={false} smoke breachSide={null} />
       {playerWrecks.map((s) => (
-        <Flotsam key={`p-${s.spec.id}`} cells={s.cells} boardOrigin={PLAYER.origin} seed={placedShipSeed(s)} livery="pirate" />
+        <Flotsam key={`p-${s.uid}`} cells={s.cells} boardOrigin={PLAYER.origin} seed={placedShipSeed(s)} livery="pirate" />
       ))}
       {enemyWrecks.map((s) => (
-        <Flotsam key={`e-${s.spec.id}`} cells={s.cells} boardOrigin={ENEMY.origin} seed={placedShipSeed(s)} livery="navy" />
+        <Flotsam key={`e-${s.uid}`} cells={s.cells} boardOrigin={ENEMY.origin} seed={placedShipSeed(s)} livery="navy" />
       ))}
     </group>
   )

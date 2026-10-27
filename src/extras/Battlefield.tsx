@@ -9,7 +9,7 @@ import type { Board } from '../engine'
 /** Sunk ships stay as listing wrecks instead of vanishing below the waves, so replay/photo show what was lost. */
 const WRECK_SINK = 0.6
 const wrecks = (board: Board): Partial<Record<string, number>> =>
-  Object.fromEntries(board.ships.filter(isSunk).map((s) => [s.spec.id, WRECK_SINK]))
+  Object.fromEntries(board.ships.filter(isSunk).map((s) => [s.uid, WRECK_SINK]))
 
 export interface BattlefieldProps {
   boards: ReplayBoards
@@ -38,11 +38,11 @@ export function Battlefield({ boards, revealEnemy = true, lod = 0, quality, fire
       {flotsam &&
         boards.playerBoard.ships
           .filter(isSunk)
-          .map((s) => <Flotsam key={`p-${s.spec.id}`} cells={s.cells} boardOrigin={P.origin} seed={placedShipSeed(s)} livery="pirate" />)}
+          .map((s) => <Flotsam key={`p-${s.uid}`} cells={s.cells} boardOrigin={P.origin} seed={placedShipSeed(s)} livery="pirate" />)}
       {flotsam &&
         boards.enemyBoard.ships
           .filter(isSunk)
-          .map((s) => <Flotsam key={`e-${s.spec.id}`} cells={s.cells} boardOrigin={E.origin} seed={placedShipSeed(s)} livery="navy" />)}
+          .map((s) => <Flotsam key={`e-${s.uid}`} cells={s.cells} boardOrigin={E.origin} seed={placedShipSeed(s)} livery="navy" />)}
     </>
   )
 }

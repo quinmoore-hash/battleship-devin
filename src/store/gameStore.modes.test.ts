@@ -22,7 +22,7 @@ describe('game modes: defaults', () => {
 
   it('classic rules when no modes are given: one shot resolves immediately', () => {
     startBattle()
-    expect(s().modes).toEqual({ salvo: false, storm: false })
+    expect(s().modes).toEqual({ salvo: false, storm: false, blackFlag: false })
     expect(s().salvo).toEqual({ pending: [], size: 5 })
     const r = s().fireAt({ x: 0, y: 0 })
     expect(r).not.toBeNull()
@@ -37,9 +37,9 @@ describe('game modes: defaults', () => {
 
   it('partial modes merge with the defaults and reset() remembers them for the next battle (BUG-320)', () => {
     s().startGame('medium', { storm: true })
-    expect(s().modes).toEqual({ salvo: false, storm: true })
+    expect(s().modes).toEqual({ salvo: false, storm: true, blackFlag: false })
     s().reset()
-    expect(s().modes).toEqual({ salvo: false, storm: true })
+    expect(s().modes).toEqual({ salvo: false, storm: true, blackFlag: false })
     expect(s().salvo).toEqual({ pending: [], size: 1 })
     s().setModes({ storm: false })
     expect(s().modes).toEqual(DEFAULT_MODES)

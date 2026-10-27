@@ -1,23 +1,31 @@
 import { create } from 'zustand'
 import { createOpponent, seededRng, type AiOpponent } from '../ai'
 import {
+  broadsideCells,
   coordKey,
   createBoard,
   enemyView,
   fire,
+  FLEET,
+  FLEET_PRESETS,
   hasBeenShot,
+  hasTreasureAt,
   inBounds,
   isFleetPlaced,
   isFleetSunk,
   isSunk,
   placeShip,
+  presetFleet,
   randomPlacement,
   removeShip,
   sameCoord,
+  shipAt,
+  treasureCells,
   type Board,
   type Coord,
   type Difficulty,
   type EnemyBoardView,
+  type FleetPresetId,
   type Orientation,
   type Player,
   type ShipSpec,
@@ -26,11 +34,36 @@ import {
 
 export type Phase = 'menu' | 'placement' | 'battle' | 'gameover'
 
+/**
+ * `shot` = a normal shot · `broadside` = one ball of a Black Flag Broadside (3 balls share a `group`) ·
+ * `spyglass` = a Spyglass look (no shot: `result.outcome` is `'miss'`, `spied` says what was seen) ·
+ * `treasure` = a shot (or Broadside ball) that landed on a treasure chest (open water: the shooter fires again).
+ */
+export type GameEventKind = 'shot' | 'broadside' | 'spyglass' | 'treasure'
+
 export interface GameEvent {
   id: number
   by: Player
   result: ShotResult
+  kind: GameEventKind
+  /** Balls of one Broadside share a group id (shot log renders them as one line). */
+  group?: number
+  /** Spyglass finding. */
+  spied?: 'ship' | 'water'
 }
+
+/** Black Flag power shots left for a side (`true` = still available). */
+export interface PowerShots {
+  broadside: boolean
+  spyglass: boolean
+}
+
+export interface SpyMark {
+  coord: Coord
+  ship: boolean
+}
+
+export const TREASURE_PER_BOARD = 2
 
 /** How much of each shot is played out as a cinematic. `off` = instant results (used by e2e). */
 export type CinematicsLevel = 'full' | 'fast' | 'off'
@@ -58,9 +91,11 @@ export interface GameModes {
   salvo: boolean
   /** Stormy seas: the scene weather is `stormy` and fog hides ~30% of the player's misses on the enemy grid. */
   storm: boolean
+  /** Black Flag: pick your fleet (4 presets), one Broadside + one Spyglass per side, two hidden treasure chests per board. */
+  blackFlag: boolean
 }
 
-export const DEFAULT_MODES: GameModes = { salvo: false, storm: false }
+export const DEFAULT_MODES: GameModes = { salvo: false, storm: false, blackFlag: false }
 
 /** Probability that a miss on the enemy board is swallowed by the fog in stormy seas. */
 export const STORM_FOG_CHANCE = 0.3
@@ -88,19 +123,35 @@ export interface GameState {
   salvo: SalvoState
   /** Stormy seas: `coordKey`s of the human's misses on the enemy board hidden by fog (still recorded in `enemyBoard.shots`). */
   fogged: string[]
+  /** The fleet each side places this game (`FLEET` unless Black Flag picked a preset). */
+  fleets: Record<Player, ShipSpec[]>
+  fleetPresets: Record<Player, FleetPresetId>
+  /** Black Flag: power shots still available per side (both `false` when Black Flag is off). */
+  powerShots: Record<Player, PowerShots>
+  /** Black Flag: treasure chests hidden on each side's own board (the other side finds them). Empty when off. */
+  treasure: Record<Player, Coord[]>
+  /** Black Flag: what each side has seen through the Spyglass on the other side's board. */
+  spied: Record<Player, SpyMark[]>
+  /** Black Flag: extra shots the side on turn still has from treasure (classic: fired one by one; salvo: the size of the bonus volley). */
+  bonusShots: number
   settings: Settings
   /** Non-serialisable; recreated on every new game. */
   opponent?: AiOpponent
   /** Non-serialisable; decides which misses the storm fog hides. */
   fogRng?: () => number
+  /** Non-serialisable; the seeded stream behind the AI fleet pick and the treasure chests (same stream as `fogRng`). */
+  rng?: () => number
 
   /**
    * `modes` omitted = keep the modes chosen so far (`setModes` in the menu, or the previous game's rules on a rematch);
    * `reset()` returns to classic. `seed` makes the stormy-seas fog deterministic (tests, demos).
    */
   startGame: (difficulty: Difficulty, modes?: Partial<GameModes>, seed?: number) => void
-  placePlayerShip: (spec: ShipSpec, origin: Coord, orientation: Orientation) => boolean
-  removePlayerShip: (shipId: ShipSpec['id']) => void
+  /** Black Flag: choose the human fleet preset (placement only; clears any ships already placed). */
+  setFleetPreset: (preset: FleetPresetId) => void
+  /** `uid` identifies the instance in a fleet that repeats a class (`fleetUnits`); defaults to the class id. */
+  placePlayerShip: (spec: ShipSpec, origin: Coord, orientation: Orientation, uid?: string) => boolean
+  removePlayerShip: (uid: string) => void
   autoPlacePlayerFleet: () => void
   confirmPlacement: () => void
   /**
@@ -109,6 +160,19 @@ export interface GameState {
    * queued shot resolves in order (all of them land in `events` / `lastVolley`) and the last result is returned.
    */
   fireAt: (coord: Coord) => ShotResult | null | undefined
+  /**
+   * Black Flag — Broadside: fires the up-to-3 cells of `broadsideCells(center, orientation)` that are still unshot,
+   * each through the pure `fire()`, as the whole turn (in salvo it replaces the volley). Once per game per side.
+   * Returns the results (empty array when illegal: not your turn, already used, no unshot cell in the line).
+   */
+  fireBroadside: (center: Coord, orientation: Orientation) => ShotResult[]
+  /**
+   * Black Flag — Spyglass: look at one unshot enemy cell. No shot, no turn spent. Once per game per side.
+   * Returns what was seen, or undefined when illegal.
+   */
+  spyAt: (coord: Coord) => 'ship' | 'water' | undefined
+  /** @internal shared tail of `fireAt` / `fireBroadside`. */
+  resolveHuman: (volley: Coord[], kind: GameEventKind, group?: number) => ShotResult | undefined
   /** The enemy takes a turn (a whole volley in salvo mode). Returns the last result. Call after `fireAt` (UI controls the pacing). */
   enemyTurn: () => ShotResult | undefined
   /** Change the rules of the game being set up. Allowed in `menu` / `placement` only (ignored once the battle starts). */
@@ -168,6 +232,51 @@ export function foggedEnemyView(board: Board, fogged: readonly string[]): EnemyB
 
 const emptySalvo = (): SalvoState => ({ pending: [], size: 1 })
 
+const noPowerShots = (): Record<Player, PowerShots> => ({ human: { broadside: false, spyglass: false }, enemy: { broadside: false, spyglass: false } })
+const fullPowerShots = (): Record<Player, PowerShots> => ({ human: { broadside: true, spyglass: true }, enemy: { broadside: true, spyglass: true } })
+const classicFleets = (): Record<Player, ShipSpec[]> => ({ human: [...FLEET], enemy: [...FLEET] })
+const emptyPerPlayer = <T,>(): Record<Player, T[]> => ({ human: [], enemy: [] })
+
+export const other = (p: Player): Player => (p === 'human' ? 'enemy' : 'human')
+
+/** The number of treasure chests `by` has uncovered so far. */
+export const treasureFound = (events: readonly GameEvent[], by: Player): number => events.filter((e) => e.by === by && e.kind === 'treasure').length
+
+/** Human-readable preset name of a fleet (the Black Flag line of the report). */
+export const fleetPresetName = (id: FleetPresetId): string => FLEET_PRESETS.find((p) => p.id === id)?.name ?? id
+
+let groupId = 0
+
+interface Resolved {
+  board: Board
+  events: GameEvent[]
+  /** Treasure chests uncovered in this volley. */
+  treasure: number
+  last?: ShotResult
+}
+
+/**
+ * Resolves `coords` against `board` in order, via the pure `fire()`: one event per shot, `kind: 'treasure'` for
+ * a chest. Stops when the fleet is sunk. `onShot` lets the caller roll the storm fog / feed the AI per result.
+ */
+function resolveVolley(board: Board, coords: readonly Coord[], by: Player, kind: GameEventKind, chests: readonly Coord[], group?: number, onShot?: (r: ShotResult) => void): Resolved {
+  const events: GameEvent[] = []
+  let treasure = 0
+  let last: ShotResult | undefined
+  for (const c of coords) {
+    if (hasBeenShot(board, c)) continue
+    const next = fire(board, c)
+    board = next.board
+    last = next.result
+    const chest = next.result.outcome === 'miss' && hasTreasureAt(chests, c)
+    if (chest) treasure++
+    events.push({ id: ++eventId, by, result: next.result, kind: chest ? 'treasure' : kind, group })
+    onShot?.(next.result)
+    if (isFleetSunk(board)) break
+  }
+  return { board, events, treasure, last }
+}
+
 export const useGameStore = create<GameState>((set, get) => ({
   phase: 'menu',
   difficulty: 'medium',
@@ -179,49 +288,80 @@ export const useGameStore = create<GameState>((set, get) => ({
   lastVolley: [],
   salvo: emptySalvo(),
   fogged: [],
+  fleets: classicFleets(),
+  fleetPresets: { human: 'classic', enemy: 'classic' },
+  powerShots: noPowerShots(),
+  treasure: emptyPerPlayer<Coord>(),
+  spied: emptyPerPlayer<SpyMark>(),
+  bonusShots: 0,
   settings: initialSettings,
 
   startGame: (difficulty, modes, seed) =>
-    set((s) => ({
-      phase: 'placement',
-      difficulty,
-      modes: modes ? { ...DEFAULT_MODES, ...modes } : s.modes,
-      playerBoard: createBoard(),
-      enemyBoard: randomPlacement(),
-      opponent: createOpponent(difficulty),
-      fogRng: seededRng(seed ?? Math.floor(Math.random() * 0xffffffff)),
-      turn: 'human',
-      winner: undefined,
-      events: [],
-      lastVolley: [],
-      salvo: emptySalvo(),
-      fogged: [],
-    })),
+    set((s) => {
+      const rules = modes ? { ...DEFAULT_MODES, ...modes } : s.modes
+      const rng = seededRng(seed ?? Math.floor(Math.random() * 0xffffffff))
+      // Black Flag: the enemy picks a random preset; the human picks in placement (classic until then)
+      const enemyPreset: FleetPresetId = rules.blackFlag ? FLEET_PRESETS[Math.floor(rng() * FLEET_PRESETS.length)].id : 'classic'
+      const enemyFleet = presetFleet(enemyPreset)
+      return {
+        phase: 'placement',
+        difficulty,
+        modes: rules,
+        playerBoard: createBoard(),
+        enemyBoard: randomPlacement(rng, enemyFleet),
+        fleets: { human: [...FLEET], enemy: enemyFleet },
+        fleetPresets: { human: 'classic', enemy: enemyPreset },
+        powerShots: rules.blackFlag ? fullPowerShots() : noPowerShots(),
+        treasure: emptyPerPlayer<Coord>(),
+        spied: emptyPerPlayer<SpyMark>(),
+        bonusShots: 0,
+        opponent: createOpponent(difficulty, rng),
+        fogRng: rng,
+        rng,
+        turn: 'human',
+        winner: undefined,
+        events: [],
+        lastVolley: [],
+        salvo: emptySalvo(),
+        fogged: [],
+      }
+    }),
 
-  placePlayerShip: (spec, origin, orientation) => {
+  setFleetPreset: (preset) =>
+    set((s) =>
+      s.phase === 'placement' && s.modes.blackFlag
+        ? { fleetPresets: { ...s.fleetPresets, human: preset }, fleets: { ...s.fleets, human: presetFleet(preset) }, playerBoard: createBoard(s.playerBoard.size) }
+        : {},
+    ),
+
+  placePlayerShip: (spec, origin, orientation, uid = spec.id) => {
     const { playerBoard, phase } = get()
     if (phase !== 'placement') return false
     try {
-      set({ playerBoard: placeShip(playerBoard, spec, origin, orientation) })
+      set({ playerBoard: placeShip(playerBoard, spec, origin, orientation, uid) })
       return true
     } catch {
       return false
     }
   },
 
-  removePlayerShip: (shipId) =>
-    set((s) => (s.phase === 'placement' ? { playerBoard: removeShip(s.playerBoard, shipId) } : {})),
+  removePlayerShip: (uid) =>
+    set((s) => (s.phase === 'placement' ? { playerBoard: removeShip(s.playerBoard, uid) } : {})),
 
-  autoPlacePlayerFleet: () => set((s) => (s.phase === 'placement' ? { playerBoard: randomPlacement() } : {})),
+  autoPlacePlayerFleet: () => set((s) => (s.phase === 'placement' ? { playerBoard: randomPlacement(s.rng ?? Math.random, s.fleets.human) } : {})),
 
   confirmPlacement: () => {
-    const { playerBoard, phase } = get()
-    if (phase !== 'placement' || !isFleetPlaced(playerBoard)) return
-    set({ phase: 'battle', turn: 'human', salvo: { pending: [], size: salvoSize(playerBoard) } })
+    const { playerBoard, enemyBoard, phase, fleets, modes, rng } = get()
+    if (phase !== 'placement' || !isFleetPlaced(playerBoard, fleets.human)) return
+    const draw = rng ?? Math.random
+    const treasure = modes.blackFlag
+      ? { human: treasureCells(playerBoard, draw, TREASURE_PER_BOARD), enemy: treasureCells(enemyBoard, draw, TREASURE_PER_BOARD) }
+      : emptyPerPlayer<Coord>()
+    set({ phase: 'battle', turn: 'human', salvo: { pending: [], size: salvoSize(playerBoard) }, treasure, bonusShots: 0 })
   },
 
   fireAt: (coord) => {
-    const { phase, turn, enemyBoard, modes, salvo, playerBoard } = get()
+    const { phase, turn, enemyBoard, modes, salvo, playerBoard, bonusShots } = get()
     if (phase !== 'battle' || turn !== 'human') return undefined
     if (!inBounds(coord, enemyBoard.size) || hasBeenShot(enemyBoard, coord)) return undefined
 
@@ -229,65 +369,123 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (modes.salvo) {
       if (salvo.pending.some((p) => sameCoord(p, coord))) return undefined
       const pending = [...salvo.pending, coord]
-      const size = Math.min(salvo.size, salvoSize(playerBoard))
+      // a treasure bonus volley is exactly the chests found; otherwise one shot per surviving ship
+      const size = bonusShots > 0 ? bonusShots : Math.min(salvo.size, salvoSize(playerBoard))
       if (pending.length < size) {
         set({ salvo: { pending, size } })
         return null
       }
       volley = pending
     }
+    return get().resolveHuman(volley, 'shot')
+  },
 
-    const { events, fogged, fogRng } = get()
-    let board = enemyBoard
-    const resolved: GameEvent[] = []
-    const newlyFogged: string[] = []
-    let last: ShotResult | undefined
-    for (const c of volley) {
-      const next = fire(board, c)
-      board = next.board
-      last = next.result
-      resolved.push({ id: ++eventId, by: 'human', result: next.result })
-      if (modes.storm && next.result.outcome === 'miss' && (fogRng ?? Math.random)() < STORM_FOG_CHANCE) {
-        newlyFogged.push(coordKey(c))
-      }
-      if (isFleetSunk(board)) break
-    }
-    const won = isFleetSunk(board)
+  fireBroadside: (center, orientation) => {
+    const { phase, turn, enemyBoard, powerShots, modes } = get()
+    if (phase !== 'battle' || turn !== 'human' || !modes.blackFlag || !powerShots.human.broadside) return []
+    if (!inBounds(center, enemyBoard.size)) return []
+    const cells = broadsideCells(center, orientation, enemyBoard.size).filter((c) => !hasBeenShot(enemyBoard, c))
+    if (cells.length === 0) return []
+    set((s) => ({ powerShots: { ...s.powerShots, human: { ...s.powerShots.human, broadside: false } } }))
+    get().resolveHuman(cells, 'broadside', ++groupId)
+    return get().lastVolley.map((e) => e.result)
+  },
+
+  spyAt: (coord) => {
+    const { phase, turn, enemyBoard, powerShots, modes, events, spied } = get()
+    if (phase !== 'battle' || turn !== 'human' || !modes.blackFlag || !powerShots.human.spyglass) return undefined
+    if (!inBounds(coord, enemyBoard.size) || hasBeenShot(enemyBoard, coord)) return undefined
+    const ship = !!shipAt(enemyBoard, coord)
     set({
-      enemyBoard: board,
-      events: [...events, ...resolved],
-      lastVolley: resolved,
+      powerShots: { ...powerShots, human: { ...powerShots.human, spyglass: false } },
+      spied: { ...spied, human: [...spied.human, { coord, ship }] },
+      events: [...events, { id: ++eventId, by: 'human', kind: 'spyglass', spied: ship ? 'ship' : 'water', result: { coord, outcome: 'miss' } }],
+    })
+    return ship ? 'ship' : 'water'
+  },
+
+  /** @internal Resolves the human's volley / Broadside line against the enemy board and advances the turn. */
+  resolveHuman: (volley, kind, group) => {
+    const { enemyBoard, modes, playerBoard, bonusShots, treasure } = get()
+    const { events, fogged, fogRng } = get()
+    const newlyFogged: string[] = []
+    const r = resolveVolley(enemyBoard, volley, 'human', kind, treasure.enemy, group, (res) => {
+      if (modes.storm && res.outcome === 'miss' && (fogRng ?? Math.random)() < STORM_FOG_CHANCE) newlyFogged.push(coordKey(res.coord))
+    })
+    const won = isFleetSunk(r.board)
+    // treasure: the shooter fires again — the chests found become extra shots (salvo: a bonus volley of that size)
+    const spent = bonusShots > 0 ? (modes.salvo ? bonusShots : 1) : 0
+    const bonus = won ? 0 : Math.max(0, bonusShots - spent) + r.treasure
+    set({
+      enemyBoard: r.board,
+      events: [...events, ...r.events],
+      lastVolley: r.events,
       fogged: newlyFogged.length ? [...fogged, ...newlyFogged] : fogged,
-      salvo: { pending: [], size: salvoSize(playerBoard) },
-      turn: won ? 'human' : 'enemy',
+      salvo: { pending: [], size: bonus > 0 ? bonus : salvoSize(playerBoard) },
+      bonusShots: bonus,
+      turn: won || bonus > 0 ? 'human' : 'enemy',
       phase: won ? 'gameover' : 'battle',
       winner: won ? 'human' : undefined,
     })
-    return last
+    return r.last
   },
 
   enemyTurn: () => {
-    const { phase, turn, playerBoard, opponent, events, modes } = get()
+    const { phase, turn, playerBoard, opponent, events, modes, powerShots, treasure, spied, difficulty } = get()
     if (phase !== 'battle' || turn !== 'enemy' || !opponent) return undefined
-    const shots = modes.salvo ? salvoSize(get().enemyBoard) : 1
+    let shots = modes.salvo ? salvoSize(get().enemyBoard) : 1
     let board = playerBoard
     const resolved: GameEvent[] = []
     let last: ShotResult | undefined
-    for (let i = 0; i < shots; i++) {
+    let power = powerShots.enemy
+    let seen = spied.enemy
+    const observe = (res: ShotResult) => opponent.observe(res)
+
+    // Black Flag — Spyglass (Hard): one look when the heatmap has a clear favourite; no shot, no turn spent
+    if (modes.blackFlag && power.spyglass && opponent.spyTarget) {
+      const look = opponent.spyTarget(enemyView(board))
+      if (look) {
+        const ship = !!shipAt(board, look)
+        opponent.observeSpy?.(look, ship)
+        power = { ...power, spyglass: false }
+        seen = [...seen, { coord: look, ship }]
+        resolved.push({ id: ++eventId, by: 'enemy', kind: 'spyglass', spied: ship ? 'ship' : 'water', result: { coord: look, outcome: 'miss' } })
+      }
+    }
+
+    // Black Flag — Broadside (Medium / Hard): the turn after the first confirmed hit, aligned with it
+    if (modes.blackFlag && power.broadside && difficulty !== 'easy' && opponent.broadsideTarget) {
+      const line = opponent.broadsideTarget(enemyView(board))
+      if (line) {
+        const cells = broadsideCells(line.center, line.orientation, board.size).filter((c) => !hasBeenShot(board, c))
+        if (cells.length > 0) {
+          power = { ...power, broadside: false }
+          const r = resolveVolley(board, cells, 'enemy', 'broadside', treasure.human, ++groupId, observe)
+          board = r.board
+          resolved.push(...r.events)
+          last = r.last
+          shots = r.treasure // the Broadside is the whole turn; chests found are extra shots
+        }
+      }
+    }
+
+    for (let i = 0; i < shots && !isFleetSunk(board); i++) {
       const coord = opponent.nextShot(enemyView(board))
-      const next = fire(board, coord)
-      opponent.observe(next.result)
-      board = next.board
-      last = next.result
-      resolved.push({ id: ++eventId, by: 'enemy', result: next.result })
-      if (isFleetSunk(board)) break
+      const r = resolveVolley(board, [coord], 'enemy', 'shot', treasure.human, undefined, observe)
+      board = r.board
+      resolved.push(...r.events)
+      last = r.last ?? last
+      shots += r.treasure // treasure: fire again (salvo: +1 shot in the volley)
     }
     const lost = isFleetSunk(board)
     set({
       playerBoard: board,
       events: [...events, ...resolved],
       lastVolley: resolved,
+      powerShots: { ...get().powerShots, enemy: power },
+      spied: { ...get().spied, enemy: seen },
       salvo: { pending: [], size: salvoSize(board) },
+      bonusShots: 0,
       turn: 'human',
       phase: lost ? 'gameover' : 'battle',
       winner: lost ? 'enemy' : undefined,
@@ -312,11 +510,18 @@ export const useGameStore = create<GameState>((set, get) => ({
       enemyBoard: createBoard(),
       opponent: undefined,
       fogRng: undefined,
+      rng: undefined,
       turn: 'human',
       winner: undefined,
       events: [],
       lastVolley: [],
       salvo: emptySalvo(),
       fogged: [],
+      fleets: classicFleets(),
+      fleetPresets: { human: 'classic', enemy: 'classic' },
+      powerShots: noPowerShots(),
+      treasure: emptyPerPlayer<Coord>(),
+      spied: emptyPerPlayer<SpyMark>(),
+      bonusShots: 0,
     })),
 }))

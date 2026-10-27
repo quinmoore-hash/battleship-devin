@@ -88,10 +88,12 @@ export function recordGame(stats: Stats, summary: GameSummary, now = Date.now())
 
 /** Builds the summary of the game in `state` (call when `phase === 'gameover'`). */
 export function summarizeGame(state: Pick<GameState, 'difficulty' | 'winner' | 'events' | 'modes'>, durationMs: number): GameSummary {
-  const human = state.events.filter((e) => e.by === 'human')
+  // a Black Flag Spyglass look is knowledge, not a shot (and spends no turn)
+  const shots = state.events.filter((e) => e.kind !== 'spyglass')
+  const human = shots.filter((e) => e.by === 'human')
   let turns = 0
   let prev: GameState['turn'] | null = null
-  for (const e of state.events) {
+  for (const e of shots) {
     if (e.by === 'human' && prev !== 'human') turns++
     prev = e.by
   }

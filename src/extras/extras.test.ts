@@ -62,16 +62,16 @@ describe('replayModel', () => {
   })
 
   it('snapshotFromState copies the events and modes', () => {
-    const snap = snapshotFromState({ ...game, modes: { salvo: true, storm: false }, winner: 'human' })
+    const snap = snapshotFromState({ ...game, modes: { salvo: true, storm: false, blackFlag: false }, winner: 'human' })
     expect(snap.events).toEqual(game.events)
     expect(snap.events).not.toBe(game.events)
-    expect(snap.modes).toEqual({ salvo: true, storm: false })
+    expect(snap.modes).toEqual({ salvo: true, storm: false, blackFlag: false })
   })
 
   it('captions and counters', () => {
-    expect(describeEvent({ id: 1, by: 'human', result: { coord: { x: 1, y: 3 }, outcome: 'miss' } })).toBe('You fire at B4 — splash')
-    expect(describeEvent({ id: 1, by: 'enemy', result: { coord: { x: 0, y: 0 }, outcome: 'hit', shipId: 'sloop' } })).toMatch(/^Devin fires at A1 — hit the /)
-    expect(describeEvent({ id: 1, by: 'enemy', result: { coord: { x: 0, y: 0 }, outcome: 'sunk', shipId: 'sloop' } })).toMatch(/sunk the .*!$/)
+    expect(describeEvent({ id: 1, by: 'human', kind: 'shot', result: { coord: { x: 1, y: 3 }, outcome: 'miss' } })).toBe('You fire at B4 — splash')
+    expect(describeEvent({ id: 1, by: 'enemy', kind: 'shot', result: { coord: { x: 0, y: 0 }, outcome: 'hit', shipId: 'sloop' } })).toMatch(/^Devin fires at A1 — hit the /)
+    expect(describeEvent({ id: 1, by: 'enemy', kind: 'shot', result: { coord: { x: 0, y: 0 }, outcome: 'sunk', shipId: 'sloop' } })).toMatch(/sunk the .*!$/)
     expect(shotCounts(game.events, 5)).toEqual({ human: 3, enemy: 2 })
     expect(stepIntervalMs(1)).toBe(900)
     expect(stepIntervalMs(4)).toBe(225)

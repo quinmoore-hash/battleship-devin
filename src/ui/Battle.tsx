@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { useDirector } from '../cinematics'
-import { coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, viewGrid, type Coord, type ShotResult } from '../engine'
-import { useGameStore } from '../store/gameStore'
+import { broadsideCells, coordKey, coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, sameCoord, viewGrid, type Coord, type Orientation, type ShotResult } from '../engine'
+import { treasureFound, useGameStore } from '../store/gameStore'
 import { SKIP_CINEMATIC_EVENT } from '../perf/a11y/A11yBootstrap'
 import { useBattleController } from './battleController'
 import { FleetStatus } from './FleetStatus'
+import { PowerShots, type Armed } from './PowerShots'
 import { Grid, type GridCellInfo } from './Grid'
 import { Modal } from './Modal'
 import { CompassRose, Hint } from './Ornaments'
@@ -21,6 +22,14 @@ export function BattleScreen() {
   const events = useGameStore((s) => s.events)
   const turn = useGameStore((s) => s.turn)
   const difficulty = useGameStore((s) => s.difficulty)
+  const blackFlag = useGameStore((s) => s.modes.blackFlag)
+  const fleets = useGameStore((s) => s.fleets)
+  const powerShots = useGameStore((s) => s.powerShots)
+  const spied = useGameStore((s) => s.spied)
+  const spyAt = useGameStore((s) => s.spyAt)
+  const [armed, setArmed] = useState<Armed>('shot')
+  const [broadsideDir, setBroadsideDir] = useState<Orientation>('horizontal')
+  const [spyNote, setSpyNote] = useState<string | null>(null)
   const reset = useGameStore((s) => s.reset)
   const startGame = useGameStore((s) => s.startGame)
 
@@ -62,7 +71,16 @@ export function BattleScreen() {
         e.preventDefault()
         skip()
       }
-      if (e.key === 'Escape') setPendingTarget(null)
+      if (e.key === 'Escape') {
+        setPendingTarget(null)
+        setArmed('shot')
+      }
+      if (!blackFlag || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement | null)?.closest('input, textarea')) return
+      const k = e.key.toLowerCase()
+      const power = useGameStore.getState().powerShots.human
+      if (k === 'b' && power.broadside) setArmed((a) => (a === 'broadside' ? 'shot' : 'broadside'))
+      if (k === 'g' && power.spyglass) setArmed((a) => (a === 'spyglass' ? 'shot' : 'spyglass'))
+      if (k === 'r') setBroadsideDir((o) => (o === 'horizontal' ? 'vertical' : 'horizontal'))
     }
     const onSkipEvent = () => skip()
     window.addEventListener('keydown', onKey)
@@ -71,7 +89,7 @@ export function BattleScreen() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener(SKIP_CINEMATIC_EVENT, onSkipEvent)
     }
-  }, [busy, skip, setPendingTarget])
+  }, [busy, skip, setPendingTarget, blackFlag])
 
   const yourTurn = turn === 'human' && !busy
   // while the director plays, the side panels step back so the cannonball / sinking is not hidden behind parchment
@@ -119,8 +137,23 @@ export function BattleScreen() {
   const ownCells = useMemo(() => new Set(playerBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [playerBoard])
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt, tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const chestsBy = (by: 'human' | 'enemy') => new Set(events.filter((e) => e.kind === 'treasure' && e.by === by).map((e) => coordKey(e.result.coord)))
+  const treasureCells = useMemo(() => chestsBy('human'), [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  const enemyChests = useMemo(() => chestsBy('enemy'), [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  const spiedByMe = useMemo(() => new Map(spied.human.map((m) => [coordKey(m.coord), m.ship])), [spied])
+  const treasureFoundByMe = treasureFound(events, 'human')
+  const lastEvent = events[events.length - 1]
+  const treasureAgain = yourTurn && lastEvent?.by === 'human' && lastEvent.kind === 'treasure'
   const statusText = yourTurn
-    ? 'Your turn — fire at the enemy waters'
+    ? treasureAgain
+      ? `Your turn — treasure at ${coordLabel(lastEvent.result.coord)}, fire again!`
+      : spyNote
+        ? `Your turn — ${spyNote}`
+        : armed === 'broadside'
+          ? `Your turn — Broadside armed, pick the centre cell (${broadsideDir === 'horizontal' ? 'row' : 'column'}, R rotates)`
+          : armed === 'spyglass'
+            ? 'Your turn — Spyglass armed, pick a cell to look at'
+            : 'Your turn — fire at the enemy waters'
     : beat.phase === 'intro'
       ? 'Battle stations! The fleets take position…'
       : beat.phase === 'enemy-aiming'
@@ -136,16 +169,42 @@ export function BattleScreen() {
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
   const enemyCell = (c: Coord): GridCellInfo => {
     const state = enemyCells[c.y][c.x]
-    const aimed = target && target.x === c.x && target.y === c.y
-    return { state, className: `${aimed && yourTurn ? 'is-aimed' : ''} ${pending && aimed ? 'is-pending' : ''}`, title: state === 'unknown' ? coordLabel(c) : `${coordLabel(c)} — ${state}` }
+    const key = coordKey(c)
+    const aimed = target && (armed === 'broadside' ? broadsideCells(target, broadsideDir, enemyBoard.size).some((b) => sameCoord(b, c)) : target.x === c.x && target.y === c.y)
+    const seen = spiedByMe.get(key)
+    const chest = treasureCells.has(key)
+    const extra = chest ? ' cell-treasure' : seen === undefined ? '' : seen ? ' cell-spied cell-spied-ship' : ' cell-spied cell-spied-water'
+    const title = chest ? `${coordLabel(c)} — treasure` : seen !== undefined && state === 'unknown' ? `${coordLabel(c)} — spyglass: ${seen ? 'ship' : 'open water'}` : state === 'unknown' ? coordLabel(c) : `${coordLabel(c)} — ${state}`
+    return { state, className: `${aimed && yourTurn ? 'is-aimed' : ''} ${pending && aimed ? 'is-pending' : ''}${extra}`, title }
   }
   const playerCell = (c: Coord): GridCellInfo => {
     const state = playerView[c.y][c.x]
-    return { state: state === 'unknown' && ownCells.has(`${c.x},${c.y}`) ? 'ship' : state }
+    const chest = enemyChests.has(coordKey(c))
+    return {
+      state: state === 'unknown' && ownCells.has(`${c.x},${c.y}`) ? 'ship' : state,
+      className: chest ? 'cell-treasure' : undefined,
+      title: chest ? `${coordLabel(c)} — the enemy found treasure` : undefined,
+    }
   }
 
   const onEnemyCell = (c: Coord) => {
     if (!yourTurn) return
+    if (armed === 'spyglass') {
+      if (hasBeenShot(enemyBoard, c)) return playSfx('miss')
+      const seen = spyAt(c)
+      if (!seen) return playSfx('miss')
+      playSfx('ui-click')
+      setSpyNote(`Spyglass ${coordLabel(c)} — ${seen === 'ship' ? 'a ship!' : 'open water.'}`)
+      setArmed('shot')
+      return
+    }
+    setSpyNote(null)
+    if (armed === 'broadside') {
+      if (!broadsideCells(c, broadsideDir, enemyBoard.size).some((b) => !hasBeenShot(enemyBoard, b))) return playSfx('miss')
+      setArmed('shot')
+      void fire(c, { kind: 'broadside', orientation: broadsideDir })
+      return
+    }
     if (hasBeenShot(enemyBoard, c)) return playSfx('miss')
     void fire(c)
   }
@@ -189,8 +248,8 @@ export function BattleScreen() {
 
       <div className="battle-body">
         <aside className="panel parchment side-panel side-left ink-in">
-          <FleetStatus board={playerBoard} side="player" title="Your fleet" />
-          <FleetStatus board={enemyBoard} side="enemy" title="Enemy fleet" />
+          <FleetStatus board={playerBoard} side="player" title="Your fleet" fleet={fleets.human} />
+          <FleetStatus board={enemyBoard} side="enemy" title="Enemy fleet" fleet={fleets.enemy} />
         </aside>
 
         <section className="charts">
@@ -200,6 +259,17 @@ export function BattleScreen() {
               <span className="target-readout">{target && yourTurn ? `Target ${coordLabel(target)}` : '—'}</span>
             </h2>
             <Grid testId="enemy-grid" label="Enemy waters — fire" cell={enemyCell} onCell={onEnemyCell} onHover={(c) => setHover(c ? { side: 'enemy', coord: c } : null)} disabled={!yourTurn} lockResolved />
+            {blackFlag && (
+              <PowerShots
+                power={powerShots.human}
+                armed={armed}
+                orientation={broadsideDir}
+                treasure={treasureFoundByMe}
+                disabled={!yourTurn}
+                onArm={(a) => (playSfx('ui-click'), setSpyNote(null), setArmed(a))}
+                onRotate={() => setBroadsideDir((o) => (o === 'horizontal' ? 'vertical' : 'horizontal'))}
+              />
+            )}
             {pending && yourTurn && (
               <div className="fire-confirm ink-in" data-testid="fire-confirm">
                 <span>Fire at {coordLabel(pending)}?</span>

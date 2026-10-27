@@ -117,9 +117,9 @@ export interface FleetProps {
   revealed?: boolean
   boardOrigin?: Vec3
   cellSize?: number
-  /** Per ship id, 0..1 sink progress (driven by the sinking VFX / director). */
-  sinkProgress?: Partial<Record<ShipId, number>>
-  firing?: Partial<Record<ShipId, CannonRef[]>>
+  /** Per `PlacedShip.uid`, 0..1 sink progress (driven by the sinking VFX / director). */
+  sinkProgress?: Partial<Record<string, number>>
+  firing?: Partial<Record<string, CannonRef[]>>
   /** Fixed detail level, or `'auto'` to pick per ship from camera distance each frame (`src/perf`). */
   lod?: ShipModelProps['lod'] | 'auto'
   quality?: ShipModelProps['quality']
@@ -134,20 +134,20 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
         const sunk = ship.hits.length >= ship.spec.length
         if (!revealed && !sunk) return null
         // Low tier (fixed lod 2): a finished wreck sits under the surface and its flotsam marks the cells — skip the hull
-        if (sunk && lod === 2 && (sinkProgress?.[ship.spec.id] ?? 1) >= 1) return null
+        if (sunk && lod === 2 && (sinkProgress?.[ship.uid] ?? 1) >= 1) return null
         const { position, rotationY } = shipWorldTransform(ship, boardOrigin, cellSize)
         // a wreck that has finished sinking sits under the surface: always the lod-2 silhouette
-        const sink = sinkProgress?.[ship.spec.id] ?? (sunk ? 1 : 0)
+        const sink = sinkProgress?.[ship.uid] ?? (sunk ? 1 : 0)
         const pose = sinkPose(sink, { seed: placedShipSeed(ship), hull: SHIPS[ship.spec.id].anchors.hull, damage: damageOf(ship), lastHit: lastHitIndex(ship) })
         return (
-          <group key={ship.spec.id} position={[position[0], position[1] - pose.depth, position[2]]} rotation-y={rotationY + pose.yaw}>
+          <group key={ship.uid} position={[position[0], position[1] - pose.depth, position[2]]} rotation-y={rotationY + pose.yaw}>
             <group rotation={[pose.roll, 0, pose.pitch]}>
               {lod === 'auto' && sink < 1 ? (
                 <LodGroup position={position} hullLength={ship.spec.length}>
-                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={autoLod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />}
+                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={autoLod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />}
                 </LodGroup>
               ) : (
-                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.spec.id]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
           </group>

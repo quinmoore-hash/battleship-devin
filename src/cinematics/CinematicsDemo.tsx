@@ -21,7 +21,7 @@ interface Side {
 
 const applyShot = (side: Side, r: ShotResult): Side => ({
   shots: [...side.shots, r],
-  ships: r.outcome === 'miss' ? side.ships : side.ships.map((s) => (s.spec.id === r.shipId ? { ...s, hits: [...s.hits, r.coord] } : s)),
+  ships: r.outcome === 'miss' ? side.ships : side.ships.map((s) => (s.uid === (r.shipUid ?? r.shipId) ? { ...s, hits: [...s.hits, r.coord] } : s)),
 })
 
 const panel: React.CSSProperties = {
@@ -113,11 +113,11 @@ export function CinematicsDemo() {
       const ship = afloat.filter((s) => remaining(s).length > 1).sort((a, b) => remaining(b).length - remaining(a).length)[0]
       if (!ship) return null
       const cell = remaining(ship)[Math.floor(rng.current() * remaining(ship).length)]
-      return { coord: cell, outcome: 'hit', shipId: ship.spec.id }
+      return { coord: cell, outcome: 'hit', shipId: ship.spec.id, shipUid: ship.uid }
     }
     const ship = afloat.sort((a, b) => remaining(a).length - remaining(b).length)[0]
     const left = remaining(ship)
-    return { coord: left[left.length - 1], outcome: 'sunk', shipId: ship.spec.id }
+    return { coord: left[left.length - 1], outcome: 'sunk', shipId: ship.spec.id, shipUid: ship.uid }
   }
 
   const fire = async (by: Player, outcome: 'hit' | 'miss' | 'sunk') => {
@@ -126,9 +126,9 @@ export function CinematicsDemo() {
     if (!result) return say('nothing left to shoot at')
     if (outcome === 'sunk') {
       // pre-damage every other cell of the doomed ship so the last ball sinks it
-      const ship = side.ships.find((s) => s.spec.id === result!.shipId)!
+      const ship = side.ships.find((s) => s.uid === (result!.shipUid ?? result!.shipId))!
       const pre = ship.cells.filter((c) => !(c.x === result!.coord.x && c.y === result!.coord.y) && !ship.hits.some((h) => h.x === c.x && h.y === c.y))
-      const preShots: ShotResult[] = pre.map((coord) => ({ coord, outcome: 'hit', shipId: ship.spec.id }))
+      const preShots: ShotResult[] = pre.map((coord) => ({ coord, outcome: 'hit', shipId: ship.spec.id, shipUid: ship.uid }))
       const patch = (s: Side) => preShots.reduce(applyShot, s)
       if (by === 'human') setEnemy(patch)
       else setHuman(patch)

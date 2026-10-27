@@ -58,7 +58,7 @@ export function damageEntries(ships: PlacedShip[], boardOrigin: Vec3, cellSize: 
     for (const hit of ship.hits) {
       const idx = ship.cells.findIndex((c) => c.x === hit.x && c.y === hit.y)
       if (idx < 0) continue
-      const key = `${ship.spec.id}:${coordKey(hit)}`
+      const key = `${ship.uid}:${coordKey(hit)}`
       const seed = hashString(key)
       const centre = cellToWorld(hit, boardOrigin, cellSize)
       const jitter = ((seed % 100) / 100 - 0.5) * 0.3

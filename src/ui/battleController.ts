@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Coord, ShotResult } from '../engine'
 import { useGameStore } from '../store/gameStore'
+import type { PowerFire } from './turnFlow'
 import { createTurnFlow, type TurnBeat, type TurnFlow } from './turnFlow'
 import { useUiStore } from './uiStore'
 
@@ -18,7 +19,7 @@ interface BattleControllerState {
   start: () => void
   stop: () => void
   /** Fire from the HTML grid / confirm button. */
-  fire: (coord: Coord) => Promise<void>
+  fire: (coord: Coord, power?: PowerFire) => Promise<void>
   /** Fire or stage a target from the 3D board, depending on pointer type. */
   requestFire: (coord: Coord, pointerType?: string) => void
   skip: () => void
@@ -51,7 +52,7 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
     set({ flow: null, beat: { phase: 'idle' }, last: null, busy: false })
   },
 
-  fire: async (coord) => {
+  fire: async (coord, power) => {
     const { flow, busy, beat } = get()
     const game = useGameStore.getState()
     // a shot during the battle-start flyover skips it (the flow handles that); any other busy state ignores the click
@@ -59,7 +60,7 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
     useUiStore.getState().setPendingTarget(null)
     set({ busy: true })
     try {
-      await flow.fire(coord)
+      await flow.fire(coord, power)
     } finally {
       set({ busy: false })
     }

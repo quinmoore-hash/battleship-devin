@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { Coord, Orientation, ShipId } from '../engine'
+import type { Coord, Orientation } from '../engine'
 import { useGameStore } from '../store/gameStore'
 
 export const UI_PREFS_STORAGE_KEY = 'battleship-devin.ui'
@@ -20,8 +20,8 @@ export interface UiPrefs {
  */
 export interface UiInteraction {
   hover: { side: BoardSide; coord: Coord } | null
-  /** Ship currently being carried (picked from the tray or lifted off the water). */
-  carrying: ShipId | null
+  /** `PlacedShip.uid` of the ship being carried (picked from the tray or lifted off the water); the class is `uidClass(carrying)`. */
+  carrying: string | null
   orientation: Orientation
   /** True while the pointer button is held on a carried ship (drag), false for click-to-carry. */
   dragging: boolean
@@ -33,7 +33,7 @@ export interface UiInteraction {
 
 export interface UiState extends UiPrefs, UiInteraction {
   setHover: (hover: UiInteraction['hover']) => void
-  setCarrying: (id: ShipId | null, orientation?: Orientation) => void
+  setCarrying: (uid: string | null, orientation?: Orientation) => void
   setOrientation: (o: Orientation) => void
   rotate: () => void
   setDragging: (dragging: boolean) => void

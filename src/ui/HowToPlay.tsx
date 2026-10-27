@@ -17,9 +17,31 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           you sank something. Then the enemy fires back — press <kbd>Space</kbd> to skip the cinematic.
         </li>
         <li>
-          <strong>Sink all five</strong> enemy ships before they sink yours.
+          <strong>Sink every enemy ship</strong> before they sink yours.
         </li>
       </ol>
+      <h3>Rules of engagement</h3>
+      <p className="muted small">Tick any combination in the menu; all off is Classic.</p>
+      <dl className="howto-rules" data-testid="howto-rules">
+        <dt>Classic</dt>
+        <dd>One shot per turn, every shot visible, five ships each.</dd>
+        <dt>Salvo</dt>
+        <dd>Each side fires one shot per surviving ship every turn; the volley resolves at once.</dd>
+        <dt>Stormy seas</dt>
+        <dd>Fog swallows ~30% of your misses on the enemy chart: a fogged cell still reads as unknown — re-fire to find out.</dd>
+        <dt>Black Flag</dt>
+        <dd data-testid="howto-black-flag">
+          <b>Pick your fleet</b> before placing: Classic (5·4·3·3·2), Armada (two Men-o’-War, Galleon, Frigate), Wolf pack (Frigate, two Brigantines, four Sloops) or Raiders (Galleon, two Frigates, Brigantine, two Sloops) — every preset covers 17 cells and the enemy picks one too; both fleets are shown.
+          <br />
+          <b>Two power shots</b> per side per game, under the enemy chart: <b>Broadside</b> (<kbd>B</kbd>, <kbd>R</kbd> rotates) fires a line of three cells centred on your target — cells already shot or off the chart are skipped, and it is your whole turn (in Salvo it replaces the volley; in the storm each ball can be fogged). <b>Spyglass</b> (<kbd>G</kbd>) reveals one cell as ship or open water without firing and without spending your turn; the glyph stays on the chart.
+          <br />
+          <b>Hidden treasure</b>: two chests lie in the open water of each board, never under a ship or next to each other. Hit one and you fire again at once (in Salvo, one more shot in the volley; in the storm that shot can still be fogged). The enemy captain uses the same powers — Easy never does, Medium and Hard fire their Broadside the turn after their first hit, and Hard looks through the Spyglass when one cell is far likelier than the rest.
+        </dd>
+        <dt>Two captains</dt>
+        <dd>Hot-seat: two players on one screen take turns at the chart.</dd>
+        <dt>Sky &amp; sea</dt>
+        <dd>Visual only — picks the weather and time of day; the rules do not change.</dd>
+      </dl>
       <h3>The fleet</h3>
       <ul className="howto-fleet">
         {FLEET.map((s) => (
