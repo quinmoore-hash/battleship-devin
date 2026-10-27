@@ -1766,7 +1766,6 @@
 .battle[data-cinematic='true'] .charts:hover {
   filter: none;
 }
-<<<<<<< HEAD
 
 /* ---- Black Flag: fleet picker, power shots, chart glyphs ---- */
 .fleet-picker {
@@ -1885,8 +1884,6 @@
 .shot-log li.log-treasure .outcome {
   grid-column: 2;
 }
-||||||| parent of 165e7a5 (Sky & sea: day/night + weather picker (looks only), night palette on the single key light (BUG-580..582))
-=======
 
 /* Sky & sea picker (looks only): a small corner control on the menu, a fieldset in Settings.
    Wide screens pin it top-right, clear of the posters; narrower ones place it in-flow under the menu buttons. */
@@ -1961,15 +1958,9 @@
   font-size: 0.82rem;
   min-width: 0;
 }
-.howto-rules {
-  padding-left: 18px;
-  display: grid;
-  gap: 6px;
-}
 @media (max-width: 640px) {
   .skysea-compact {
     flex-wrap: wrap;
     justify-content: center;
   }
 }
->>>>>>> 165e7a5 (Sky & sea: day/night + weather picker (looks only), night palette on the single key light (BUG-580..582))

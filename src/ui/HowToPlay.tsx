@@ -20,7 +20,6 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           <strong>Sink every enemy ship</strong> before they sink yours.
         </li>
       </ol>
-<<<<<<< HEAD
       <h3>Rules of engagement</h3>
       <p className="muted small">Tick any combination in the menu; all off is Classic.</p>
       <dl className="howto-rules" data-testid="howto-rules">
@@ -40,36 +39,13 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
         </dd>
         <dt>Two captains</dt>
         <dd>Hot-seat: two players on one screen take turns at the chart.</dd>
-        <dt>Sky &amp; sea</dt>
-        <dd>Visual only — picks the weather and time of day; the rules do not change.</dd>
+        <dt>Sky &amp; sea (looks only)</dt>
+        <dd data-testid="howto-sky-sea">
+          Pick the time of day (Dawn, Noon, Golden hour, Dusk, Moonlit night) and the weather (Calm, Overcast, Squall)
+          from the corner of the menu or in Settings. It only changes the light and the water — shots, odds and turns are
+          untouched. Stormy seas brings its own weather while it is on.
+        </dd>
       </dl>
-||||||| parent of 165e7a5 (Sky & sea: day/night + weather picker (looks only), night palette on the single key light (BUG-580..582))
-=======
-      <h3>Rules of engagement</h3>
-      <ul className="howto-rules">
-        <li>
-          <strong>Classic</strong> — every rule off: one shot per turn, sink all five.
-        </li>
-        <li>
-          <strong>Salvo</strong> — one shot per surviving ship, every turn, for both sides.
-        </li>
-        <li>
-          <strong>Stormy seas</strong> — 30% of shots are lost in the storm, both sides; re-fire to find out.
-        </li>
-        <li>
-          <strong>Black Flag</strong> — pirate rules; see the dock for the current mechanics.
-        </li>
-        <li>
-          <strong>Two captains</strong> — two players at one screen, passing the helm between turns.
-        </li>
-        <li>
-          <strong>Sky &amp; sea (looks only)</strong> — pick the time of day (Dawn, Noon, Golden hour, Dusk,
-          Moonlit night) and the weather (Calm, Overcast, Squall) from the corner of the menu or in Settings.
-          It only changes the light and the water; shots, odds and turns are untouched. Stormy seas sets its
-          own weather while it is on.
-        </li>
-      </ul>
->>>>>>> 165e7a5 (Sky & sea: day/night + weather picker (looks only), night palette on the single key light (BUG-580..582))
       <h3>The fleet</h3>
       <ul className="howto-fleet">
         {FLEET.map((s) => (
