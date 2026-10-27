@@ -134,7 +134,7 @@ export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null
     const hull = SHIPS[event.shipId].anchors.hull
     const C = set(tmp.a, pose.position)
     if (beat?.name === 'sink') {
-      const r = hull.length * 0.55 + 1.5
+      const r = hull.length * 0.6 + 1.8
       const a = pose.rotationY + 0.95 + k * 1.1
       const orbit: Pose = { position: tmp.b, target: tmp.n, fov: 38 - k * 4 }
       orbit.position.set(C.x + Math.sin(a) * r, C.y + 0.9 + k * 0.7, C.z + Math.cos(a) * r)
