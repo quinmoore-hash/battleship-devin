@@ -117,7 +117,10 @@ always start there; `high` (2k shadows, bloom/SMAA, lod 0, full particles) is ma
 *and* a ≥ 90 fps probe. `<FpsWatchdog>` drops one tier once when battle FPS stays < 45 for 4 s (`auto` only) and
 `<QualityToast>` shows the one-time notice; `window.__perf.autoLower()` triggers it for tests; `?gpu=` pins the detected tier (skips the probe). `useDistanceLod(position,
 hullLength)` / `<LodGroup>` pick a ship `lod` from camera distance with hysteresis + 1 s dwell; `<Fleet lod="auto">`
-uses it. `useParticlesScale()` / `scaleCount(n, scale)` for VFX counts. `?perf` adds `<PerfStats>` (gl.info) +
+uses it. `LOD_THRESHOLDS` (`src/perf/lod.ts`, unit-tested against the real `CAMERA_SHOTS` battle cameras) keep every
+ship at lod ≤ 1 from the battle overview (23–44 units): lod 1 is the visually complete baked ship (rigging + ratlines,
+guns + lids, rails, stern works, ~24–47 k tris), lod 2 the far / Low-tier silhouette (masts, lower shrouds + stays,
+gun stubs, rails, ≤ ~8 k tris) and lod 0 the live close-up (BUG-702). `useParticlesScale()` / `scaleCount(n, scale)` for VFX counts. `?perf` adds `<PerfStats>` (gl.info) +
 `<PerfOverlay>`; `window.__perf.summary()` feeds `npm run perf`. `?perf-demo` = full-game load. Accessibility:
 `<A11yBootstrap>` (prefers-reduced-motion → `reducedMotion` + `cinematics:'fast'`, `<html data-colorblind|
 data-reduced-motion|data-quality>`, Space → `SKIP_CINEMATIC_EVENT`), `announce()`/`<Announcer>` live regions,

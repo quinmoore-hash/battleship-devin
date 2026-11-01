@@ -48,20 +48,36 @@ describe('bakeObject', () => {
     // shares the source material instance (uniform updates on the live copy show on the bake)
     expect(baked.children.some((c) => (c as THREE.Mesh).material === wood)).toBe(true)
   })
-  it('skips invisible subtrees and keeps instanced meshes as-is', () => {
+  it('skips invisible subtrees and unrolls instanced meshes into the material bucket (BUG-702)', () => {
     const root = new THREE.Group()
     const mat = new THREE.MeshStandardMaterial()
     const hidden = box(mat)
     hidden.visible = false
     const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(), mat, 5)
     inst.position.z = 4
+    const m = new THREE.Matrix4()
+    for (let i = 0; i < 5; i++) inst.setMatrixAt(i, m.makeTranslation(i, 0, 0))
     root.add(hidden, inst, box(mat))
+    const baked = bakeObject(root)
+    // one merged mesh: the plain box + the five instances share the material
+    expect(baked.children).toHaveLength(1)
+    expect(baked.children.some((c) => (c as THREE.InstancedMesh).isInstancedMesh)).toBe(false)
+    expect(bakeStats(baked).triangles).toBe(12 + 12 * 5)
+    const merged = (baked.children[0] as THREE.Mesh).geometry
+    merged.computeBoundingBox()
+    expect(merged.boundingBox!.max.x).toBeCloseTo(4.5) // instance 4 at x=4, half a unit box wide
+    expect(merged.boundingBox!.max.z).toBeCloseTo(4.5) // instances carry the InstancedMesh's own transform
+  })
+  it('keeps per-instance coloured InstancedMeshes as-is', () => {
+    const root = new THREE.Group()
+    const mat = new THREE.MeshStandardMaterial()
+    const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(), mat, 3)
+    inst.setColorAt(0, new THREE.Color('red'))
+    root.add(inst, box(mat))
     const baked = bakeObject(root)
     expect(baked.children).toHaveLength(2)
     const kept = baked.children.find((c) => (c as THREE.InstancedMesh).isInstancedMesh) as THREE.InstancedMesh
-    expect(kept.count).toBe(5)
-    expect(kept.position.z).toBeCloseTo(4)
-    expect(bakeStats(baked).triangles).toBe(12 + 12 * 5)
+    expect(kept.count).toBe(3)
   })
   it('keeps `userData.bakeAsIs` cloth meshes in their own frame with the depth material, no shadow', () => {
     const root = new THREE.Group()
@@ -101,7 +117,7 @@ describe('bakeObject', () => {
 })
 
 describe('bakeObject collapse (settled wrecks)', () => {
-  it('merges every plain mesh into one silhouette draw in the wreck material, keeping instanced parts as-is', () => {
+  it('merges every plain mesh and unrolled instance into one silhouette draw in the wreck material', () => {
     const root = new THREE.Group()
     const wood = new THREE.MeshStandardMaterial({ color: 'brown' })
     const cloth = new THREE.MeshStandardMaterial({ color: 'white', transparent: true })
@@ -117,6 +133,6 @@ describe('bakeObject collapse (settled wrecks)', () => {
     expect(meshes[0].material).toBe(wreck)
     expect(Object.keys(meshes[0].geometry.attributes).sort()).toEqual(['normal', 'position'])
     expect(bakeStats(baked).triangles).toBe(2 + 12 + 12 * 2)
-    expect(baked.children.some((c) => (c as THREE.InstancedMesh).isInstancedMesh)).toBe(true)
+    expect(baked.children).toHaveLength(1)
   })
 })

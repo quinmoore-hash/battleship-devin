@@ -139,9 +139,18 @@ const innerSkin = (x: number, y: number) => hullHalfWidth(x, y) - 0.045
 // ---------------------------------------------------------------------------------------------------------
 // hull
 
+/** Hull skin at 26/18/12 stations x 12/8/6 rings for lod 0/1/2: the lod-independent loft was 16 k of the 21 k lod-2 triangles (BUG-702). */
+const hullSkin = cached((key: string) => {
+  const lod = Number(key) as Lod
+  const rings = lod === 0 ? 12 : lod === 1 ? 8 : 6
+  const xs = stations(X_STERN, X_BOW, lod === 0 ? 26 : lod === 1 ? 18 : 12)
+  return {
+    above: dropTopSkin(loftHull(hullSections('above', rings, xs), rings), railY),
+    below: dropTopSkin(loftHull(hullSections('below', rings, xs), rings), () => 0),
+  }
+})
+
 const hullGeo = once(() => ({
-  above: dropTopSkin(loftHull(hullSections('above'), 12), railY),
-  below: dropTopSkin(loftHull(hullSections('below'), 12), () => 0),
   keel: (() => {
     const xs = stations(X_STERN + 0.05, X_BOW - 0.02, 20)
     const lo = (s: 1 | -1): Vec3[] => xs.map((x) => [x, keelY(x) - 0.045, s * 0.03])
@@ -239,11 +248,12 @@ export interface PartProps {
 
 export function Hull({ m, livery, lod }: PartProps) {
   const g = hullGeo()
+  const skin = hullSkin(String(lod))
   const navy = livery === 'navy'
   return (
     <group>
-      <mesh geometry={g.above} material={m.hull} castShadow receiveShadow />
-      <mesh geometry={g.below} material={m.hullBelow} receiveShadow />
+      <mesh geometry={skin.above} material={m.hull} castShadow receiveShadow />
+      <mesh geometry={skin.below} material={m.hullBelow} receiveShadow />
       <mesh geometry={g.keel} material={m.wale} />
       <mesh geometry={g.stem} material={m.hull} castShadow />
       <mesh geometry={g.rudder} material={m.hull} castShadow />
@@ -333,12 +343,13 @@ const frameGeo = once(() => {
   shape.holes.push(hole)
   return new THREE.ShapeGeometry(shape, 1)
 })
-const barrelGeo = once(() => {
-  const g = new THREE.CylinderGeometry(0.03, 0.04, 0.44, 10)
+const barrelGeo = cached((lodKey: string) => {
+  const fine = lodKey === '0'
+  const g = new THREE.CylinderGeometry(0.03, 0.04, 0.44, fine ? 10 : 6)
   g.rotateX(Math.PI / 2)
-  const ring = new THREE.TorusGeometry(0.034, 0.008, 6, 12)
+  const ring = new THREE.TorusGeometry(0.034, 0.008, fine ? 6 : 4, fine ? 12 : 6)
   ring.translate(0, 0, 0.2)
-  const g2 = new THREE.CylinderGeometry(0.04, 0.046, 0.06, 10)
+  const g2 = new THREE.CylinderGeometry(0.04, 0.046, 0.06, fine ? 10 : 6)
   g2.rotateX(Math.PI / 2)
   g2.translate(0, 0, -0.1)
   return mergeSimple([g, ring, g2])
@@ -403,11 +414,12 @@ export function GunDecks({ m, livery, lod, firing }: PartProps & { firing?: read
   return (
     <group>
       <InstancedPart geometry={portGeo()} material={m.portDark} items={ports} />
+      {lod === 2 && <InstancedPart geometry={barrelGeo(String(lod))} material={m.iron} items={barrels} />}
       {lod < 2 && (
         <>
           <InstancedPart geometry={frameGeo()} material={livery === 'navy' ? m.wale : m.trim} items={ports} />
           <InstancedPart geometry={lidGeo()} material={lidMaterials} items={lids} castShadow />
-          <InstancedPart geometry={barrelGeo()} material={m.iron} items={barrels} castShadow />
+          <InstancedPart geometry={barrelGeo(String(lod))} material={m.iron} items={barrels} castShadow />
           {carriages.map(({ slot, recoil }) => {
             const s = sideSign(slot.side)
             return (
@@ -418,6 +430,7 @@ export function GunDecks({ m, livery, lod, firing }: PartProps & { firing?: read
                 livery={livery}
                 recoil={recoil}
                 scale={0.55}
+                lod={lod}
               />
             )
           })}
@@ -807,17 +820,17 @@ export function shroudFeet(ch: ChannelSpec, side: 1 | -1, count: number): Vec3[]
 }
 
 /** All standing rigging of one mast (both sides), in the ship frame. */
-export function mastRigging(i: number, rungs: boolean): RopeSeg[] {
+export function mastRigging(i: number, rungs: boolean, rungSpacing = 0.09): RopeSeg[] {
   const mst = MASTS[i]
   const ch = CHANNELS[i]
   const segs: RopeSeg[] = []
   for (const s of [1, -1] as const) {
     const feet = shroudFeet(ch, s, i === 2 ? 3 : 4)
     const head = mastLocalToShip(mst, [0, mst.top - 0.06, s * 0.04])
-    segs.push(...shroudSegs(feet, head, rungs))
+    segs.push(...shroudSegs(feet, head, rungs, rungSpacing))
     const topFeet: Vec3[] = [-0.08, 0, 0.08].map((dx) => mastLocalToShip(mst, [dx + 0.02, mst.top + 0.02, s * (i < 2 ? 0.15 : 0.11)]))
     const topHead = mastLocalToShip(mst, [0.05, mst.crosstrees - 0.04, s * 0.03])
-    segs.push(...shroudSegs(topFeet, topHead, rungs, 0.07, 0.007))
+    segs.push(...shroudSegs(topFeet, topHead, rungs && rungSpacing < 0.1, 0.07, 0.007))
     // backstays
     segs.push({ a: mastLocalToShip(mst, [0.05, mst.crosstrees + 0.1, s * 0.02]), b: [ch.x0 - 0.12, ch.y + 0.015, s * (hullHalfWidth(ch.x0 - 0.12, ch.y) + 0.1)], r: 0.008 })
     segs.push({ a: mastLocalToShip(mst, [0.1, mst.height - 0.08, s * 0.015]), b: [ch.x0 - 0.22, ch.y + 0.015, s * (hullHalfWidth(ch.x0 - 0.22, ch.y) + 0.1)], r: 0.007 })
@@ -853,7 +866,7 @@ export function mastRigging(i: number, rungs: boolean): RopeSeg[] {
 const riggingGeo = cached((key: string) => {
   const [i, lodKey] = key.split(',')
   const lod = Number(lodKey) as Lod
-  return ropeTubes(mastRigging(Number(i), lod === 0), lod === 0 ? 5 : 4, lod)
+  return ropeTubes(mastRigging(Number(i), lod < 2, lod === 0 ? 0.09 : 0.18), lod === 0 ? 5 : 3, lod)
 })
 
 /** Bowsprit gear: bobstay, gammoning-to-stem, beakhead rails and the anchor cables. */
@@ -1050,11 +1063,11 @@ export function DeckFurniture({ m, livery, lod }: PartProps) {
       {/* hatch coaming + grating */}
       <mesh geometry={bx(0.64, 0.05, 0.42)} material={m.wale} position={[0.62, DECK.main + 0.025, 0]} castShadow />
       <mesh geometry={bx(0.6, 0.01, 0.38)} material={m.portDark} position={[0.62, DECK.main + 0.05, 0]} />
+      <InstancedPart geometry={railPostGeo()} material={m.spar} items={d.railPosts} castShadow={lod === 0} />
+      <InstancedPart geometry={bx(1, 1, 1)} material={m.wale} items={d.rails} />
       {lod < 2 && (
         <>
           <InstancedPart geometry={stepGeo()} material={m.deckDark} items={d.steps} castShadow />
-          <InstancedPart geometry={railPostGeo()} material={m.spar} items={d.railPosts} castShadow />
-          <InstancedPart geometry={bx(1, 1, 1)} material={m.wale} items={d.rails} />
           <ShipsBoat m={m} lod={lod} />
           <Capstan m={m} lod={lod} />
           <Belfry m={m} />
@@ -1076,7 +1089,7 @@ export function DeckFurniture({ m, livery, lod }: PartProps) {
             return (
               <group key={`a${s}`}>
                 <mesh geometry={bx(0.07, 0.06, 0.4)} material={m.wale} position={[1.95, RAIL.castle + 0.02, s * (skin + 0.1)]} rotation-y={s * 0.3} castShadow />
-                <Anchor position={[1.98, 0.72, s * (hullHalfWidth(1.95, 0.7) + 0.16)]} livery={livery} scale={1.35} />
+                <Anchor lod={lod} position={[1.98, 0.72, s * (hullHalfWidth(1.95, 0.7) + 0.16)]} livery={livery} scale={1.35} />
                 <mesh geometry={cyl(0.03, 0.03, 0.02, 10)} material={m.portDark} position={[2.12, 0.62, s * (hullHalfWidth(2.12, 0.62) + 0.002)]} rotation-x={Math.PI / 2} />
               </group>
             )

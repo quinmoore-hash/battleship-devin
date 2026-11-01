@@ -149,7 +149,7 @@ function foreRopes(lod: Lod): RopeLine[] {
   const lines: RopeLine[] = []
   for (const s of [1, -1] as const) {
     const bases = [0.63, 0.75, 0.87].map((x) => channelPoint(x, s))
-    lines.push(...shroudLines(bases, FORE_LOWER_HEAD, lod === 0 ? 11 : 0))
+    lines.push(...shroudLines(bases, FORE_LOWER_HEAD, lod === 0 ? 11 : lod === 1 ? 5 : 0))
     // topmast shrouds from the top rim
     lines.push([[FOREMAST_X, FORE_LOWER_HEAD[1], s * 0.09], [FORE_HEAD[0], FORE_HEAD[1] - 0.03, s * 0.015], 0.007])
     // backstay
@@ -167,7 +167,7 @@ function mainRopes(lod: Lod, sails: number): RopeLine[] {
   const peakW: Vec3 = [MAINMAST_X + peak[0], DECK_Y + peak[1], 0]
   for (const s of [1, -1] as const) {
     const bases = [-0.54, -0.4, -0.26].map((x) => channelPoint(x, s))
-    lines.push(...shroudLines(bases, MAIN_LOWER_HEAD, lod === 0 ? 12 : 0))
+    lines.push(...shroudLines(bases, MAIN_LOWER_HEAD, lod === 0 ? 12 : lod === 1 ? 6 : 0))
     lines.push([[MAINMAST_X, MAIN_LOWER_HEAD[1], s * 0.12], [MAIN_HEAD[0], MAIN_HEAD[1] - 0.03, s * 0.015], 0.007])
     lines.push([[MAIN_HEAD[0], MAIN_HEAD[1] - 0.05, 0], railPoint(-1.05, s), 0.008]) // backstays
     // boom topping lift to the masthead
@@ -263,13 +263,12 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
       {lod < 2 && <BrigLantern position={[TRANSOM_X + 0.02, sheerY(TRANSOM_X) + 0.03, -0.27]} mats={mats} scale={0.9} />}
 
       {/* ---------- guns ---------- */}
-      {lod < 2 &&
-        CANNON_X.map((x) =>
+      {CANNON_X.map((x) =>
           (['port', 'starboard'] as const).map((side) => {
             const fire = isFiring(x, side)
             return (
               <group key={`${x}${side}`}>
-                <Cannon position={cannonPosition(x, side)} rotationY={side === 'starboard' ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} scale={CANNON_SCALE} />
+                <Cannon position={cannonPosition(x, side)} rotationY={side === 'starboard' ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} lod={lod} scale={CANNON_SCALE} />
                 <GunPortLid x={x} side={side} open={fire ? 1 : 0.55} mats={mats} />
                 {lod === 0 && <RopeCoil position={[x + 0.07, DECK_Y, side === 'starboard' ? 0.1 : -0.1]} livery={livery} />}
               </group>
@@ -313,7 +312,7 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
               <mesh material={mats.timber} position={[1.24, sheerY(1.24) + 0.01, s * (hullHalfWidth(1.24, sheerY(1.24)) + 0.02)]} rotation-y={s * 0.3}>
                 <boxGeometry args={[0.05, 0.04, 0.16]} />
               </mesh>
-              <Anchor position={[1.26, 0.38, s * (hullHalfWidth(1.26, 0.4) + 0.07)]} livery={livery} scale={0.55} />
+              <Anchor lod={lod} position={[1.26, 0.38, s * (hullHalfWidth(1.26, 0.4) + 0.07)]} livery={livery} scale={0.55} />
             </group>
           ))}
         </>

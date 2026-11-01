@@ -150,7 +150,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
       [[0.03, 1.5, 0.02], [0.1 - 0.15, 0.1, 0.24], 0.006], // topping lift fall to the pin rail
       [hounds, [0.0, 0.12, 0.0], 0.006], // main halyard fall along the mast
     ]
-    return ropesGeometry(segs, 5, 0, lod)
+    return ropesGeometry(segs, lod === 0 ? 5 : 3, 0, lod)
   }, [lod, boomEnd, throat, peak])
 
   const blocks = useMemo(() => {
@@ -189,9 +189,9 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
         segs.push([[d[0], d[1] - 0.03, d[2]], [d[0], d[1] + 0.03, d[2]], 0.006])
       }
       // ratline rungs are the finest lines: LOD 0 only (they alias into dots from the game camera)
-      if (lod === 0) segs.push(...ratlineSegments(shrouds, 0.62, 1.36, 0.065))
+      if (lod < 2) segs.push(...ratlineSegments(shrouds, 0.62, 1.36, lod === 0 ? 0.065 : 0.13))
     }
-    return ropesGeometry(segs, 5, 0, lod)
+    return ropesGeometry(segs, lod === 0 ? 5 : 3, 0, lod)
   }, [lod])
 
   // sheets for the headsails (ship frame, hidden with the mast)

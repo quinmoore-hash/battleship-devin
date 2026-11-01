@@ -48,26 +48,28 @@ function cannonGeometry(lod: Lod) {
   const key = `cannon${lod}`
   let g = GEOM.get(key) as THREE.BufferGeometry & { oak?: THREE.BufferGeometry; brass?: THREE.BufferGeometry | null }
   if (g) return { iron: g, oak: g.oak!, brass: g.brass ?? null }
-  const radial = lod === 0 ? 18 : lod === 1 ? 10 : 6
-  const pts = (lod === 2 ? BARREL_PROFILE.filter((_, i) => i % 2 === 0 || i > 20) : BARREL_PROFILE).map(([r, z]) => new THREE.Vector2(r, z))
+  // baked lods (BUG-702): a gun is a few pixels long from the battle camera, so the barrel drops to 7 / 6 facets and
+  // every other profile point: ~150 tris instead of ~550 per gun, with the carriage / rings / lids all still present
+  const radial = lod === 0 ? 18 : lod === 1 ? 7 : 6
+  const pts = (lod >= 1 ? BARREL_PROFILE.filter((_, i) => i % 2 === 0 || i > 20) : BARREL_PROFILE).map(([r, z]) => new THREE.Vector2(r, z))
   const barrel = new THREE.LatheGeometry(pts, radial)
   barrel.rotateX(Math.PI / 2)
   barrel.translate(0, 0.2, 0)
-  const iron = mergeBuffers([barrel, cyl(0.03, 0.03, 0.26, lod === 0 ? 10 : 6, 0, 0.2, 0.02, 0, 0, Math.PI / 2)])
+  const iron = mergeBuffers([barrel, cyl(0.03, 0.03, 0.26, lod === 0 ? 10 : 5, 0, 0.2, 0.02, 0, 0, Math.PI / 2)])
   const oak: THREE.BufferGeometry[] = []
   for (const s of [-1, 1]) {
     oak.push(box(0.05, CHEEK_H, 0.46, s * 0.1, 0.095, 0.06))
     oak.push(box(0.05, 0.04, 0.12, s * 0.1, 0.095 + CHEEK_H / 2 - 0.02, -0.12))
     if (lod < 2) oak.push(box(0.05, 0.06, 0.1, s * 0.1, 0.03, -0.17))
-    oak.push(cyl(0.075, 0.075, 0.045, lod === 0 ? 14 : 8, s * 0.15, 0.075, 0.2, 0, 0, Math.PI / 2))
-    oak.push(cyl(0.065, 0.065, 0.045, lod === 0 ? 14 : 8, s * 0.14, 0.065, -0.14, 0, 0, Math.PI / 2))
+    oak.push(cyl(0.075, 0.075, 0.045, lod === 0 ? 14 : 6, s * 0.15, 0.075, 0.2, 0, 0, Math.PI / 2))
+    oak.push(cyl(0.065, 0.065, 0.045, lod === 0 ? 14 : 6, s * 0.14, 0.065, -0.14, 0, 0, Math.PI / 2))
   }
   oak.push(box(0.2, 0.03, 0.46, 0, 0.06, -0.02), box(0.3, 0.05, 0.05, 0, 0.03, 0.2), box(0.28, 0.05, 0.05, 0, 0.03, -0.14))
   oak.push(box(0.07, 0.035, 0.14, 0, 0.13, -0.17, -0.22), cyl(0.012, 0.012, 0.08, 6, 0, 0.17, -0.09, 0, 0, Math.PI / 2))
   let brass: THREE.BufferGeometry | null = null
   if (lod < 2) {
     brass = mergeBuffers([
-      ...[-1, 1].map((s) => place(new THREE.TorusGeometry(0.034, 0.008, 6, 12, Math.PI), s * 0.1, 0.2, 0.02, 0, 0, Math.PI / 2)),
+      ...[-1, 1].map((s) => place(new THREE.TorusGeometry(0.034, 0.008, lod === 0 ? 6 : 4, lod === 0 ? 12 : 6, Math.PI), s * 0.1, 0.2, 0.02, 0, 0, Math.PI / 2)),
       ...[-1, 1].map((s) => cyl(0.014, 0.014, 0.02, 6, s * 0.17, 0.075, 0.2, 0, 0, Math.PI / 2)),
       ...[-1, 1].map((s) => cyl(0.012, 0.012, 0.02, 6, s * 0.16, 0.065, -0.14, 0, 0, Math.PI / 2)),
     ])
@@ -89,10 +91,11 @@ function breechingGeometry(lod: Lod, step: number) {
     const recoil = step / RECOIL_STEPS
     const cascabel = new THREE.Vector3(0, 0.2, -0.33 - recoil * 0.32)
     const sag = 0.1 * (1 - recoil) + 0.004
-    const r = lod === 0 ? 6 : 4
+    const r = lod === 0 ? 6 : 3
+    const samples = lod === 0 ? 10 : 4
     g = mergeBuffers([
-      ropeGeometry(ropeCurve(RING_L, cascabel.toArray() as Vec3, sag, 10), 0.016, r),
-      ropeGeometry(ropeCurve(cascabel.toArray() as Vec3, RING_R, sag, 10), 0.016, r),
+      ropeGeometry(ropeCurve(RING_L, cascabel.toArray() as Vec3, sag, samples), 0.016, r),
+      ropeGeometry(ropeCurve(cascabel.toArray() as Vec3, RING_R, sag, samples), 0.016, r),
     ])
     GEOM.set(key, g)
   }

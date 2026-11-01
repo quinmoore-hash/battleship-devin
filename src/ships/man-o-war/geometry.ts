@@ -113,8 +113,8 @@ export function hullCurve(y: number | ((x: number) => number), side: 1 | -1, off
 }
 
 /** Cross-sections for the kit lofter, split at the waterline so the topsides and the bottom get their own material. */
-export function hullSections(part: 'above' | 'below', rings = 12): HullSection[] {
-  return stations().map((x) => {
+export function hullSections(part: 'above' | 'below', rings = 12, xs = stations()): HullSection[] {
+  return xs.map((x) => {
     const lo = part === 'below' ? keelY(x) : 0
     const hi = part === 'below' ? 0 : railY(x)
     const halfWidths: number[] = []

@@ -90,13 +90,13 @@ export function Cloth({ corners, billow, set = 1, torn = 0, scorched = false, ph
 
 export type RopeLine = [Vec3, Vec3, number?]
 
-/** Cylinder between two points, 5 radial segments. */
-function ropeGeometry(from: Vec3, to: Vec3, radius: number): THREE.BufferGeometry {
+/** Cylinder between two points (5 radial segments live, 3 in the baked lods). */
+function ropeGeometry(from: Vec3, to: Vec3, radius: number, radial = 5): THREE.BufferGeometry {
   const a = new THREE.Vector3(...from)
   const b = new THREE.Vector3(...to)
   const dir = b.clone().sub(a)
   const len = dir.length()
-  const g = new THREE.CylinderGeometry(radius, radius, len, 5, 1, true)
+  const g = new THREE.CylinderGeometry(radius, radius, len, radial, 1, true)
   const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
   g.applyQuaternion(q)
   g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
@@ -105,7 +105,7 @@ function ropeGeometry(from: Vec3, to: Vec3, radius: number): THREE.BufferGeometr
 
 /** All lines merged into one geometry. */
 export function buildRopeGeometry(lines: RopeLine[], radius = 0.009, lod: Lod = 0): THREE.BufferGeometry | null {
-  const parts = lines.filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) > 1e-4).map(([a, b, r]) => ropeGeometry(a, b, ropeRadiusAtLod(r ?? radius, lod)))
+  const parts = lines.filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) > 1e-4).map(([a, b, r]) => ropeGeometry(a, b, ropeRadiusAtLod(r ?? radius, lod), lod === 0 ? 5 : 3))
   if (parts.length === 0) return null
   const merged = mergeGeometries(parts, false)
   parts.forEach((p) => p.dispose())

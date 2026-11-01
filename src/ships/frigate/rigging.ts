@@ -41,7 +41,7 @@ export function buildMastGeoms(m: MastSpec, lod: Lod, spanker: boolean): MastGeo
   const hit = mastGeomCache.get(key)
   if (hit) return hit
   const h = m.height
-  const seg = lod === 2 ? 6 : 10
+  const seg = lod === 2 ? 6 : lod === 1 ? 7 : 10
   const breakY = h * BREAK_FRAC
   const stump = spar(breakY, 0.05, 0.046, seg)
   const oak: THREE.BufferGeometry[] = []
@@ -135,7 +135,6 @@ export function mastRigging(index: number, lod: Lod): Segment[] {
   const m = MASTS[index]
   const h = m.height
   const segs: Segment[] = []
-  if (lod === 2) return segs
   const chanY = deckY(m.x) + 0.15
   const hounds = mastPoint(m, h * 0.52)
   const rungStep = 0.045
@@ -146,12 +145,13 @@ export function mastRigging(index: number, lod: Lod): Segment[] {
     const top: Vec3 = [hounds[0], hounds[1], side * 0.04]
     for (const d of dead) segs.push({ a: d, b: top, r: 0.009 })
     const at = (d: Vec3, t: number): Vec3 => [d[0] + (top[0] - d[0]) * t, d[1] + (top[1] - d[1]) * t, d[2] + (top[2] - d[2]) * t]
-    // ratline rungs are the finest lines: LOD 0 only (they alias into dots from the game camera)
-    if (lod === 0) {
-      for (let t = 0.1; t < 0.84; t += rungStep) {
+    // ratline rungs: every rung live, every other rung in the baked lod 1 (BUG-702), none in the far silhouette
+    if (lod < 2) {
+      for (let t = 0.1; t < 0.84; t += lod === 0 ? rungStep : rungStep * 2) {
         for (let i = 0; i < 3; i++) segs.push({ a: at(dead[i], t), b: at(dead[i + 1], t), r: 0.004 })
       }
     }
+    if (lod === 2) continue // the silhouette keeps the lower shrouds + stays only
     // topmast shrouds from the top platform to the crosstrees
     const platform = mastPoint(m, h * 0.55)
     const xtrees = mastPoint(m, h * 0.82)

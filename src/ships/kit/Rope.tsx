@@ -51,7 +51,8 @@ export function Rope({ from, to, livery, radius = 0.012, sag = 0, lod = 0 }: Rop
   const m = shipMaterials(livery)
   const geom = useMemo(() => {
     const samples = sag > 0 ? (lod === 0 ? 14 : 7) : 2
-    return ropeGeometry(ropeCurve(from, to, sag, samples), ropeRadiusAtLod(radius, lod), lod === 0 ? 6 : lod === 1 ? 4 : 3)
+    // baked lods: one straight segment per taut rope, a short polyline for sagging ones (tube length / 0.15 is live-only)
+    return ropeGeometry(ropeCurve(from, to, sag, samples), ropeRadiusAtLod(radius, lod), lod === 0 ? 6 : lod === 1 ? 4 : 3, lod === 0 ? undefined : sag > 0 ? 6 : 1)
   }, [from, to, radius, sag, lod])
   useLayoutEffect(() => () => geom.dispose(), [geom])
   return <mesh geometry={geom} material={m.rope} castShadow />
@@ -85,7 +86,7 @@ const _up = new THREE.Vector3(0, 1, 0)
 export function Ratlines({ from, to, livery, rungs = 10, shrouds = 3, spread = 0.35, mirror = true, lod = 0 }: RatlinesProps) {
   const m = shipMaterials(livery)
   const sides = mirror ? [1, -1] : [1]
-  const rungCount = lod === 0 ? rungs : 0 // rungs are the finest lines: LOD 0 only
+  const rungCount = lod === 0 ? rungs : lod === 1 ? Math.ceil(rungs / 2) : 0 // lod 1 keeps every other rung at the thickened radius (BUG-702)
   const lines = useMemo(() => {
     const out: { a: Vec3; b: Vec3 }[] = []
     for (const side of sides) {
