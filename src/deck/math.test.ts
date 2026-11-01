@@ -18,6 +18,7 @@ import {
   rayToCell,
   rectPolygon,
   resolveDeckAnchors,
+  sinkProgressFor,
   spawnPose,
   stationsOf,
   stationUsable,
@@ -214,5 +215,12 @@ describe('look math', () => {
     expect(cycleShip(afloat, 'c')).toBe('b')
     expect(cycleShip(afloat, 'a')).toBe('b')
     expect(cycleShip([], 'a')).toBeNull()
+  })
+
+  it('sinkProgressFor ignores a stale wreck progress for an afloat ship (uids repeat across games / fleets)', () => {
+    expect(sinkProgressFor(false, 1)).toBe(0)
+    expect(sinkProgressFor(false, undefined)).toBe(0)
+    expect(sinkProgressFor(true, 0.4)).toBe(0.4)
+    expect(sinkProgressFor(true, undefined)).toBe(1)
   })
 })

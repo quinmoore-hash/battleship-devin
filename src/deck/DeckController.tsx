@@ -36,6 +36,7 @@ import {
   nearestStation,
   rayToCell,
   resolveDeckAnchors,
+  sinkProgressFor,
   spawnPose,
   stationUsable,
   stationsOf,
@@ -414,7 +415,7 @@ export function DeckController() {
     // ship world pose: exactly what <Fleet>'s Afloat group does (wave height + sink pose)
     const { position, rotationY } = geometry.transform
     const sunk = isSunk(ship)
-    const sink = director.store.getState().sinkProgress[ship.uid] ?? (sunk ? 1 : 0)
+    const sink = sinkProgressFor(sunk, director.store.getState().sinkProgress[ship.uid])
     const sp = sinkPose(sink, { seed: geometry.seed, hull: geometry.hull, damage: damageOf(ship), lastHit: lastHitIndex(ship) })
     const y = position[1] - sp.depth + sampleWaveHeight(position[0], position[2], t)
     tmp.q.setFromEuler(tmp.e.set(0, rotationY + sp.yaw, 0))

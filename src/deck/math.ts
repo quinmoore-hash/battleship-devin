@@ -376,3 +376,9 @@ export function cycleShip(afloat: readonly string[], current: string | null, ste
   if (i < 0) return afloat[0]
   return afloat[(i + step + afloat.length) % afloat.length]
 }
+
+/**
+ * Sink depth input for the standing ship. The director keys `sinkProgress` by ship uid and keeps it across games, and
+ * uids repeat (spec ids, both hot-seat fleets), so a stale 1 from a wreck of the previous game must not drown an afloat ship.
+ */
+export const sinkProgressFor = (sunk: boolean, progress: number | undefined): number => (sunk ? (progress ?? 1) : 0)
