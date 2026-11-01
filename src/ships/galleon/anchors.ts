@@ -5,6 +5,8 @@
 import type { Vec3 } from '../../scene/layout'
 import type { CannonRef, ShipAnchors, Side } from '../types'
 import { GALLEON, deckY, halfWidth } from './hull'
+import type { DeckAnchors } from '../../deck/contract'
+import { breakRamp, deckPolygon, gunStations, mastObstacles } from '../kit/deck'
 
 /** Kit `Cannon` scale used on the galleon; its muzzle sits at local z = 0.45 × scale. */
 export const CANNON_SCALE = 0.5
@@ -69,6 +71,34 @@ export const mastBase = (m: MastSpec): Vec3 => [m.x, deckY(m.x), 0]
 /** Cannonballs hit the side just above the wales, at the cell's centre. Port side; mirror z for starboard. */
 export const IMPACT_Y = 0.32
 
+/**
+ * Walkable decks: waist (main deck) between the castles, quarterdeck and poop aft, forecastle forward, each
+ * joined by a central stair at its break. Guns under the castles are served from the deck above them.
+ * Obstacles: masts, the waist grating, wheel + binnacle, the belfry; the helmsman spawns aft of the wheel.
+ */
+export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnchors['masts']): DeckAnchors {
+  const G = GALLEON
+  const hw = (x: number) => halfWidth(x, deckY(x) + 0.02) - G.plank - 0.02
+  const walk = [
+    deckPolygon({ x0: G.quarterX + 0.02, x1: G.forecastleX - 0.02, y: G.mainDeckY, halfWidth: hw, steps: 6 }),
+    deckPolygon({ x0: G.poopX + 0.02, x1: G.quarterX - 0.02, y: G.quarterDeckY, halfWidth: hw, steps: 4 }),
+    deckPolygon({ x0: G.xStern + 0.1, x1: G.poopX - 0.02, y: G.poopDeckY, halfWidth: hw, steps: 3 }),
+    deckPolygon({ x0: G.forecastleX + 0.02, x1: G.xBow - 0.2, y: G.forecastleDeckY, halfWidth: hw, steps: 3 }),
+  ]
+  return {
+    spawn: [-0.98, G.quarterDeckY, 0.14],
+    walk,
+    ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1), breakRamp(0, 3, G.forecastleX, 0.12)],
+    obstacles: [
+      ...mastObstacles(masts, 0.1),
+      { center: [0.3, 0], radius: 0.3 },
+      { center: [-0.7, 0], radius: 0.14 },
+      { center: [1.4, 0], radius: 0.1 },
+    ],
+    stations: gunStations(cannons, walk, deckY),
+  }
+}
+
 export function buildAnchors(): ShipAnchors {
   const cannons = cannonPlacements().map(({ cell, side, muzzle, direction }) => ({ cell, side, muzzle, direction }))
   const masts = MASTS.map((m) => ({ base: mastBase(m), height: m.height }))
@@ -81,6 +111,7 @@ export function buildAnchors(): ShipAnchors {
     cannons,
     masts,
     deckY: GALLEON.mainDeckY,
+    deck: buildGalleonDeck(cannons, masts),
     hull: { length: GALLEON.length, beam: GALLEON.beam, height: mastTop, draft: -GALLEON.keelY },
     impactPoints,
   }

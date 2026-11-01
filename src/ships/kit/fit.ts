@@ -1,5 +1,6 @@
 import type { Vec3 } from '../../scene/layout'
 import type { ShipAnchors } from '../types'
+import { fitDeck } from './deck'
 
 /**
  * Re-expresses a class's anchors after its model root is scaled about the origin and shifted along x
@@ -13,5 +14,6 @@ export function fitAnchors(a: ShipAnchors, scale: number, dx: number): ShipAncho
     deckY: a.deckY * scale,
     hull: { length: a.hull.length * scale, beam: a.hull.beam * scale, height: a.hull.height * scale, draft: a.hull.draft * scale },
     impactPoints: a.impactPoints.map(p),
+    ...(a.deck ? { deck: fitDeck(a.deck, scale, dx) } : {}),
   }
 }
