@@ -7,6 +7,7 @@ import { OceanScene } from '../scene'
 import type { Weather } from '../scene/sun'
 import { BOARD_LAYOUT, type Vec3 } from '../scene/layout'
 import { sampleWaveHeight } from '../scene/waves'
+import { usePerf } from '../perf'
 import { Fleet, SHIPS, shipWorldTransform } from './index'
 import type { Livery } from './types'
 
@@ -14,8 +15,8 @@ import type { Livery } from './types'
  * `?deck-demo&ship=man-o-war&look=fwd|rail|aft|port&lod=0&dressed=0|1&bay=0|1&wrecks=6&tod=0.6&weather=squall&livery=navy&perf&quality=medium`
  *
  * Eye-height review of one class in the real battle scene: the chosen ship sits on the player board's first row
- * and is rendered live at `lod` (default 0, the "On deck" detail level); the rest of a classic fleet is baked on
- * the rows behind it; `wrecks` sunk enemy ships lie on the enemy waters. The camera stands at the class's helm
+ * and is rendered at `lod` (default: the perf tier's lod, as `GameWorld` does on deck — `lod=0` forces the live
+ * model); the rest of a classic fleet is baked one lod coarser on the rows behind it; `wrecks` sunk enemy ships lie on the enemy waters. The camera stands at the class's helm
  * (`anchors.deck.spawn`, else a quarterdeck guess) at `deckY + EYE_HEIGHT`, near `DECK_NEAR`, fov `DECK_FOV`, and
  * rides the hull on the waves. `look`: `fwd` down the deck toward the bow, `rail` across the port rail toward
  * the enemy board, `aft` toward the stern, `port` = `rail` pitched up to the horizon, `down` from `eye=x,y,z` (ship frame,
@@ -84,7 +85,11 @@ export function DeckDemo() {
   const id = (q.get('ship') as ShipId | null) ?? 'man-o-war'
   const shipId: ShipId = SHIPS[id] ? id : 'man-o-war'
   const look = LOOKS[q.get('look') ?? 'fwd'] ?? LOOKS.fwd
-  const lod = Math.min(2, Math.max(0, Number(q.get('lod') ?? 0))) as 0 | 1 | 2
+  // same tiering as GameWorld on deck: the standing ship at the tier's lod (Medium = baked lod 1, High = live lod 0),
+  // the rest of the own fleet one step coarser, the enemy wrecks by distance
+  const tierLod = usePerf().lod
+  const lod = (q.get('lod') !== null ? Math.min(2, Math.max(0, Number(q.get('lod')))) : tierLod) as 0 | 1 | 2
+  const restLod = lod === 0 ? 1 : 2
   const wrecks = Math.min(5, Math.max(0, Number(q.get('wrecks') ?? 0)))
   const livery = (q.get('livery') as Livery) || 'pirate'
   const tod = q.get('tod') !== null ? Number(q.get('tod')) : undefined
@@ -102,8 +107,8 @@ export function DeckDemo() {
   return (
     <OceanScene view="battle" interactive={false} cameraOverride timeOfDay={tod} weather={weather} dressing={bay}>
       <Fleet ships={[own]} livery={livery} lod={lod} dressedUid={dressed ? own.uid : null} />
-      <Fleet ships={rest} livery={livery} lod={1} />
-      {foe.length > 0 && <Fleet ships={foe} livery={livery === 'pirate' ? 'navy' : 'pirate'} revealed={false} boardOrigin={BOARD_LAYOUT.enemy.origin} lod={1} />}
+      <Fleet ships={rest} livery={livery} lod={restLod} />
+      {foe.length > 0 && <Fleet ships={foe} livery={livery === 'pirate' ? 'navy' : 'pirate'} revealed={false} boardOrigin={BOARD_LAYOUT.enemy.origin} lod="auto" />}
       <EyeCamera ship={own} look={look} eye={eye} />
     </OceanScene>
   )

@@ -40,7 +40,7 @@ export interface ShipProps extends ShipModelProps {
   id: ShipId
   /** A wreck frozen at a fixed `sinkProgress` (replay / photo): render the baked copy instead of the live sinking model. */
   staticWreck?: boolean
-  /** Mount the lod-0 "On deck" dressing layer (`kit/DeckDressing`) — the ship the player stands on. */
+  /** Mount the "On deck" dressing layer (`kit/DeckDressing`) — the ship the player stands on (live, or baked at lod 1). */
   dressed?: boolean
 }
 
@@ -67,10 +67,17 @@ export function Ship({ id, staticWreck: _staticWreck, dressed = false, ...rest }
     return (
       <LiveShip>
         <Model {...rest} />
-        {dressed && lod === 0 && <DeckDressing shipId={id} livery={rest.livery} damage={rest.damage} />}
+        {dressed && <DeckDressing shipId={id} livery={rest.livery} damage={rest.damage} />}
       </LiveShip>
     )
-  return <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality) + (wreck ? '|wreck' : '')} element={element} wreck={wreck} />
+  // Medium rides the baked lod-1 copy of the standing ship (a live man-o'-war alone is ~420 draws): the dressing is a
+  // separate ~12-draw layer, so it rides along with the bake instead of being lost with lod 0.
+  return (
+    <>
+      <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality) + (wreck ? '|wreck' : '')} element={element} wreck={wreck} />
+      {dressed && lod <= 1 && !wreck && <DeckDressing shipId={id} livery={rest.livery} damage={rest.damage} />}
+    </>
+  )
 }
 
 
