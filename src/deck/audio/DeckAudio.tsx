@@ -11,7 +11,7 @@
  */
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { DEFAULT_LISTENER, playSfx, playSfxAt, setAudioListener, setAudioListenerFromCamera, type SfxHandle, type Vec3 } from '../../audio'
+import { DEFAULT_LISTENER, playSfx, playSfxAt, preloadDeckSfx, setAudioListener, setAudioListenerFromCamera, type SfxHandle, type Vec3 } from '../../audio'
 import { director } from '../../cinematics'
 import { BOARD_LAYOUT } from '../../scene/layout'
 import { sampleWaveHeight } from '../../scene/waves'
@@ -61,6 +61,7 @@ export function DeckAudio() {
 
   useEffect(() => {
     if (!active) return
+    preloadDeckSfx()
     const store = useDeckAudioStore.getState()
     store.reset()
     amb.current.reset()

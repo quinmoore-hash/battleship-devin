@@ -100,6 +100,21 @@ export const SFX_FILES: Record<Sfx, readonly string[]> = {
 /** The real sound set (no aliases) — what the demo lists. */
 export const SFX_NAMES = Object.keys(CANONICAL_FILES) as CanonicalSfx[]
 
+/** On-deck only (src/deck/audio): not part of the boot preload, `preloadDeckSfx()` loads them when the deck layer mounts. */
+export const DECK_SFX: ReadonlySet<CanonicalSfx> = new Set<CanonicalSfx>([
+  'footstep',
+  'footstep-land',
+  'rope-strain',
+  'water-lap',
+  'wind-sails',
+  'crew-call',
+  'gun-call-run-out',
+  'gun-call-fire',
+  'crew-groan',
+  'crew-brace',
+  'crew-panic',
+])
+
 /** SFX authored as seamless loops (`playSfx` of these returns a handle you must `stop()`). */
 export const LOOPING_SFX: ReadonlySet<CanonicalSfx> = new Set<CanonicalSfx>(['fire-loop', 'bubbles', 'wind-sails'])
 

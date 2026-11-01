@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { ALL_AUDIO_FILES, AMBIENCE_FILES, AUDIO_FORMATS, LEGACY_SFX, LOOPING_SFX, LOOP_FILES, MUSIC_FILES, SFX_FILES, SFX_NAMES, audioUrls, resolveSfx, type CanonicalSfx } from './manifest'
+import { ALL_AUDIO_FILES, AMBIENCE_FILES, AUDIO_FORMATS, LEGACY_SFX, LOOPING_SFX, LOOP_FILES, MUSIC_FILES, SFX_FILES, SFX_NAMES, audioUrls, resolveSfx, type CanonicalSfx, DECK_SFX } from './manifest'
 
 const AUDIO_DIR = fileURLToPath(new URL('../../public/assets/audio', import.meta.url))
 const GENERATOR = fileURLToPath(new URL('../../scripts/generate-audio.mjs', import.meta.url))
@@ -72,5 +72,11 @@ describe('audio manifest', () => {
 
   it('builds URLs under the Vite base', () => {
     expect(audioUrls('cannon-fire-1')).toEqual(['/assets/audio/cannon-fire-1.ogg', '/assets/audio/cannon-fire-1.mp3'])
+  })
+
+  it('the deck set is a subset of the canonical names and stays out of the boot preload', () => {
+    for (const name of DECK_SFX) expect(SFX_NAMES).toContain(name)
+    expect(DECK_SFX.has('cannon-fire')).toBe(false)
+    expect(DECK_SFX.size).toBe(11)
   })
 })

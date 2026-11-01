@@ -25,6 +25,7 @@ import {
   MUSIC_FILES,
   SFX_DUCK_MS,
   SFX_FILES,
+  DECK_SFX,
   SFX_GAIN,
   SFX_NAMES,
   audioUrls,
@@ -38,7 +39,7 @@ import { useAudioSettings } from './settings'
 import { DEFAULT_LISTENER, spatialize, type AudioListener, type SpatialOptions, type Vec3 } from './spatial'
 
 export type { Sfx, SfxName, CanonicalSfx, LegacySfx, MusicTrack } from './manifest'
-export { SFX_FILES, SFX_NAMES, LEGACY_SFX, LOOPING_SFX, MUSIC_FILES, AMBIENCE_FILES, ALL_AUDIO_FILES, audioUrls, resolveSfx } from './manifest'
+export { SFX_FILES, SFX_NAMES, DECK_SFX, LEGACY_SFX, LOOPING_SFX, MUSIC_FILES, AMBIENCE_FILES, ALL_AUDIO_FILES, audioUrls, resolveSfx } from './manifest'
 export { useAudioSettings, AUDIO_SETTINGS_STORAGE_KEY, DEFAULT_AUDIO_SETTINGS, clamp01, mergeAudioSettings } from './settings'
 export type { AudioSettingsState } from './settings'
 export { spatialize, DEFAULT_LISTENER } from './spatial'
@@ -233,10 +234,16 @@ export function stopAllSfx(fadeMs = 200): void {
   }
 }
 
-/** Create every SFX Howl up front so the first shot isn't late. */
+/** Create every overview SFX Howl up front so the first shot isn't late (the deck set waits for `preloadDeckSfx`). */
 export function preloadSfx(): void {
   if (!hasDom) return
-  for (const name of SFX_NAMES) sfxVariants(name)
+  for (const name of SFX_NAMES) if (!DECK_SFX.has(name)) sfxVariants(name)
+}
+
+/** The on-deck set (footsteps, rigging, wind, crew): loaded when the deck audio layer first mounts, not at boot. */
+export function preloadDeckSfx(): void {
+  if (!hasDom) return
+  for (const name of DECK_SFX) sfxVariants(name)
 }
 
 // ------------------------------------------------------------------ listener (spatial)
