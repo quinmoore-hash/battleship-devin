@@ -148,7 +148,11 @@ describe('battle', () => {
     expect(store().events[1].by).toBe('enemy')
     await act(() => vi.advanceTimersByTimeAsync(800))
     expect(screen.getByTestId('status').textContent).toContain('Your turn')
+    expect(screen.queryByTestId('shot-log')).toBeNull()
+    expect(screen.getByTestId('shot-log-count').textContent).toBe('2')
+    fireEvent.click(screen.getByTestId('shot-log-toggle'))
     expect(screen.getByTestId('shot-log').querySelectorAll('li')).toHaveLength(2)
+    expect(screen.getByTestId('shot-log-toggle').getAttribute('aria-expanded')).toBe('true')
   })
 
   it('shows A–J / 1–10 coordinate labels on both grids', () => {
@@ -286,5 +290,12 @@ describe('battle player chart', () => {
     const own = store().playerBoard.ships.flatMap((s) => s.cells)
     for (const c of own) expect(cell('player-grid', c.x, c.y).dataset.state).toBe('ship')
     expect(screen.getByTestId('player-grid').querySelectorAll('[data-state="ship"]')).toHaveLength(17)
+    // read-only: nothing on the own chart is in the tab order, and it is labelled for screen readers
+    expect(screen.getByTestId('player-grid').querySelectorAll('button:not([disabled])')).toHaveLength(0)
+    expect(screen.getByTestId('player-grid').getAttribute('aria-label')).toBe('Our waters')
+    expect(screen.getByTestId('your-waters-title').textContent).toContain('Our waters')
+    expect(screen.getByTestId('score-strip').textContent).toBe('Your fleet 5 of 5 afloat · Enemy fleet 5 of 5 afloat')
+    expect(screen.getByTestId('score-strip').dataset.lead).toBe('even')
+    expect(screen.queryByText("Captain's log")).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { startSinglePlayer } from './helpers'
+import { openShotLog, startSinglePlayer } from './helpers'
 
 // Black Flag rules toggle: fleet picker, Broadside / Spyglass power shots and hidden treasure (BUG-540+).
 test.describe('Black Flag', () => {
@@ -42,6 +42,7 @@ test.describe('Black Flag', () => {
     await expect(page.getByTestId('enemy-grid-4-4')).toHaveAttribute('data-state', 'unknown')
     await expect(page.getByTestId('enemy-grid-4-4')).toHaveClass(/cell-spied/)
     await expect(page.getByTestId('power-spyglass')).toBeDisabled()
+    await openShotLog(page)
     await expect(page.getByTestId('shot-log')).toContainText('Spyglass E5')
     await expect(yourTurn).toBeVisible()
 

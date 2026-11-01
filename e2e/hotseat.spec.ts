@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { startTwoCaptains } from './helpers'
+import { openShotLog, startTwoCaptains } from './helpers'
 
 /** Dismiss the curtain for `to`. `thorough` also checks that nothing of either chart is in the DOM and that Space / Escape do not drop it. */
 async function passDeck(page: Page, to: string, thorough = false) {
@@ -184,6 +184,7 @@ test('two captains + Black Flag: each captain picks a fleet and has their own Br
   await page.getByTestId('enemy-grid-5-5').click()
   // the curtain follows the broadside at once, so read the result from Anne's side of the table
   await passDeck(page, 'Anne')
+  await openShotLog(page)
   await expect(page.getByTestId('shot-log').locator('li.log-broadside')).toHaveCount(2)
   for (const id of ['player-grid-4-5', 'player-grid-5-5', 'player-grid-6-5']) await expect(page.getByTestId(id)).toHaveAttribute('data-state', /hit|miss|sunk/)
   await expect(page.getByTestId('power-broadside')).toBeDisabled()

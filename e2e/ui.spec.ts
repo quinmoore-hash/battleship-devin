@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { startSinglePlayer } from './helpers'
+import { openShotLog, startSinglePlayer } from './helpers'
 
 test('settings expose cinematics, quality, mute and colorblind markers and persist them', async ({ page }) => {
   await page.goto('/?no3d')
@@ -35,8 +35,16 @@ test('battle HUD: compass status, captain’s log, restart, skip hint and quit c
   await expect(page.getByTestId('status-turn')).toHaveText(/Your broadside|Enemy turn/)
   await page.keyboard.press(' ')
   await expect(page.getByTestId('status').filter({ hasText: 'Your turn' })).toBeVisible()
+  await expect(page.getByTestId('shot-log-count')).toHaveText('2')
+  await openShotLog(page)
   await expect(page.getByTestId('shot-log').locator('li')).toHaveCount(2)
   await expect(page.getByTestId('fleet-status-enemy-afloat')).toHaveText('5/5 afloat')
+  // the right column: Enemy waters, the score strip, Our waters — no Captain's log card (BUG-720)
+  await expect(page.getByTestId('score-strip')).toHaveText('Your fleet 5 of 5 afloat · Enemy fleet 5 of 5 afloat')
+  await expect(page.getByTestId('your-waters-title')).toContainText('Our waters')
+  await expect(page.getByTestId('player-grid')).toBeVisible()
+  await expect(page.getByTestId('player-grid').locator('button[data-state="ship"]')).toHaveCount(17)
+  await expect(page.getByText("Captain's log")).toHaveCount(0)
 
   await page.getByTestId('restart').click()
   await expect(page.getByTestId('placement')).toBeVisible()

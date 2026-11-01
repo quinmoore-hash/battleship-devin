@@ -284,7 +284,8 @@ Demo routes (`?…-demo`) are lazy chunks; the game bundle is split into `three`
 `auto-place`, `confirm-placement`, `battle`, `enemy-grid`, `enemy-grid-{x}-{y}[data-state]`, `player-grid`, `status`
 (contains "Your turn" when the human may fire), `gameover[data-winner]`, `play-again`, `rematch`, `quit`, `quit-confirm`,
 `nav-settings`, `nav-how-to-play`. Also used: `ship-tray-{uid}[data-placed][aria-pressed]`, `placed-count`, `rotate`,
-`clear-placement`, `restart`, `skip-cinematic`, `fire-confirm(-yes|-no)`, `shot-log`, `fleet-status-{side}-{uid}[data-sunk]`,
+`clear-placement`, `restart`, `skip-cinematic`, `fire-confirm(-yes|-no)`, `shot-log-toggle[aria-expanded]` / `shot-log-count` / `shot-log-drawer` / `shot-log`
+(the log is a header drawer, not a card), `score-strip[data-lead]`, `player-grid` cells carry `cell-own-{0-5}` (one hue per own ship), `fleet-status-{side}-{uid}[data-sunk]`,
 `stat-{shots|accuracy|turns|sunk|lost|streak|time}`, `rank`, `report-replay`, `report-photo`, `hint-{placement|battle}`, `loading`,
 Black Flag: `mode-black-flag`, `fleet-picker`, `fleet-preset-{classic|armada|wolf-pack|raiders}[aria-checked]`,
 `power-shots[data-armed]`, `power-broadside[data-used]`, `power-spyglass[data-used]`, `power-rotate`, `treasure-count`,
