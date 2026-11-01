@@ -314,6 +314,16 @@ export function deckHeightAt(p: Pt, level: number, deck: DeckAnchors): number {
  * Move the player from `from` by (`dx`, `dz`) on the walkable deck: stays inside the current polygon unless the step
  * crosses a ramp into the neighbouring one, never enters an obstacle, and reports the deck height under the feet.
  */
+/** A step that ends this close to a ramp line counts as taking the ramp (the authored levels leave a gap at a break). */
+export const RAMP_REACH = 0.06
+function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
+  const vx = b[0] - a[0]
+  const vz = b[1] - a[1]
+  const len2 = vx * vx + vz * vz || 1
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / len2))
+  return Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t))
+}
+
 export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnchors): WalkPose {
   const levelOk = deck.walk[from.level] ? from.level : 0
   const start: Pt = [from.x, from.z]
@@ -329,7 +339,7 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
       if (other < 0 || !deck.walk[other]) continue
       // crossing the ramp line is enough: the authored polygons leave a small gap at a break, so a slow step may land
       // between them — snap onto the other level rather than stalling at the edge (a run jumped the gap, a walk did not)
-      if (segmentsCross(start, p, r.a, r.b)) {
+      if (segmentsCross(start, p, r.a, r.b) || distanceToSegment(p, r.a, r.b) < RAMP_REACH) {
         level = other
         moved = true
         if (!pointInPolygon(p, deck.walk[other].points)) p = clampToPolygon(p, deck.walk[other].points)
