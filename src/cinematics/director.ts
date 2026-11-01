@@ -242,7 +242,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     if (a.pov) {
       const ob = a.pov.overboard
       if (beat === 'overboard' && ob) {
-        deckBus.emit({ type: 'thrown-overboard', nextUid: ob.nextUid, cell: ob.cell, point: ob.point })
+        deckBus.emit({ type: 'thrown-overboard', nextUid: ob.nextUid, cell: ob.cell, point: ob.point, seconds: a.seq.beats.find((b) => b.name === 'overboard')?.duration })
         if (audio) {
           playSfxAt('splash-miss', ob.splashAt, { gain: 1.5, noDuck: true })
           setTimeout(() => playSfxAt('bubbles', ob.splashAt, { gain: 0.9, noDuck: true }), 350)
@@ -318,6 +318,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       // on deck the director borrows the camera for shots (follow-cam / overboard); sinks, horns and victories leave it with the deck
       const borrow = !!active.pov && event.type === 'shot'
       if (borrow) {
+        active.pov!.cameraBorrowed = true
         deckCameraLease.owner = 'director'
         deckBus.emit({ type: 'camera', owner: 'director' })
       }

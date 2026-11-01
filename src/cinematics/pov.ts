@@ -27,6 +27,8 @@ export interface PovContext {
   abandoned: boolean
   /** Set when the incoming ball took the very section the player stood on (or the gun they manned): see `overboardFor`. */
   overboard?: OverboardBeat
+  /** The director borrowed the camera for this sequence (follow-cam): the chase shows the impact, so no `look-at` nudges are emitted. */
+  cameraBorrowed?: boolean
 }
 
 /** The thrown-overboard beat of one incoming hit. */
@@ -161,7 +163,7 @@ export function povBeatEvents(
 ): DeckBusEvent[] {
   const out: DeckBusEvent[] = []
   const look = (point: Vec3, seconds: number) => {
-    if (!reducedMotion) out.push({ type: 'look-at', point, seconds })
+    if (!reducedMotion && !pov.cameraBorrowed) out.push({ type: 'look-at', point, seconds })
   }
   if (event.type === 'shot') {
     if (beat === 'fire' && pov.outgoing) out.push(shake(POV.fireShake, 0.3, reducedMotion))
