@@ -16,6 +16,7 @@ import { QualityToast } from './perf/QualityToast'
 
 const SceneDemo = lazy(() => import('./scene/SceneDemo').then((m) => ({ default: m.SceneDemo })))
 const ShipDemo = lazy(() => import('./ships/ShipDemo').then((m) => ({ default: m.ShipDemo })))
+const DeckDemo = lazy(() => import('./ships/DeckDemo').then((m) => ({ default: m.DeckDemo })))
 const AudioDemo = lazy(() => import('./audio/AudioDemo').then((m) => ({ default: m.AudioDemo })))
 const KitDemo = lazy(() => import('./ships/kit/KitDemo').then((m) => ({ default: m.KitDemo })))
 const SinkingDemo = lazy(() => import('./vfx/sinking/SinkingDemo').then((m) => ({ default: m.SinkingDemo })))
@@ -43,6 +44,7 @@ const DEMOS: Record<string, React.LazyExoticComponent<() => React.JSX.Element>> 
   'vfx-damage-demo': VfxDamageDemo,
   'frigate-demo': FrigateDemo,
   'extras-demo': ExtrasDemo,
+  'deck-demo': DeckDemo,
 }
 
 function demoRoute() {

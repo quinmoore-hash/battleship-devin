@@ -1,7 +1,9 @@
 import type { Vec3 } from '../../scene/layout'
 import type { ShipAnchors, Side } from '../types'
 import { fitAnchors } from '../kit/fit'
-import { BEAM, CANNON_X, DECK_Y, DRAFT, FIT, FOREMAST_HEIGHT, FOREMAST_X, HALF, LENGTH, MAINMAST_HEIGHT, MAINMAST_X, hullHalfWidth } from './hull'
+import { BEAM, BULWARK_THICKNESS, CABIN_FRONT_X, CABIN_TOP_Y, CANNON_X, DECK_Y, DRAFT, FIT, FOREMAST_HEIGHT, FOREMAST_X, HALF, LENGTH, MAINMAST_HEIGHT, MAINMAST_X, STEM_X, TRANSOM_X, hullHalfWidth } from './hull'
+import type { DeckAnchors } from '../../deck/contract'
+import { breakRamp, deckPolygon, gunStations, mastObstacles } from '../kit/deck'
 
 /** Height of the cannon bore above the deck (kit `Cannon` barrel axis × CANNON_SCALE). */
 export const CANNON_SCALE = 0.5
@@ -32,21 +34,57 @@ export function cannonMuzzle(x: number, side: Side): Vec3 {
   return [x, CANNON_BORE_Y, side === 'starboard' ? z : -z]
 }
 
+const MODEL_CANNONS: ShipAnchors['cannons'] = CANNON_X.flatMap((x) =>
+  (['port', 'starboard'] as const).map((side) => ({
+    cell: cellOfX(x),
+    side,
+    muzzle: cannonMuzzle(x, side),
+    direction: [0, 0.04, side === 'starboard' ? 1 : -1] as Vec3,
+  })),
+)
+const MODEL_MASTS: ShipAnchors['masts'] = [
+  { base: [FOREMAST_X, DECK_Y, 0], height: FOREMAST_HEIGHT },
+  { base: [MAINMAST_X, DECK_Y, 0], height: MAINMAST_HEIGHT },
+]
+
+/**
+ * Walkable deck (model frame): the main deck from the cabin front to the bow, and the cabin roof aft of it as a
+ * raised quarterdeck (skylight + companionway as obstacles) reached by the ladder at the cabin front. Hatches,
+ * bitts and the stern barrels block walking; the helmsman stands on the cabin roof by the tiller.
+ */
+export function buildBrigantineDeck(): DeckAnchors {
+  const hw = (x: number) => hullHalfWidth(x, DECK_Y) - BULWARK_THICKNESS
+  const walk = [
+    deckPolygon({ x0: CABIN_FRONT_X + 0.02, x1: STEM_X - 0.3, y: DECK_Y, halfWidth: hw, steps: 8 }),
+    deckPolygon({ x0: TRANSOM_X + 0.06, x1: CABIN_FRONT_X - 0.02, y: CABIN_TOP_Y, halfWidth: (x) => hw(x) - 0.03, inset: 0.06, steps: 3 }),
+  ]
+  const obstacles: DeckAnchors['obstacles'] = [
+      ...mastObstacles(MODEL_MASTS, 0.09),
+      { center: [FOREMAST_X + 0.1, 0], radius: 0.05 },
+      { center: [MAINMAST_X + 0.1, 0], radius: 0.05 },
+      { center: [0.45, 0], radius: 0.14 },
+      { center: [-0.76, 0], radius: 0.11 },
+      { center: [-0.9, 0.2], radius: 0.07 },
+      { center: [-0.9, -0.2], radius: 0.07 },
+      { center: [-1.0, 0.05], radius: 0.065 },
+      { center: [-1.3, 0], radius: 0.1 },
+      { center: [-1.17, -0.14], radius: 0.07 },
+    ]
+  return {
+    spawn: [-1.2, CABIN_TOP_Y, 0.18],
+    walk,
+    ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12, 0.2)],
+    obstacles,
+    stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y, { barrel: CANNON_MUZZLE_LEN + 0.25 * CANNON_SCALE, obstacles }),
+  }
+}
+
 /** Anchors in the unscaled model frame (what the geometry code uses). */
 export const BRIGANTINE_MODEL_ANCHORS: ShipAnchors = {
-  cannons: CANNON_X.flatMap((x) =>
-    (['port', 'starboard'] as const).map((side) => ({
-      cell: cellOfX(x),
-      side,
-      muzzle: cannonMuzzle(x, side),
-      direction: [0, 0.04, side === 'starboard' ? 1 : -1] as Vec3,
-    })),
-  ),
-  masts: [
-    { base: [FOREMAST_X, DECK_Y, 0], height: FOREMAST_HEIGHT },
-    { base: [MAINMAST_X, DECK_Y, 0], height: MAINMAST_HEIGHT },
-  ],
+  cannons: MODEL_CANNONS,
+  masts: MODEL_MASTS,
   deckY: DECK_Y,
+  deck: buildBrigantineDeck(),
   hull: { length: LENGTH, beam: BEAM, height: DECK_Y + MAINMAST_HEIGHT + 0.25, draft: DRAFT },
   impactPoints: Array.from({ length: LENGTH }, (_, cell) => {
     const x = cellCenterX(cell)

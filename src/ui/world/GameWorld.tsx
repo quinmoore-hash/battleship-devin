@@ -315,7 +315,7 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
         }}
       />
       <Fleet ships={ownRest} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={restLod} firing={firing} sinkProgress={own.sink} />
-      {standing.length > 0 && <Fleet ships={standing} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={standingLod} firing={firing} sinkProgress={own.sink} />}
+      {standing.length > 0 && <Fleet ships={standing} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={standingLod} firing={firing} sinkProgress={own.sink} dressedUid={deck.shipUid} />}
       <Fleet ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} quality={quality} lod={lod} firing={firing} sinkProgress={foe.sink} />
       {crewOn && <CrewLayer ships={own.ships} livery={own.livery} boardOrigin={own.origin} sinkProgress={own.sink} low={perf.lod === 2} reducedMotion={reducedMotion} />}
       {crewOn && <CrewLayer ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} sinkProgress={foe.sink} low={perf.lod === 2} reducedMotion={reducedMotion} />}

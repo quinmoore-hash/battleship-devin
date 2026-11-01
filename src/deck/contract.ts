@@ -61,8 +61,12 @@ export interface DeckAnchors {
   ramps: { from: number; to: number; a: [number, number]; b: [number, number] }[]
   /** Things you cannot walk through (masts, capstan, hatches): circles in x/z. */
   obstacles: { center: [number, number]; radius: number }[]
-  /** One entry per `ShipAnchors.cannons[i]`: where the gunner stands and the yaw (radians, ship space) they face when manning it. */
-  stations: { stand: Vec3; yaw: number }[]
+  /**
+   * One entry per `ShipAnchors.cannons[i]`: where the gunner stands and the yaw (radians, ship space) they face when
+   * manning it. `breech` (optional, session C) is the inboard end of that gun's barrel on its deck — the spot to mark /
+   * walk to; the gun's side is `ShipAnchors.cannons[i].side`.
+   */
+  stations: { stand: Vec3; yaw: number; breech?: Vec3 }[]
 }
 
 /** Fallback used by session A until a class ships real `DeckAnchors`: a rectangle `length × beam` at `deckY`, masts as obstacles. */

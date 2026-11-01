@@ -6,6 +6,8 @@
  */
 import type { Vec3 } from '../../scene/layout'
 import type { CannonRef, ShipAnchors, Side } from '../types'
+import type { DeckAnchors } from '../../deck/contract'
+import { breakRamp, deckPolygon, gunStations } from '../kit/deck'
 
 export const LENGTH = 5
 export const BEAM = 1.3
@@ -178,17 +180,59 @@ export function isFiring(firing: readonly CannonRef[] | undefined, g: GunSpec, s
 
 export const IMPACT_Y = 0.25
 
+const MOW_CANNONS: ShipAnchors['cannons'] = SIDES.flatMap((side) =>
+  GUNS.map((g) => ({
+    cell: cellOf(g.x),
+    side,
+    muzzle: muzzleOf(g, side),
+    direction: [0, 0.06, sideSign(side)] as Vec3,
+  })),
+)
+const MOW_MASTS: ShipAnchors['masts'] = MASTS.map((m) => ({ base: [m.x, m.baseY, 0] as Vec3, height: m.height }))
+
+/**
+ * Walkable decks: the open waist (main deck) between the breaks, quarterdeck and forecastle at `DECK.castle`,
+ * the poop aft. Stairs match `DeckFurniture`: one at the quarterdeck break (port), two at the forecastle break,
+ * one up to the poop. Lower-deck and under-castle guns are served from the weather deck above (`deckY(x)`).
+ * Obstacles: masts, the main hatch with the ship's boat on it, pumps, capstan, belfry, wheel, poop skylight.
+ */
+export function buildManOWarDeck(): DeckAnchors {
+  const hw = (x: number) => hullHalfWidth(x, deckY(x) + 0.02) - 0.06
+  const walk = [
+    deckPolygon({ x0: BREAK.quarter + 0.02, x1: BREAK.fore - 0.02, y: DECK.main, halfWidth: hw, steps: 6 }),
+    deckPolygon({ x0: BREAK.poop + 0.02, x1: BREAK.quarter - 0.02, y: DECK.castle, halfWidth: hw, steps: 4 }),
+    deckPolygon({ x0: BREAK.fore + 0.02, x1: X_BOW - 0.25, y: DECK.castle, halfWidth: hw, steps: 3 }),
+    deckPolygon({ x0: X_STERN + 0.1, x1: BREAK.poop - 0.02, y: DECK.poop, halfWidth: hw, steps: 3 }),
+  ]
+  const obstacles: DeckAnchors['obstacles'] = [
+      ...MOW_MASTS.map((m) => ({ center: [m.base[0], m.base[2]] as [number, number], radius: 0.12 })),
+      { center: [0.42, 0], radius: 0.19 },
+      { center: [0.62, 0], radius: 0.19 },
+      { center: [0.82, 0], radius: 0.19 },
+      { center: [-0.32, 0.14], radius: 0.06 },
+      { center: [-0.32, -0.14], radius: 0.06 },
+      { center: [-0.95, 0], radius: 0.14 },
+      { center: [BREAK.fore + 0.06, 0], radius: 0.12 },
+      // the wheel is a thin disc across the deck: three small circles, so the poop stair at BREAK.poop stays reachable
+      { center: [-1.68, -0.2], radius: 0.09 },
+      { center: [-1.68, 0], radius: 0.09 },
+      { center: [-1.68, 0.2], radius: 0.09 },
+      { center: [-2.1, 0], radius: 0.14 },
+    ]
+  return {
+    spawn: [-0.72, DECK.castle, 0],
+    walk,
+    ramps: [breakRamp(0, 1, BREAK.quarter, 0.12, -0.34), breakRamp(0, 2, BREAK.fore, 0.1, 0.3), breakRamp(0, 2, BREAK.fore, 0.1, -0.3), breakRamp(1, 3, BREAK.poop, 0.1, 0.1)],
+    obstacles,
+    stations: gunStations(MOW_CANNONS, walk, deckY, { barrel: 0.14 + 0.3, obstacles }),
+  }
+}
+
 export const MAN_O_WAR_ANCHORS: ShipAnchors = {
-  cannons: SIDES.flatMap((side) =>
-    GUNS.map((g) => ({
-      cell: cellOf(g.x),
-      side,
-      muzzle: muzzleOf(g, side),
-      direction: [0, 0.06, sideSign(side)] as Vec3,
-    })),
-  ),
-  masts: MASTS.map((m) => ({ base: [m.x, m.baseY, 0] as Vec3, height: m.height })),
+  cannons: MOW_CANNONS,
+  masts: MOW_MASTS,
   deckY: DECK.main,
+  deck: buildManOWarDeck(),
   hull: { length: LENGTH, beam: BEAM, height: MASTS[1].baseY + MASTS[1].height, draft: DRAFT },
   impactPoints: Array.from({ length: LENGTH }, (_, i) => [cellX(i), IMPACT_Y, -hullHalfWidth(cellX(i), IMPACT_Y)] as Vec3),
 }

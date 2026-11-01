@@ -1,3 +1,4 @@
+import type { DeckAnchors } from '../deck/contract'
 import type { ComponentType } from 'react'
 import type { ShipId } from '../engine'
 import type { Vec3 } from '../scene/layout'
@@ -53,6 +54,8 @@ export interface ShipAnchors {
   masts: { base: Vec3; height: number }[]
   /** Main deck height above the waterline. Fires/splinters spawn here. */
   deckY: number
+  /** Walkable-deck data for the "On deck" first-person mode (`src/deck/contract.ts`); absent = rectangle fallback. */
+  deck?: DeckAnchors
   /** Overall hull size for camera framing and LOD switching. */
   hull: { length: number; beam: number; height: number; draft: number }
   /** Where a cannonball hitting cell `i` should impact (hull side at the waterline-ish), per cell, port side. Mirror z for starboard. */
