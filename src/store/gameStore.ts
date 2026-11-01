@@ -76,7 +76,7 @@ export interface Settings extends DeckSettings {
   sfxVolume: number
   musicVolume: number
   reducedMotion: boolean
-  /** Pirate crew on the decks (BUG-7xx crew module); off removes every figure. */
+  /** Pirate crew on the decks (BUG-709); off removes every figure. */
   crew: boolean
   cinematics: CinematicsLevel
   /** Render quality (see `src/perf`). Persisted by the perf store. */
