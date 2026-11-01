@@ -486,6 +486,7 @@ export function DeckController() {
     }
 
     runtime.setAirborne(air.current.airborne)
+    runtime.setRunning(wantsMove && k.has('shift'))
 
     // the crew keeps clear of the player (src/crew)
     setPlayerDeck(ship.uid, pose.current.x, pose.current.z, g.deck.station ?? -1)

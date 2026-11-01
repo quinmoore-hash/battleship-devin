@@ -18,6 +18,8 @@ export interface DeckRuntime {
   active: boolean
   /** The pirate is in the air (Space hop); `src/deck/audio` plays the landing thud on the falling edge. */
   airborne: boolean
+  /** Shift held while walking (the footsteps pick the run sample from this, not from the measured speed, which lags during acceleration). */
+  running: boolean
   /** HUD elements the controller positions per frame (set by the HUD's callback refs). */
   labelEl: HTMLElement | null
   compassEl: HTMLElement | null
@@ -26,6 +28,7 @@ export interface DeckRuntime {
   setFade: (fade: number) => void
   setActive: (active: boolean) => void
   setAirborne: (airborne: boolean) => void
+  setRunning: (running: boolean) => void
   showNudge: (text: string, ms?: number) => void
   setLabelEl: (el: HTMLElement | null) => void
   setCompassEl: (el: HTMLElement | null) => void
@@ -40,6 +43,7 @@ export const useDeckStore = create<DeckRuntime>((set, get) => ({
   nudge: null,
   active: false,
   airborne: false,
+  running: false,
   labelEl: null,
   compassEl: null,
   setNear: (near) => {
@@ -50,6 +54,7 @@ export const useDeckStore = create<DeckRuntime>((set, get) => ({
   setFade: (fade) => (Math.abs(get().fade - fade) > 1e-3 || (fade === 0 && get().fade !== 0) ? set({ fade }) : undefined),
   setActive: (active) => (get().active !== active ? set({ active }) : undefined),
   setAirborne: (airborne) => (get().airborne !== airborne ? set({ airborne }) : undefined),
+  setRunning: (running) => (get().running !== running ? set({ running }) : undefined),
   showNudge: (text, ms = 1800) => {
     set({ nudge: text })
     clearTimeout(nudgeTimer)
@@ -62,5 +67,5 @@ export const useDeckStore = create<DeckRuntime>((set, get) => ({
 /** Back to the idle runtime (deck off / battle over). */
 export function resetDeckRuntime() {
   clearTimeout(nudgeTimer)
-  useDeckStore.setState({ near: null, approach: null, fade: 0, nudge: null, active: false, airborne: false })
+  useDeckStore.setState({ near: null, approach: null, fade: 0, nudge: null, active: false, airborne: false, running: false })
 }

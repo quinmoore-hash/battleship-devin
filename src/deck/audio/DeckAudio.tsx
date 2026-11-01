@@ -172,7 +172,7 @@ export function DeckAudio() {
     const cz = camera.position.z
     if (lastCam.current && !manning) {
       const dist = Math.hypot(cx - lastCam.current.x, cz - lastCam.current.z)
-      const running = dist / dt > (WALK_SPEED + RUN_SPEED) / 2
+      const running = useDeckStore.getState().running || dist / dt > (WALK_SPEED + RUN_SPEED) / 2
       for (const s of steps.current.advance(dist, dt, running)) {
         log('footstep', running ? 'run' : 'walk')
         playSfx('footstep', { gain: s.gain, noDuck: true })
