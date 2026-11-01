@@ -14,7 +14,7 @@ test('audio demo lists every sound with its variants and plays them without cons
   await unlock(page)
 
   const sfx = page.locator('[data-testid^="audio-demo-sfx-"]')
-  await expect(sfx).toHaveCount(20)
+  await expect(sfx).toHaveCount(31)
   await expect(page.getByTestId('audio-demo-sfx-cannon-fire').getByRole('button')).toHaveCount(3)
   await expect(page.getByTestId('audio-demo-sfx-splash-miss').getByRole('button')).toHaveCount(3)
   await expect(page.getByTestId('audio-demo-sfx-impact-wood').getByRole('button')).toHaveCount(3)
