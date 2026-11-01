@@ -31,7 +31,7 @@ export function buildFrigateDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
     deckPolygon({ x0: F.xStern + 0.06, x1: F.qdBreakX - 0.02, y: F.qdY, halfWidth: hw, steps: 4 }),
   ]
   return {
-    spawn: [-1.32, F.qdY, 0.12],
+    spawn: [-1.28, F.qdY, 0.17],
     walk,
     ramps: [breakRamp(0, 1, F.qdBreakX, 0.12)],
     obstacles: [...mastObstacles(masts, 0.09), { center: [-1.2, 0], radius: 0.08 }],

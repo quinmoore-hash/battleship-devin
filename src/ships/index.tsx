@@ -14,6 +14,7 @@ import type { PlacedShip, ShipId } from '../engine'
 import { LodGroup } from '../perf/LodShip'
 import { BakedShip, bakeKey, holdBakes, useBakeryActive } from './bake'
 import { LiveShip } from './LiveShip'
+import { DeckDressing } from './kit/DeckDressing'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
 import { sampleWaveHeight } from '../scene/waves'
 import { BRIGANTINE } from './brigantine'
@@ -39,6 +40,8 @@ export interface ShipProps extends ShipModelProps {
   id: ShipId
   /** A wreck frozen at a fixed `sinkProgress` (replay / photo): render the baked copy instead of the live sinking model. */
   staticWreck?: boolean
+  /** Mount the lod-0 "On deck" dressing layer (`kit/DeckDressing`) — the ship the player stands on. */
+  dressed?: boolean
 }
 
 /**
@@ -47,7 +50,7 @@ export interface ShipProps extends ShipModelProps {
  * mounted — a sinking ship too, posed by `<Fleet>` (a live lod-1 galleon is ~480 draws while it goes down,
  * BUG-404), and a settled wreck as one collapsed silhouette mesh.
  */
-export function Ship({ id, staticWreck: _staticWreck, ...rest }: ShipProps) {
+export function Ship({ id, staticWreck: _staticWreck, dressed = false, ...rest }: ShipProps) {
   const Model = SHIPS[id].Model
   const lod = rest.lod ?? 0
   const sink = rest.sinkProgress ?? 0
@@ -64,6 +67,7 @@ export function Ship({ id, staticWreck: _staticWreck, ...rest }: ShipProps) {
     return (
       <LiveShip>
         <Model {...rest} />
+        {dressed && lod === 0 && <DeckDressing shipId={id} livery={rest.livery} damage={rest.damage} />}
       </LiveShip>
     )
   return <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality) + (wreck ? '|wreck' : '')} element={element} wreck={wreck} />
@@ -101,6 +105,8 @@ export interface FleetProps {
   quality?: ShipModelProps['quality']
   /** Wrecks are frozen (replay / photo): bake them like any other lod ≥ 1 ship instead of rendering the live sinking model. */
   staticWrecks?: boolean
+  /** `PlacedShip.uid` the player is standing on ("On deck"): that ship gets the lod-0 deck dressing. Never set in the overview. */
+  dressedUid?: string | null
 }
 
 /**
@@ -120,7 +126,7 @@ function Afloat({ position, depth, rotationY, children }: { position: Vec3; dept
   )
 }
 
-export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality, staticWrecks }: FleetProps) {
+export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality, staticWrecks, dressedUid }: FleetProps) {
   return (
     <group>
       {ships.map((ship) => {
@@ -137,10 +143,10 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
             <group rotation={[pose.roll, 0, pose.pitch]}>
               {lod === 'auto' && sink < 1 ? (
                 <LodGroup position={position} hullLength={ship.spec.length}>
-                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={autoLod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />}
+                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={dressedUid === ship.uid ? 0 : autoLod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} phase={ship.origin.x * 1.7 + ship.origin.y} />}
                 </LodGroup>
               ) : (
-                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} phase={ship.origin.x * 1.7 + ship.origin.y} />
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
           </Afloat>

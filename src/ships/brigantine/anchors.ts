@@ -59,7 +59,7 @@ export function buildBrigantineDeck(): DeckAnchors {
     deckPolygon({ x0: TRANSOM_X + 0.06, x1: CABIN_FRONT_X - 0.02, y: CABIN_TOP_Y, halfWidth: (x) => hw(x) - 0.03, inset: 0.06, steps: 3 }),
   ]
   return {
-    spawn: [-1.3, CABIN_TOP_Y, 0.16],
+    spawn: [-1.2, CABIN_TOP_Y, 0.18],
     walk,
     ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12)],
     obstacles: [

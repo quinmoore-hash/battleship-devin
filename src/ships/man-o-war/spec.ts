@@ -205,7 +205,7 @@ export function buildManOWarDeck(): DeckAnchors {
     deckPolygon({ x0: X_STERN + 0.1, x1: BREAK.poop - 0.02, y: DECK.poop, halfWidth: hw, steps: 3 }),
   ]
   return {
-    spawn: [-1.76, DECK.castle, 0.16],
+    spawn: [-1.45, DECK.castle, 0.28],
     walk,
     ramps: [breakRamp(0, 1, BREAK.quarter, 0.12, -0.34), breakRamp(0, 2, BREAK.fore, 0.1, 0.3), breakRamp(0, 2, BREAK.fore, 0.1, -0.3), breakRamp(1, 3, BREAK.poop, 0.1)],
     obstacles: [

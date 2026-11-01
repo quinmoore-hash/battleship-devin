@@ -11,20 +11,22 @@ import { Fleet, SHIPS, shipWorldTransform } from './index'
 import type { Livery } from './types'
 
 /**
- * `?deck-demo&ship=man-o-war&look=fwd|rail|aft|port&lod=0&wrecks=6&tod=0.6&weather=squall&livery=navy&perf&quality=medium`
+ * `?deck-demo&ship=man-o-war&look=fwd|rail|aft|port&lod=0&dressed=0|1&wrecks=6&tod=0.6&weather=squall&livery=navy&perf&quality=medium`
  *
  * Eye-height review of one class in the real battle scene: the chosen ship sits on the player board's first row
  * and is rendered live at `lod` (default 0, the "On deck" detail level); the rest of a classic fleet is baked on
  * the rows behind it; `wrecks` sunk enemy ships lie on the enemy waters. The camera stands at the class's helm
  * (`anchors.deck.spawn`, else a quarterdeck guess) at `deckY + EYE_HEIGHT`, near `DECK_NEAR`, fov `DECK_FOV`, and
  * rides the hull on the waves. `look`: `fwd` down the deck toward the bow, `rail` across the port rail toward
- * the enemy board, `aft` toward the stern, `port` = `rail` pitched up to the horizon.
+ * the enemy board, `aft` toward the stern, `port` = `rail` pitched up to the horizon, `down` from `eye=x,y,z` (ship frame,
+ * overrides the spawn; no eye-height offset) for a top-down check of the deck.
  */
 const LOOKS: Record<string, Vec3> = {
   fwd: [1, -0.08, 0],
   rail: [0.15, -0.12, -1],
   aft: [-1, -0.08, 0],
   port: [0, 0.02, -1],
+  down: [0.25, -1, -0.45],
 }
 
 /** Helm position guess per class (ship frame) until `anchors.deck` lands; y is the deck the helmsman stands on. */
@@ -54,13 +56,13 @@ function wreckFleet(count: number): PlacedShip[] {
   return board.ships.slice(0, count).map((s) => ({ ...s, hits: s.cells }))
 }
 
-function EyeCamera({ ship, look }: { ship: PlacedShip; look: Vec3 }) {
+function EyeCamera({ ship, look, eye }: { ship: PlacedShip; look: Vec3; eye?: Vec3 }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const dir = useMemo(() => new THREE.Vector3(...look).normalize(), [look])
   const tmp = useRef(new THREE.Vector3())
   const { position } = shipWorldTransform(ship, BOARD_LAYOUT.player.origin, 1)
   const def = SHIPS[ship.spec.id]
-  const helm = def.anchors.deck?.spawn ?? HELM_GUESS[ship.spec.id]
+  const helm = eye ?? def.anchors.deck?.spawn ?? HELM_GUESS[ship.spec.id]
 
   useEffect(() => {
     camera.near = DECK_NEAR
@@ -70,7 +72,7 @@ function EyeCamera({ ship, look }: { ship: PlacedShip; look: Vec3 }) {
 
   useFrame(({ clock }) => {
     const wave = sampleWaveHeight(position[0], position[2], clock.elapsedTime)
-    camera.position.set(position[0] + helm[0], position[1] + wave + helm[1] + EYE_HEIGHT, position[2] + helm[2])
+    camera.position.set(position[0] + helm[0], position[1] + wave + helm[1] + (eye ? 0 : EYE_HEIGHT), position[2] + helm[2])
     tmp.current.copy(camera.position).add(dir)
     camera.lookAt(tmp.current)
   })
@@ -87,6 +89,9 @@ export function DeckDemo() {
   const livery = (q.get('livery') as Livery) || 'pirate'
   const tod = q.get('tod') !== null ? Number(q.get('tod')) : undefined
   const weather = (q.get('weather') as Weather | null) ?? undefined
+  const dressed = q.get('dressed') !== '0'
+  const eyeParam = q.get('eye')?.split(',').map(Number)
+  const eye = eyeParam && eyeParam.length === 3 && eyeParam.every(Number.isFinite) ? (eyeParam as Vec3) : undefined
 
   const board = useMemo(() => classicFleet(shipId), [shipId])
   const own = board.ships[0]
@@ -95,10 +100,10 @@ export function DeckDemo() {
 
   return (
     <OceanScene view="battle" interactive={false} cameraOverride timeOfDay={tod} weather={weather}>
-      <Fleet ships={[own]} livery={livery} lod={lod} />
+      <Fleet ships={[own]} livery={livery} lod={lod} dressedUid={dressed ? own.uid : null} />
       <Fleet ships={rest} livery={livery} lod={1} />
       {foe.length > 0 && <Fleet ships={foe} livery={livery === 'pirate' ? 'navy' : 'pirate'} revealed={false} boardOrigin={BOARD_LAYOUT.enemy.origin} lod={1} />}
-      <EyeCamera ship={own} look={look} />
+      <EyeCamera ship={own} look={look} eye={eye} />
     </OceanScene>
   )
 }
