@@ -64,9 +64,6 @@ const DESCRIPTIONS: Record<CanonicalSfx, string> = {
   'crew-groan': 'on deck: groan at a miss',
   'crew-brace': 'on deck: "Brace!" (synth placeholder)',
   'crew-panic': 'on deck: cries as she goes down',
-  'land-ho': 'spyglass: "Land ho!" murmur on a ship reveal',
-  'spyglass-raise': 'spyglass: brass slide + click',
-  'spyglass-lower': 'spyglass: click + slide shut',
 }
 
 // top-down pad: x maps to world x, y maps to world z (enemy fleet at the top, player fleet at the bottom)

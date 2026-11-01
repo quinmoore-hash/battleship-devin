@@ -68,9 +68,6 @@ const SOUNDS = {
   'crew-groan': [deck.crewGroan, DECK],
   'crew-brace': [deck.crewBrace, DECK],
   'crew-panic': [deck.crewPanic, DECK],
-  'land-ho': [deck.landHo, DECK],
-  'spyglass-raise': [deck.spyglassRaise, DECK],
-  'spyglass-lower': [deck.spyglassLower, DECK],
 }
 
 function encode(name, samples, tmp, { oggQ = 3, mp3Kbps = 96 } = {}) {

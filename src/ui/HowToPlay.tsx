@@ -36,7 +36,7 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
         <dd data-testid="howto-black-flag">
           <b>Pick your fleet</b> before placing: Classic (5·4·3·3·2), Armada (two Men-o’-War, Galleon, Frigate), Wolf pack (Frigate, two Brigantines, four Sloops) or Raiders (Galleon, two Frigates, Brigantine, two Sloops) — every preset covers 17 cells and the enemy picks one too; both fleets are shown.
           <br />
-          <b>Two power shots</b> per side per game, under the enemy chart: <b>Broadside</b> (<kbd>B</kbd>, <kbd>R</kbd> rotates) fires a line of three cells centred on your target — cells already shot or off the chart are skipped, and it is your whole turn (in Salvo it replaces the volley; in the storm each ball rolls its own 30% chance of being lost). <b>Spyglass</b> (<kbd>G</kbd>) reveals one cell as ship or open water without firing and without spending your turn; the glyph stays on the chart. On deck, <kbd>G</kbd> (or the HUD's <em>Spyglass</em>) raises a real glass at the rail — zoomed on the enemy waters, pan with the mouse, click the square under the crosshair (or on the chart) to look; <kbd>Esc</kbd> or <kbd>G</kbd> lowers it unused.
+          <b>Two power shots</b> per side per game, under the enemy chart: <b>Broadside</b> (<kbd>B</kbd>, <kbd>R</kbd> rotates) fires a line of three cells centred on your target — cells already shot or off the chart are skipped, and it is your whole turn (in Salvo it replaces the volley; in the storm each ball rolls its own 30% chance of being lost). <b>Spyglass</b> (<kbd>G</kbd>) reveals one cell as ship or open water without firing and without spending your turn; the glyph stays on the chart.
           <br />
           <b>Hidden treasure</b>: two chests lie in the open water of each board, never under a ship or next to each other. Hit one and you fire again at once (in Salvo, one more shot in the volley; in the storm that shot can still be lost). The enemy captain uses the same powers — Easy never does, Medium and Hard fire their Broadside the turn after their first hit, and Hard looks through the Spyglass when one cell is far likelier than the rest.
         </dd>
@@ -58,9 +58,8 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           next afloat ship. You cannot fall off or walk through the masts. Walk up to a cannon on the side facing the enemy waters and press{' '}
           <kbd>E</kbd> to man it (guns on the far side say <em>No target that side</em>), then <b>click a square</b> — on the chart or out on the
           water through the crosshair — and the gun swings to bear and fires there. No free aim: the same odds as the overview. Salvo counts
-          the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) works from a gun, the Spyglass (<kbd>G</kbd>) needs none — it is raised at the rail,
-          zoomed on the enemy waters — and a stormy sea still swallows its 30 %. The deck has its own sounds: creaking timbers, rigging, water at the
-          hull, wind in the sails (louder in a squall or storm), your own footsteps and the gun crew calling the shots — all under the SFX slider. The enemy's balls splash around you or strike your hull; when your ship goes down you wake on the next one (<kbd>Tab</kbd>{' '}
+          the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) and Spyglass (<kbd>G</kbd>) work from a gun, and a stormy sea still swallows
+          its 30 %. The enemy's balls splash around you or strike your hull; when your ship goes down you wake on the next one (<kbd>Tab</kbd>{' '}
           to choose). Each captain in Two captains gets their own deck. Not available without 3D.
         </dd>
         <dt>Sky &amp; sea (looks only)</dt>

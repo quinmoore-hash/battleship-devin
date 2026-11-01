@@ -35,9 +35,6 @@ export type CanonicalSfx =
   | 'crew-groan'
   | 'crew-brace'
   | 'crew-panic'
-  | 'land-ho'
-  | 'spyglass-raise'
-  | 'spyglass-lower'
 
 /** Names used by the pre-pirate UI (`src/ui`). They keep working and map onto the new set. */
 export type LegacySfx = 'fire' | 'hit' | 'miss' | 'sunk' | 'victory' | 'defeat' | 'place'
@@ -92,9 +89,6 @@ const CANONICAL_FILES: Record<CanonicalSfx, readonly string[]> = {
   'crew-groan': ['crew-groan'],
   'crew-brace': ['crew-brace'],
   'crew-panic': ['crew-panic'],
-  'land-ho': ['land-ho'],
-  'spyglass-raise': ['spyglass-raise'],
-  'spyglass-lower': ['spyglass-lower'],
 }
 
 /** Canonical names plus the legacy aliases (pointing at the same files). */
@@ -144,9 +138,6 @@ export const SFX_GAIN: Partial<Record<CanonicalSfx, number>> = {
   'crew-groan': 0.55,
   'crew-brace': 0.65,
   'crew-panic': 0.6,
-  'land-ho': 0.55,
-  'spyglass-raise': 0.5,
-  'spyglass-lower': 0.5,
 }
 
 export type MusicTrack = 'menu' | 'battle'

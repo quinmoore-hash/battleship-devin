@@ -4,8 +4,8 @@
  * Every generator is deterministic (seeded) and returns a mono buffer. Kept short: the whole set must stay well under 600 KB.
  */
 import {
-  TAU, adEnv, asrEnv, bandpass, buffer, comb, envelope, expInterp, foldLoop, highpass, lerp, lowpass, midi, mix, noise,
-  pinkNoise, resonantLowpass, reverb, rng, softclip, tone, wander, waves,
+  TAU, adEnv, asrEnv, bandpass, buffer, comb, envelope, expInterp, foldLoop, highpass, lowpass, midi, mix, noise,
+  pinkNoise, resonantLowpass, reverb, rng, tone, wander, waves,
 } from './dsp.mjs'
 import { VOWEL, finish, voice } from './sfx.mjs'
 
@@ -176,37 +176,4 @@ export function crewPanic() {
   mix(out, voice(1.1, (t) => midi(57) * envelope([[0, 1.0], [0.5, 1.15], [1.1, 0.9]])(t), [VOWEL.a, VOWEL.a], r, { breath: 0.3 }), 0.5, 0.35)
   mix(out, tone(0.5, (t) => expInterp(2100, 2500, Math.min(1, t / 0.5)), (t) => asrEnv(t, 0.5, 0.02, 0.1), waves.pulse(0.5)), 1.2, 0.2)
   return finish(reverb(out, { mixLevel: 0.2, decay: 0.75, tail: 0.6, size: 1.6 }), { peak: 0.9 })
-}
-
-/** "Land ho!"-style murmur from the lookout when the glass finds a ship: two syllables, far and echoing. */
-export function landHo() {
-  const r = rng(981)
-  const out = buffer(1.6)
-  const base = midi(50)
-  bark(out, 0, base * 1.0, 0.3, [VOWEL.a, VOWEL.a], r, 0.5)
-  mix(out, voice(0.6, (t) => base * envelope([[0, 1.2], [0.25, 1.3], [0.6, 1.0]])(t), [VOWEL.o, VOWEL.o], r), 0.36, 0.5)
-  for (let v = 0; v < 3; v++) mix(out, voice(0.25, (t) => midi(44 + r() * 6) * expInterp(1.05, 0.9, Math.min(1, t / 0.25)), [VOWEL.o, VOWEL.o], r, { breath: 0.4 }), 1.0 + r() * 0.3, 0.25)
-  return finish(reverb(out, { mixLevel: 0.3, decay: 0.8, tail: 0.8, size: 2 }), { peak: 0.8 })
-}
-
-// ---------------------------------------------------------------- spyglass
-
-/** Brass tubes sliding out and seating: a slide-hiss and a click. */
-export function spyglassRaise() {
-  const r = rng(991)
-  const out = buffer(0.5)
-  mix(out, bandpass(noise(0.22, (t) => asrEnv(t, 0.22, 0.03, 0.08), r), (t) => lerp(1800, 2600, t / 0.22), 1.5), 0, 0.35)
-  mix(out, softclip(resonantLowpass(noise(0.03, (t) => adEnv(t, 0.0005, 0.025, 6), r), 3200, 0.6), 2), 0.24, 0.9)
-  mix(out, tone(0.12, () => 1450, (t) => adEnv(t, 0.001, 0.1, 6)), 0.24, 0.3)
-  return finish(out, { peak: 0.7 })
-}
-
-/** The glass collapsing shut: click first, then the slide. */
-export function spyglassLower() {
-  const r = rng(992)
-  const out = buffer(0.45)
-  mix(out, softclip(resonantLowpass(noise(0.03, (t) => adEnv(t, 0.0005, 0.025, 6), r), 2400, 0.6), 2), 0, 0.8)
-  mix(out, bandpass(noise(0.2, (t) => asrEnv(t, 0.2, 0.02, 0.1), r), (t) => lerp(2400, 1500, t / 0.2), 1.5), 0.05, 0.3)
-  mix(out, tone(0.1, () => 1100, (t) => adEnv(t, 0.001, 0.08, 6)), 0.22, 0.25)
-  return finish(out, { peak: 0.65 })
 }

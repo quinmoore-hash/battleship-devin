@@ -12,7 +12,6 @@ export type VoiceCue =
   | 'crew-groan'
   | 'crew-brace'
   | 'crew-panic'
-  | 'land-ho'
 
 /** Urgent lines may interrupt the gap once it is mostly elapsed; the random chatter never does. */
 const PRIORITY: Record<VoiceCue, number> = {
@@ -23,7 +22,6 @@ const PRIORITY: Record<VoiceCue, number> = {
   'crew-groan': 1,
   'crew-brace': 2,
   'crew-panic': 3,
-  'land-ho': 2,
 }
 
 export interface VoiceLimiter {
@@ -57,8 +55,7 @@ export const VOICE_SFX: Record<VoiceCue, CanonicalSfx> = {
   'crew-groan': 'crew-groan',
   'crew-brace': 'crew-brace',
   'crew-panic': 'crew-panic',
-  'land-ho': 'land-ho',
 }
 
-/** The one crew throat: DeckAudio's lines and the Spyglass "Land ho!" share this limiter. */
+/** The one crew throat: all of DeckAudio's lines share this limiter. */
 export const crewVoice: VoiceLimiter = createVoiceLimiter()

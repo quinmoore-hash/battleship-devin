@@ -2,7 +2,7 @@
  * Deck ambience scheduler (pure): hull creaks at random 4–9 s, rigging strain on wave peaks, water lapping at the hull
  * and a wind loop whose gain follows the weather. `DeckAudio` ticks it once per frame and plays what it returns.
  */
-import type { Weather } from '../../store/gameStore'
+import type { Weather } from '../../scene/sun'
 
 export const CREAK_MIN_S = 4
 export const CREAK_MAX_S = 9
