@@ -821,8 +821,8 @@ export function shroudFeet(ch: ChannelSpec, side: 1 | -1, count: number): Vec3[]
   })
 }
 
-/** All standing rigging of one mast (both sides), in the ship frame. */
-export function mastRigging(i: number, rungs: boolean, rungSpacing = 0.09): RopeSeg[] {
+/** All standing rigging of one mast (both sides), in the ship frame; `far` keeps only the lower shrouds + centreline stays (lod 2 silhouette). */
+export function mastRigging(i: number, rungs: boolean, rungSpacing = 0.09, far = false): RopeSeg[] {
   const mst = MASTS[i]
   const ch = CHANNELS[i]
   const segs: RopeSeg[] = []
@@ -830,6 +830,7 @@ export function mastRigging(i: number, rungs: boolean, rungSpacing = 0.09): Rope
     const feet = shroudFeet(ch, s, i === 2 ? 3 : 4)
     const head = mastLocalToShip(mst, [0, mst.top - 0.06, s * 0.04])
     segs.push(...shroudSegs(feet, head, rungs, rungSpacing))
+    if (far) continue
     const topFeet: Vec3[] = [-0.08, 0, 0.08].map((dx) => mastLocalToShip(mst, [dx + 0.02, mst.top + 0.02, s * (i < 2 ? 0.15 : 0.11)]))
     const topHead = mastLocalToShip(mst, [0.05, mst.crosstrees - 0.04, s * 0.03])
     segs.push(...shroudSegs(topFeet, topHead, rungs && rungSpacing < 0.1, 0.07, 0.007))
@@ -857,7 +858,7 @@ export function mastRigging(i: number, rungs: boolean, rungSpacing = 0.09): Rope
   segs.push({ a: mastLocalToShip(mst, [0.03, mst.top + 0.12, 0]), b: stayTargets[0], r: 0.011 })
   segs.push({ a: mastLocalToShip(mst, [0.06, mst.crosstrees + 0.08, 0]), b: stayTargets[1], r: 0.009 })
   segs.push({ a: mastLocalToShip(mst, [0.1, mst.height - 0.05, 0]), b: stayTargets[2], r: 0.007 })
-  if (i === 2) {
+  if (i === 2 && !far) {
     // ensign staff stays + spanker vangs
     segs.push({ a: mastLocalToShip(mst, [-0.84, 1.38, 0]), b: [X_STERN - 0.2, RAIL.poop + 0.02, 0.25], r: 0.006 })
     segs.push({ a: mastLocalToShip(mst, [-0.84, 1.38, 0]), b: [X_STERN - 0.2, RAIL.poop + 0.02, -0.25], r: 0.006 })
@@ -868,7 +869,7 @@ export function mastRigging(i: number, rungs: boolean, rungSpacing = 0.09): Rope
 const riggingGeo = cached((key: string) => {
   const [i, lodKey] = key.split(',')
   const lod = Number(lodKey) as Lod
-  return ropeTubes(mastRigging(Number(i), lod < 2, lod === 0 ? 0.09 : 0.18), lod === 0 ? 5 : 3, lod)
+  return ropeTubes(mastRigging(Number(i), lod < 2, lod === 0 ? 0.09 : 0.18, lod === 2), lod === 0 ? 5 : 3, lod)
 })
 
 /** Bowsprit gear: bobstay, gammoning-to-stem, beakhead rails and the anchor cables. */

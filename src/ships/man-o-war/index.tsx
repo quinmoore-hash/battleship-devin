@@ -62,9 +62,9 @@ function ManOWarModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'hi
           }
         />
       ))}
+      <Rigging {...common} snaps={snaps} />
       {effectiveLod < 2 && (
         <>
-          <Rigging {...common} snaps={snaps} />
           <Jibs m={m} sail={sailStates[0]} snap={snaps[0]} />
           <DeckFurniture {...common} />
         </>
