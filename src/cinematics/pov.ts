@@ -6,6 +6,7 @@ import { directionToWorld, localToWorld, type ShipPose, type WorldMuzzle } from 
 import { useGameStore } from '../store/gameStore'
 import { isAfloat, ownBoardOrigin } from './battery'
 import type { Battery, CinematicEvent } from './types'
+import { playerDeck } from '../crew/playerPose'
 
 /**
  * "On deck" point-of-view branch of the director. When `deck.on` the camera belongs to the deck controller
@@ -41,8 +42,6 @@ export interface OverboardBeat {
   point: Vec3
   /** Where the player hits the water (world, at the surface): over the nearest rail. */
   splashAt: Vec3
-  /** `boardShip` has been called for this beat. */
-  boarded: boolean
 }
 
 /**
@@ -50,6 +49,19 @@ export interface OverboardBeat {
  * outside the canvas and needs it to tell which hull section the player stands on). Null off deck.
  */
 export const deckEye: { position: Vec3 | null } = { position: null }
+
+/**
+ * Where the player is (world, at eye height): the deck controller's published feet position on the standing ship
+ * (`playerDeck`, ship-local), falling back to the deck camera's last idle position (demo page, no controller).
+ */
+export function playerEye(pov: PovContext): Vec3 | null {
+  const ship = pov.standing
+  if (ship && playerDeck.uid === ship.uid) {
+    const anchors = SHIPS[ship.spec.id].anchors
+    return localToWorld([playerDeck.x, anchors.deckY + 0.17, playerDeck.z], shipWorldTransform(ship, ownBoardOrigin(pov.perspective)))
+  }
+  return deckEye.position
+}
 
 export const POV = {
   /** `shake` on your own gun firing. */
@@ -242,5 +254,5 @@ export function overboardFor(pov: PovContext, event: CinematicEvent, own: readon
   const side = lz < 0 ? -1 : 1
   const point: Vec3 = eye ?? localToWorld([lx, anchors.deckY + 0.17, 0], pose)
   const splash = localToWorld([lx, 0, side * (anchors.hull.beam / 2 + 0.6)], pose)
-  return { cell: hitCell, nextUid: overboardNextUid(own, ship.uid), point, splashAt: [splash[0], BOARD_LAYOUT.surfaceY, splash[2]], boarded: false }
+  return { cell: hitCell, nextUid: overboardNextUid(own, ship.uid), point, splashAt: [splash[0], BOARD_LAYOUT.surfaceY, splash[2]] }
 }
