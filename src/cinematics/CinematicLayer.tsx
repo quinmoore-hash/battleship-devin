@@ -1,4 +1,5 @@
 import { useFrame } from '@react-three/fiber'
+import { useParticlesScale } from '../perf'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useStore } from 'zustand'
@@ -170,7 +171,10 @@ function ResidualFx({ fx, onDone }: { fx: Residual; onDone: () => void }) {
   return <BurnFx fx={fx} onDone={onDone} />
 }
 
-/** Budget: one instanced shard mesh (12 big chunks) + two small splashes, all transient; the gap is one persistent decal. */
+/**
+ * Budget: one instanced shard mesh (12 big chunks) + two small splashes, all transient; the gap is one persistent decal.
+ * The splashes are High-tier only (particlesScale 1): at Medium they pushed the shot frames past the 350-draw budget.
+ */
 const BREAKUP_SPLASHES: [number, number, number][] = [
   [0.55, 0.35, 0.6],
   [1.0, -0.3, 0.55],
@@ -179,16 +183,17 @@ const BREAKUP_SPLASHES: [number, number, number][] = [
 /** A hull section of the standing ship breaks up: bulwark and plank chunks tumble out and down into the sea, each landing with a splash. */
 function BreakupFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'breakup' }>; onDone: () => void }) {
   const done = useRef(0)
+  const splashes = useParticlesScale() >= 1 ? BREAKUP_SPLASHES : []
   const one = () => {
     done.current++
-    if (done.current >= 1 + BREAKUP_SPLASHES.length) onDone()
+    if (done.current >= 1 + splashes.length) onDone()
   }
   const n = fx.normal
   const out: Vec3 = [n[0], 0.35, n[2]]
   return (
     <>
       <SplinterBurst position={fx.position} normal={out} seed={fx.seed} count={12} size={3.4} speed={[0.9, 2.6]} waterY={BOARD_LAYOUT.surfaceY} onDone={one} />
-      {BREAKUP_SPLASHES.map(([delay, along, outward], i) => (
+      {splashes.map(([delay, along, outward], i) => (
         <Splash
           key={i}
           position={[fx.position[0] + n[0] * outward - n[2] * along, BOARD_LAYOUT.surfaceY, fx.position[2] + n[2] * outward + n[0] * along]}

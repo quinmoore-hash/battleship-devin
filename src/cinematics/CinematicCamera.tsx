@@ -118,9 +118,10 @@ function povShotPose(out: Pose, active: ActiveCinematic, plan: NonNullable<Activ
       const side = tmp.side.crossVectors(UP, n).normalize()
       const miss = plan.result.outcome === 'miss' || plan.result.outcome === 'lost'
       const hull = plan.victim ? SHIPS[plan.victim.ship.spec.id].anchors.hull : null
-      const r = miss ? 3.6 : hull ? hull.beam * 0.9 + 2.2 : 2.6
+      // a step further out than a true close-up: fewer ship parts fill the frame on the hold, which is what keeps Medium under 350 draws
+      const r = miss ? 3.6 : hull ? hull.beam * 0.9 + 3.4 : 3.6
       const dir = tmp.b.copy(n).multiplyScalar(hull ? 0.9 : 0.75).addScaledVector(side, hull ? 0.45 : 0.65).normalize().applyAxisAngle(UP, k * 0.3)
-      out.position.copy(I).addScaledVector(dir, r).addScaledVector(UP, miss ? 1.4 : (hull ? hull.height * 0.45 + 0.5 : 0.9) + k * 0.2)
+      out.position.copy(I).addScaledVector(dir, r).addScaledVector(UP, miss ? 1.4 : (hull ? hull.height * 0.55 + 0.8 : 1.2) + k * 0.2)
       out.target.copy(I).addScaledVector(UP, miss ? 0.1 : hull ? hull.height * 0.2 + 0.15 : 0.2)
       out.fov = miss ? 50 : 44
       return false
