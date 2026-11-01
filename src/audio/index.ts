@@ -14,6 +14,7 @@
  *           `src/cinematics` once its director lands (see README section in the PR).
  */
 import { Howl, Howler } from 'howler'
+import { Vector3 } from 'three'
 import { useSyncExternalStore } from 'react'
 import type { CinematicEvent } from '../cinematics/types'
 import { BOARD_LAYOUT, boardCenter, cellToWorld } from '../scene/layout'
@@ -254,11 +255,13 @@ export function setAudioListener(position: Vec3, forward: Vec3 = listener.forwar
 }
 
 /** Convenience for three.js cameras (structurally typed so this module doesn't import three). */
+const dirTarget = new Vector3()
+
 export function setAudioListenerFromCamera(camera: {
   position: { x: number; y: number; z: number }
-  getWorldDirection(target: { x: number; y: number; z: number; set(x: number, y: number, z: number): unknown }): unknown
+  getWorldDirection(target: Vector3): unknown
 }): void {
-  const dir = { x: 0, y: 0, z: -1, set(x: number, y: number, z: number) { this.x = x; this.y = y; this.z = z; return this } }
+  const dir = dirTarget.set(0, 0, -1)
   camera.getWorldDirection(dir)
   setAudioListener([camera.position.x, camera.position.y, camera.position.z], [dir.x, dir.y, dir.z])
 }

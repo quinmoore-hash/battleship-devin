@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CREAK_MAX_S, CREAK_MIN_S, DUCK_GAIN, createAmbience, windGainFor } from './ambience'
 import { STEP_DISTANCE, TELEPORT_DISTANCE, createFootsteps } from './footsteps'
-import { VOICE_GAP_MS, createVoiceLimiter } from './voice'
+import { CROWD_GAP_MS, VOICE_GAP_MS, createVoiceLimiter } from './voice'
 
 describe('footstep cadence', () => {
   it('drops one step every STEP_DISTANCE of walking, whatever the frame rate', () => {
@@ -34,15 +34,34 @@ describe('voice rate limiter', () => {
     const v = createVoiceLimiter()
     expect(v.request('crew-call', 0)).toBe(true)
     expect(v.request('crew-call', 1000)).toBe(false)
-    expect(v.request('gun-call-run-out', VOICE_GAP_MS - 1)).toBe(false)
-    expect(v.request('gun-call-run-out', VOICE_GAP_MS)).toBe(true)
+    expect(v.request('crew-call', VOICE_GAP_MS - 1)).toBe(false)
+    expect(v.request('crew-call', VOICE_GAP_MS)).toBe(true)
   })
-  it('lets urgent lines (brace, panic) cut in after half the gap, never sooner', () => {
+  it('lets the gun captain run the sequence: "Run out the gun!" after half the gap, "Fire!" after a quarter', () => {
+    const v = createVoiceLimiter()
+    v.request('crew-call', 0)
+    expect(v.request('gun-call-run-out', VOICE_GAP_MS * 0.25)).toBe(false)
+    expect(v.request('gun-call-run-out', VOICE_GAP_MS * 0.5)).toBe(true)
+    const t = VOICE_GAP_MS * 0.5
+    expect(v.request('gun-call-fire', t + 500)).toBe(false)
+    expect(v.request('gun-call-fire', t + VOICE_GAP_MS * 0.25)).toBe(true)
+  })
+  it('lets urgent lines (brace, panic) cut in, never two at once', () => {
     const v = createVoiceLimiter()
     v.request('crew-call', 0)
     expect(v.request('crew-brace', VOICE_GAP_MS * 0.25)).toBe(false)
     expect(v.request('crew-brace', VOICE_GAP_MS * 0.5)).toBe(true)
     expect(v.request('crew-panic', VOICE_GAP_MS * 0.5 + 100)).toBe(false)
+    expect(v.request('crew-panic', VOICE_GAP_MS * 0.75)).toBe(true)
+  })
+  it('cheer / groan are crowd reactions on their own guard: they follow a line at once, but not each other', () => {
+    const v = createVoiceLimiter()
+    expect(v.request('gun-call-fire', 0)).toBe(true)
+    expect(v.request('crew-cheer', 1100)).toBe(true)
+    expect(v.request('crew-groan', 1100 + CROWD_GAP_MS - 1)).toBe(false)
+    expect(v.request('crew-groan', 1100 + CROWD_GAP_MS)).toBe(true)
+    // the crowd never silences the next spoken line
+    expect(v.request('crew-brace', VOICE_GAP_MS * 0.5)).toBe(true)
   })
 })
 

@@ -31,6 +31,8 @@ const CHATTER_MIN_S = 14
 const CHATTER_MAX_S = 26
 /** Swim phase length used when a beat does not say (abandon-ship fade ≈ 2.4 s). */
 const SWIM_MS = 2600
+/** Cheer / groan this long after "Fire!" (≈ the ball's flight in the shot cinematic). */
+const REACTION_MS = 1100
 
 type Underwaterish = { type: string; seconds?: number; ms?: number }
 
@@ -48,6 +50,7 @@ export function DeckAudio() {
   const shipPos = useRef<Vec3>([0, 0, 0])
   const airborne = useRef(false)
   const underwaterTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const reactionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const say = (cue: VoiceCue, detail?: string) => {
     if (!crewVoice.request(cue, performance.now())) return false
@@ -94,9 +97,13 @@ export function DeckAudio() {
     const unsubBeat = useBattleController.subscribe((s, prev) => {
       if (s.beat === prev.beat) return
       const b = s.beat
-      if (b.phase === 'player-shot' && !b.result) say('gun-call-fire', 'fire')
-      else if (b.phase === 'player-shot' && b.result) say(b.result.outcome === 'miss' ? 'crew-groan' : 'crew-cheer', b.result.outcome)
-      else if (b.phase === 'enemy-aiming') say('crew-brace', 'incoming')
+      if (b.phase === 'player-shot' && b.result) {
+        // the beat carries the result up front (turnFlow); the crew reacts once the ball has flown
+        say('gun-call-fire', 'fire')
+        const outcome = b.result.outcome
+        clearTimeout(reactionTimer.current)
+        reactionTimer.current = setTimeout(() => say(outcome === 'miss' || outcome === 'lost' ? 'crew-groan' : 'crew-cheer', outcome), REACTION_MS)
+      } else if (b.phase === 'enemy-aiming') say('crew-brace', 'incoming')
       else if (b.phase === 'enemy-shot' && b.result?.outcome === 'sunk') say('crew-panic', 'sunk')
     })
     const underwaterFor = (ms: number) => {
@@ -127,6 +134,7 @@ export function DeckAudio() {
       wind.current?.stop(400)
       wind.current = null
       clearTimeout(underwaterTimer.current)
+      clearTimeout(reactionTimer.current)
       setUnderwater(false)
       useDeckAudioStore.getState().setUnderwater(false)
       setAudioListener(DEFAULT_LISTENER.position, DEFAULT_LISTENER.forward)

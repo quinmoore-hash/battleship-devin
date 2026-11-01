@@ -13,16 +13,23 @@ export type VoiceCue =
   | 'crew-brace'
   | 'crew-panic'
 
-/** Urgent lines may interrupt the gap once it is mostly elapsed; the random chatter never does. */
-const PRIORITY: Record<VoiceCue, number> = {
-  'crew-call': 0,
-  'gun-call-run-out': 1,
-  'gun-call-fire': 2,
-  'crew-cheer': 1,
-  'crew-groan': 1,
-  'crew-brace': 2,
-  'crew-panic': 3,
+/**
+ * Spoken lines share one throat: at most one per `gapMs` (4 s). The gun captain's "Fire!" and the urgent "Brace!" /
+ * panic may cut in after a fraction of the gap (a "Run out the gun!" → "Fire!" sequence is the point of the gun crew),
+ * the random chatter never does. Cheer / groan are crowd reactions, not lines: their own, shorter guard.
+ */
+const LINE_GAP_FRACTION: Record<VoiceCue, number> = {
+  'crew-call': 1,
+  'gun-call-run-out': 0.5,
+  'gun-call-fire': 0.25,
+  'crew-brace': 0.5,
+  'crew-panic': 0.25,
+  'crew-cheer': 0,
+  'crew-groan': 0,
 }
+const CROWD: ReadonlySet<VoiceCue> = new Set(['crew-cheer', 'crew-groan'])
+/** Minimum gap between two crowd reactions. */
+export const CROWD_GAP_MS = 2000
 
 export interface VoiceLimiter {
   /** Returns true (and records the line) if `cue` may play at time `nowMs`. */
@@ -30,19 +37,23 @@ export interface VoiceLimiter {
   reset(): void
 }
 
-export function createVoiceLimiter(gapMs = VOICE_GAP_MS): VoiceLimiter {
-  let last = -Infinity
+export function createVoiceLimiter(gapMs = VOICE_GAP_MS, crowdGapMs = CROWD_GAP_MS): VoiceLimiter {
+  let lastLine = -Infinity
+  let lastCrowd = -Infinity
   return {
     request(cue, nowMs) {
-      const since = nowMs - last
-      // panic/brace may cut in after half the gap; everything else waits the full gap
-      const need = PRIORITY[cue] >= 2 ? gapMs * 0.5 : gapMs
-      if (since < need) return false
-      last = nowMs
+      if (CROWD.has(cue)) {
+        if (nowMs - lastCrowd < crowdGapMs) return false
+        lastCrowd = nowMs
+        return true
+      }
+      if (nowMs - lastLine < gapMs * LINE_GAP_FRACTION[cue]) return false
+      lastLine = nowMs
       return true
     },
     reset() {
-      last = -Infinity
+      lastLine = -Infinity
+      lastCrowd = -Infinity
     },
   }
 }
