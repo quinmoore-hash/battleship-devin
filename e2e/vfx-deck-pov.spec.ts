@@ -49,6 +49,8 @@ test('on deck: a ball into my own section throws me overboard — follow-cam, tu
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
   })
+  // the scene project prefers reduced motion; the overboard beat is a 0.5 s cut there and would be skipped between SwiftShader frames
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto('/?cinematics-demo&quality=low')
   await expect(page.getByTestId('cinematics-panel')).toBeVisible()
   await expect(page.getByTestId('ocean-canvas').locator('canvas')).toBeVisible()
@@ -60,15 +62,18 @@ test('on deck: a ball into my own section throws me overboard — follow-cam, tu
   await expect(page.getByTestId('status')).toContainText('playing')
   // the director borrowed the camera: letterbox on, follow-cam riding the ball in
   await expect(page.getByTestId('letterbox')).toHaveAttribute('data-visible', 'true', { timeout: 20_000 })
-  await page.waitForTimeout(1200)
+  // full: approach 0.9 · fire 0.45 · flight 1.0 · impact 1.26 · overboard 2.9 (tumble ≈ 1 s, then the swim) · return 0.9
+  await page.waitForTimeout(900)
   await page.screenshot({ path: 'test-results/deck-overboard-followcam.png' })
-  await page.waitForTimeout(1800)
+  await page.waitForTimeout(2300)
   await page.screenshot({ path: 'test-results/deck-overboard-tumble.png' })
-  await page.waitForTimeout(1200)
+  await page.waitForTimeout(1300)
   await page.screenshot({ path: 'test-results/deck-overboard-swim.png' })
   await expect(page.getByTestId('status')).toContainText('1 done', { timeout: 40_000 })
   await expect(page.getByTestId('letterbox')).toHaveAttribute('data-visible', 'false', { timeout: 10_000 })
   await page.waitForTimeout(600)
   await page.screenshot({ path: 'test-results/deck-overboard-after.png' })
+  // the demo logs what the director decided for that ball (the beats themselves are not mirrored into the DOM)
+  await expect(page.getByTestId('cinematics-panel')).toContainText(/overboard yes → \w/)
   expect(errors).toEqual([])
 })

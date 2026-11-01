@@ -159,10 +159,16 @@ export function CinematicsDemo() {
     const ship = standingShip(human.ships, readDeckState())
     if (!ship) return say('no standing ship to hit')
     const pose = shipWorldTransform(ship, BOARD_LAYOUT.player.origin)
-    const cell = ship.cells[standingCell(ship, pose, deckEye.position ?? deckEyePosition(ship))]
+    // the section the player is on: the manned gun's cell (the demo mans station 0), else the one under the eye
+    const station = readDeckState().station
+    const manned = station !== null ? SHIPS[ship.spec.id].anchors.cannons[station]?.cell : undefined
+    const cell = ship.cells[manned ?? standingCell(ship, pose, deckEye.position ?? deckEyePosition(ship))]
     if (ship.hits.some((h) => h.x === cell.x && h.y === cell.y)) return say('my section is already hit')
     const result: ShotResult = { coord: cell, outcome: ship.hits.length + 1 >= ship.spec.length ? 'sunk' : 'hit', shipId: ship.spec.id, shipUid: ship.uid }
-    await playShot('enemy', result)
+    const played = playShot('enemy', result)
+    const a = director.active
+    say(`my section: cell ${ship.cells.indexOf(cell)} (station ${station ?? '–'}), overboard ${a?.pov?.overboard ? 'yes → ' + a.pov.overboard.nextUid : 'no'}, pov ${a?.pov ? 'on' : 'off'}`)
+    await played
     if (result.outcome === 'sunk') await director.play({ type: 'sink', owner: 'human', shipId: ship.spec.id, uid: ship.uid }, level)
   }
 
