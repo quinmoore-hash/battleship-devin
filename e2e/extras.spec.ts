@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { startSinglePlayer } from './helpers'
+import { playToGameOver, startSinglePlayer } from './helpers'
 
 // Extras flows run with the 3D scene disabled (see smoke.spec.ts); the 3D replay/photo canvases are covered by the `?extras-demo` sandbox below and the scene project.
 test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, the no3d report skips replay and photo', async ({ page }) => {
@@ -94,15 +94,7 @@ test('no3d game over: Replay / Photo mode give way to a note, the captain’s lo
   await startSinglePlayer(page, 'easy')
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
-  const grid = page.getByTestId('enemy-grid')
-  const gameover = page.getByTestId('gameover')
-  const yourTurn = page.getByTestId('status').filter({ hasText: 'Your turn' })
-  for (let i = 0; i < 100; i++) {
-    await expect(yourTurn.or(gameover)).toBeVisible()
-    if (await gameover.isVisible()) break
-    await grid.locator('button[data-state="unknown"]').first().click()
-  }
-  await expect(gameover).toBeVisible()
+  await playToGameOver(page)
   // no buttons that would open an empty blue gradient; a note says why
   await expect(page.getByTestId('report-replay')).toHaveCount(0)
   await expect(page.getByTestId('report-photo')).toHaveCount(0)

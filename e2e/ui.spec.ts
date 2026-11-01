@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openShotLog, startSinglePlayer } from './helpers'
+import { openShotLog, playToGameOver, startSinglePlayer } from './helpers'
 
 test('settings expose cinematics, quality, mute and colorblind markers and persist them', async ({ page }) => {
   await page.goto('/?no3d')
@@ -66,15 +66,7 @@ test('game over report has time, rank, and swaps the Replay / Photo buttons for 
   await startSinglePlayer(page, 'easy')
   await page.getByTestId('auto-place').click()
   await page.getByTestId('confirm-placement').click()
-  const grid = page.getByTestId('enemy-grid')
-  const gameover = page.getByTestId('gameover')
-  const yourTurn = page.getByTestId('status').filter({ hasText: 'Your turn' })
-  for (let i = 0; i < 100; i++) {
-    await expect(yourTurn.or(gameover)).toBeVisible()
-    if (await gameover.isVisible()) break
-    await grid.locator('button[data-state="unknown"]').first().click()
-  }
-  await expect(gameover).toBeVisible()
+  await playToGameOver(page)
   await expect(page.getByTestId('stat-time')).toHaveText(/\d+:\d\d/)
   await expect(page.getByTestId('rank')).not.toBeEmpty()
   // the extras module owns the replay / photo overlays (3D canvases): under `?no3d` the report shows a note instead of the buttons (BUG-601)
