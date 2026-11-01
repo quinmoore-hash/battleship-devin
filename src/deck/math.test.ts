@@ -324,6 +324,20 @@ describe('walk acceleration and jump', () => {
     expect(t).toBeLessThan(JUMP_TIME)
   })
 
+  it("a slow walk (1 cm steps) climbs the Man-o'-War quarterdeck ramp — the gap between the authored polygons never stalls it", () => {
+    const d = resolveDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
+    const ramp = d.ramps[0]
+    const mid: [number, number] = [(ramp.a[0] + ramp.b[0]) / 2, (ramp.a[1] + ramp.b[1]) / 2]
+    const fromLevel = d.walk[ramp.from].y < d.walk[ramp.to].y ? ramp.from : ramp.to
+    const toLevel = fromLevel === ramp.from ? ramp.to : ramp.from
+    const dir = d.walk[toLevel].points.reduce((acc, q) => acc + q[0], 0) / d.walk[toLevel].points.length > mid[0] ? 1 : -1
+    let pose: WalkPose = { x: mid[0] - dir * 0.15, z: mid[1], y: d.walk[fromLevel].y, level: fromLevel }
+    pose = stepOnDeck(pose, 0, 0, d)
+    for (let i = 0; i < 60 && pose.level !== toLevel; i++) pose = stepOnDeck(pose, dir * 0.01, 0, d)
+    expect(pose.level).toBe(toLevel)
+    expect(pose.y).toBeCloseTo(d.walk[toLevel].y, 2)
+  })
+
   it('while airborne the horizontal clamp still holds: stepping off the rail mid-jump snaps back inside the plan', () => {
     const d = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
     let pose = spawnPose(d)

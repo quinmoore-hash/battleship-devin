@@ -327,9 +327,12 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
     for (const r of deck.ramps) {
       const other = r.from === level ? r.to : r.to === level ? r.from : -1
       if (other < 0 || !deck.walk[other]) continue
-      if (segmentsCross(start, p, r.a, r.b) && pointInPolygon(p, deck.walk[other].points)) {
+      // crossing the ramp line is enough: the authored polygons leave a small gap at a break, so a slow step may land
+      // between them — snap onto the other level rather than stalling at the edge (a run jumped the gap, a walk did not)
+      if (segmentsCross(start, p, r.a, r.b)) {
         level = other
         moved = true
+        if (!pointInPolygon(p, deck.walk[other].points)) p = clampToPolygon(p, deck.walk[other].points)
         break
       }
     }
