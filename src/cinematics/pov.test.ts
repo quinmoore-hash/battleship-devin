@@ -24,7 +24,10 @@ const sinkOther: CinematicEvent = { type: 'sink', owner: 'human', shipId: 'sloop
 
 const record = () => {
   const events: DeckBusEvent[] = []
-  const off = deckBus.on((e) => events.push(e))
+  // the camera lease events (follow-cam) are covered in overboard.test.ts
+  const off = deckBus.on((e) => {
+    if (e.type !== 'camera') events.push(e)
+  })
   return { events, off }
 }
 const run = (d: ReturnType<typeof make>, seconds: number) => {

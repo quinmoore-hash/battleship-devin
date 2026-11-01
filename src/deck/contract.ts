@@ -85,6 +85,12 @@ export type DeckBusEvent =
    * sequence returns to the deck. `deckCameraLease.owner` mirrors the last event; the camera owner stands down while it is `'director'`.
    */
   | { type: 'camera'; owner: 'director' | 'deck' }
+  /**
+   * Session B addition: the incoming ball struck the hull section the player stood on (or the gun they manned). The director
+   * plays the tumble / swim beat and then calls `boardShip(nextUid)` itself (`nextUid` = next afloat own ship, or the same ship
+   * when it is the last one afloat); the camera owner may play its own tumble in either view.
+   */
+  | { type: 'thrown-overboard'; nextUid: string; cell: number; point: Vec3 }
 
 type Listener = (e: DeckBusEvent) => void
 const listeners = new Set<Listener>()

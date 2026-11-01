@@ -17,6 +17,10 @@ export interface SplinterBurstProps {
   count?: number
   /** World height of the water the shards land on. */
   waterY?: number
+  /** Shard size multiplier (hull-section breakup uses big planks and rail chunks). */
+  size?: number
+  /** Launch speed range, u/s. */
+  speed?: [number, number]
   /** Called once the last shard has sunk; unmount the burst then. */
   onDone?: () => void
 }
@@ -30,13 +34,13 @@ const CHAR = new THREE.Color('#1b120b')
  * Cannonball hit on timber: a spray of spinning plank shards and knots that arc out along the hit
  * normal, splash into the water, bob for a moment and sink; plus a dust puff and a few embers.
  */
-export function SplinterBurst({ position, normal, seed = 1, count, waterY = BOARD_LAYOUT.surfaceY, onDone }: SplinterBurstProps) {
+export function SplinterBurst({ position, normal, seed = 1, count, waterY = BOARD_LAYOUT.surfaceY, size = 1, speed, onDone }: SplinterBurstProps) {
   const reduced = useReducedMotion()
   const particles = useParticlesScale()
   const n = count ?? scaleCount(reduced ? 18 : 42, particles)
   const mesh = useRef<THREE.InstancedMesh>(null)
   const dust = useRef<THREE.InstancedMesh>(null)
-  const shards = useMemo(() => makeSplinters({ seed, count: n, normal, size: reduced ? 0.9 : 1 }), [seed, n, normal, reduced])
+  const shards = useMemo(() => makeSplinters({ seed, count: n, normal, size: (reduced ? 0.9 : 1) * size, speed }), [seed, n, normal, reduced, size, speed])
   const relWater = waterY - position[1]
   const total = useMemo(() => splinterDuration(shards, relWater), [shards, relWater])
   const dustParts = useMemo(
