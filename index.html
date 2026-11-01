@@ -6,8 +6,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pirate Battleship</title>
     <meta name="description" content="A fully 3D, cinematic pirate Battleship game. Fire real cannonballs, watch wooden ships burn and sink." />
+    <!-- fonts load from the HTML (not an @import inside the CSS bundle) so they do not sit behind the stylesheet on the critical path -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pirata+One&family=IM+Fell+English:ital@0;1&family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&display=swap" media="print" onload="this.media='all'" />
+    <style>
+      /* Boot splash: inline so it paints before any JS bundle arrives; App.tsx removes it once React mounts. */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        box-sizing: border-box;
+        background: radial-gradient(ellipse at 50% 40%, #16485c, #0b2a3a 75%);
+        color: #2a1a0f;
+        font-family: 'IM Fell English', Georgia, 'Times New Roman', serif;
+        transition: opacity 0.3s ease;
+      }
+      #boot-splash[data-done] {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .boot-card {
+        width: min(420px, 100%);
+        box-sizing: border-box;
+        display: grid;
+        justify-items: center;
+        gap: 0.7rem;
+        padding: clamp(1rem, 4vmin, 1.6rem) clamp(1rem, 4vmin, 1.4rem);
+        background: linear-gradient(165deg, #ead9b4, #d8c08f);
+        border: 3px solid #b98a2f;
+        border-radius: 14px;
+        box-shadow: 0 0 0 1px #7a5614 inset, 0 18px 50px rgba(0, 0, 0, 0.5);
+        text-align: center;
+      }
+      .boot-card h1 {
+        margin: 0;
+        font-weight: 400;
+        font-style: italic;
+        font-size: clamp(1.4rem, 5vmin, 2rem);
+        line-height: 1.15;
+      }
+      .boot-card p {
+        margin: 0;
+        font-size: clamp(0.85rem, 3vmin, 1rem);
+        color: #5a4330;
+      }
+      .boot-bar {
+        width: 100%;
+        height: 10px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #b99a63;
+        box-shadow: 0 1px 0 #f3ead6 inset;
+      }
+      .boot-bar span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #7a5614, #e8c86e, #b98a2f);
+        animation: boot-sweep 1.4s ease-in-out infinite alternate;
+      }
+      @keyframes boot-sweep {
+        from { transform: translateX(-10%); }
+        to { transform: translateX(160%); }
+      }
+      /* reduced motion: the bar stops sweeping; the 0.3 s opacity hand-off stays so the React card is never
+         preceded by a bare gradient frame */
+      @media (prefers-reduced-motion: reduce) {
+        .boot-bar span { animation: none; width: 55%; }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot-splash" role="status" aria-live="polite">
+      <div class="boot-card">
+        <h1>Hoisting the sails…</h1>
+        <div class="boot-bar" aria-hidden="true"><span></span></div>
+        <p>Loading the ship’s charts — the sea itself keeps streaming in behind the menu.</p>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

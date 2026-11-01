@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { startSinglePlayer } from './helpers'
 
-// Extras flows run with the 3D scene disabled (see smoke.spec.ts); the 3D replay/photo canvases are covered by scene.spec.ts-style checks in the recording.
-test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, replay and photo open from game over', async ({ page }) => {
+// Extras flows run with the 3D scene disabled (see smoke.spec.ts); the 3D replay/photo canvases are covered by the `?extras-demo` sandbox below and the scene project.
+test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, the no3d report skips replay and photo', async ({ page }) => {
   test.setTimeout(240_000) // a stormy game re-fires ~30% of its shots, so it is longer than a classic one (BUG-309)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/?no3d')
@@ -66,18 +66,10 @@ test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, repla
   await page.getByTestId('toggle-log').click()
   await expect(page.getByTestId('stats-panel')).toHaveCount(0)
 
-  await page.getByTestId('report-replay').click()
-  await expect(page.getByTestId('replay-player')).toBeVisible()
-  const counter = page.getByTestId('replay-counter')
-  await page.getByTestId('replay-next').click()
-  await expect(counter).toContainText(/^1\//)
-  await page.getByTestId('replay-close').click()
-  await expect(page.getByTestId('replay-player')).toHaveCount(0)
-
-  await page.getByTestId('report-photo').click()
-  await expect(page.getByTestId('photo-mode')).toBeVisible()
-  await page.getByTestId('photo-close').click()
-  await expect(page.getByTestId('photo-mode')).toHaveCount(0)
+  // BUG-601: Replay / Photo mode are 3D canvases, so under `?no3d` the report explains instead of offering them
+  await expect(page.getByTestId('report-replay')).toHaveCount(0)
+  await expect(page.getByTestId('report-photo')).toHaveCount(0)
+  await expect(page.getByTestId('report-no3d-note')).toBeVisible()
 
   await page.getByTestId('play-again').click()
   await expect(page.getByTestId('stats-panel')).toContainText('1 / 1')
@@ -94,6 +86,46 @@ test('salvo + stormy seas game: volleys queue, lost shots are re-fireable, repla
   await page.getByTestId('stats-clear-yes').click()
   await expect(page.getByTestId('stats-panel')).toContainText('No battles yet')
   expect(await page.evaluate(() => localStorage.getItem('battleship-devin.stats'))).toBeNull()
+})
+
+test('no3d game over: Replay / Photo mode give way to a note, the captain’s log and shot log still work (BUG-601)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/?no3d')
+  await startSinglePlayer(page, 'easy')
+  await page.getByTestId('auto-place').click()
+  await page.getByTestId('confirm-placement').click()
+  const grid = page.getByTestId('enemy-grid')
+  const gameover = page.getByTestId('gameover')
+  const yourTurn = page.getByTestId('status').filter({ hasText: 'Your turn' })
+  for (let i = 0; i < 100; i++) {
+    await expect(yourTurn.or(gameover)).toBeVisible()
+    if (await gameover.isVisible()) break
+    await grid.locator('button[data-state="unknown"]').first().click()
+  }
+  await expect(gameover).toBeVisible()
+  // no buttons that would open an empty blue gradient; a note says why
+  await expect(page.getByTestId('report-replay')).toHaveCount(0)
+  await expect(page.getByTestId('report-photo')).toHaveCount(0)
+  const note = page.getByTestId('report-no3d-note')
+  await expect(note).toBeVisible()
+  await expect(note).toContainText(/need the 3D sea/)
+  // even a stray request (keyboard shortcut, console) must not open the 3D overlays without a scene
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('battleship:replay'))
+    window.dispatchEvent(new CustomEvent('battleship:photo'))
+  })
+  await page.waitForTimeout(300)
+  await expect(page.getByTestId('replay-player')).toHaveCount(0)
+  await expect(page.getByTestId('photo-mode')).toHaveCount(0)
+  // the 2D extras keep working: captain's log with the shot log
+  await page.getByTestId('toggle-log').click()
+  await expect(page.getByTestId('stats-panel')).toBeVisible()
+  await expect(page.getByTestId('stats-totals')).toContainText('1 battle')
+  await page.getByTestId('toggle-log').click()
+  await expect(page.getByTestId('stats-panel')).toHaveCount(0)
+  // Rematch / Menu are untouched
+  await expect(page.getByTestId('rematch')).toBeVisible()
+  await expect(page.getByTestId('play-again')).toBeVisible()
 })
 
 test('classic game keeps one shot per turn with both modes off', async ({ page }) => {

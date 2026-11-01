@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { playSfx } from '../audio'
 import { useDirector } from '../cinematics'
+import { is3dDisabled } from '../scene/flags'
 import { fleetPresetName, isHotSeat, TREASURE_PER_BOARD, treasureFound, useGameStore } from '../store/gameStore'
 import { Confetti } from './Confetti'
 import { Skull, WaxSeal } from './Ornaments'
@@ -9,7 +10,8 @@ import { useUiStore } from './uiStore'
 
 /**
  * Parchment after-action report. "Replay" and "Photo mode" are owned by the extras session: the
- * buttons dispatch `battleship:replay` / `battleship:photo` window events for it to hook into.
+ * buttons dispatch `battleship:replay` / `battleship:photo` window events for it to hook into. Both
+ * overlays are 3D canvases, so under `?no3d` the report shows a note in their place (BUG-601).
  */
 export function GameOverScreen() {
   const winner = useGameStore((s) => s.winner)
@@ -30,6 +32,7 @@ export function GameOverScreen() {
   const battleStartedAt = useUiStore((s) => s.battleStartedAt)
   // the report inks in once the director has finished the last shot / sinking / victory flyover (instantly without the director)
   const flyover = useDirector((s) => s.busy)
+  const no3d = is3dDisabled()
 
   const won = winner === 'human'
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt])
@@ -91,12 +94,20 @@ export function GameOverScreen() {
           <button type="button" className="btn btn-brass" data-testid="play-again" onClick={() => (playSfx('ui-click'), reset())}>
             Menu
           </button>
-          <button type="button" className="btn btn-rope" data-testid="report-replay" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:replay')))}>
-            Replay
-          </button>
-          <button type="button" className="btn btn-rope" data-testid="report-photo" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:photo')))}>
-            Photo mode
-          </button>
+          {no3d ? (
+            <p className="report-note" data-testid="report-no3d-note">
+              Replay &amp; Photo mode need the 3D sea — it is switched off here.
+            </p>
+          ) : (
+            <>
+              <button type="button" className="btn btn-rope" data-testid="report-replay" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:replay')))}>
+                Replay
+              </button>
+              <button type="button" className="btn btn-rope" data-testid="report-photo" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:photo')))}>
+                Photo mode
+              </button>
+            </>
+          )}
         </div>
         <WaxSeal tone={won ? 'gold' : 'crimson'} className="report-seal">
           <Skull size={22} />
