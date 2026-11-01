@@ -226,6 +226,22 @@ Medium rides the baked lod-1 copy and drops the other own ships to lod 2 while o
 draws). Keyboard-only: pointer lock refused → arrow keys look, WASD walk, Enter fires at the crosshair; touch: drag to look, tap
 a gun (or the HUD button) to man it, tap the chart to fire.
 
+### crew (`src/crew`)
+```tsx
+<CrewLayer ships livery revealed boardOrigin sinkProgress low reducedMotion />   // one per board, next to its <Fleet>s
+placeCrew(anchors, placedShipSeed(ship), crewCountFor(id, low)) → CrewSlot[]     // pure, deterministic; gunners at stationsOf()
+reactionFor(slots, hitCell, length, gone) → { thrown, stumble }                   // who goes overboard / stumbles on a hit
+CLIPS / samplePose(clip, t, out) / blendPose                                      // the keyframe table + allocation-free sampler
+playerDeck / setPlayerDeck(uid, x, z, station)                                    // DeckController publishes the walk pose; crew step aside
+```
+One `InstancedMesh` of a unit box per board holds every part of every figure (9 boxes a figure = 1 draw call a board, ~108 tris
+a figure, ≤ 8 crew a ship by class: sloop 3 … man-o'-war 8; Low tier 2). Poses are sampled on the CPU in `useFrame` from
+`CLIPS` and composed through the same ship matrix as `Fleet` / `DeckController` (wave height × `sinkPose`), so crew ride the
+deck. Visibility follows `Fleet`: `revealed={over}` for the enemy — only sunk enemy ships show crew (jumping off). A new hit
+(`damageOf` change at a cell) throws the nearest figure within a cell over the nearest rail (`<Splash>` → swim 3 s → fade) and
+stumbles the others; a sink empties the deck over the first 1.5 s. `settings.crew` (default on, persisted) unmounts the layer;
+`reducedMotion` fades figures in place instead of tumbling; Low tier skips the swim. `window.__crewPerf` reports the update ms.
+
 ### audio (`src/audio`)
 `initAudio()`, `playSfx(name, opts?)` → `SfxHandle` (`stop()` for the `fire-loop` / `bubbles` loops), `playSfxAt(name, worldPos)`
 (camera-relative pan + distance gain; feed the camera with `setAudioListener(pos, forward)` / `setAudioListenerFromCamera(camera)`),

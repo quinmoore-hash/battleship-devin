@@ -19,6 +19,7 @@ import { useUiStore } from '../ui/uiStore'
 import { lastHitIndex, placedShipSeed, sinkPose } from '../vfx/sinking'
 import { DECK_FOV, DECK_NEAR, deckBus, type DeckBusEvent } from './contract'
 import { resetDeckRuntime, useDeckStore } from './deckStore'
+import { setPlayerDeck } from '../crew/playerPose'
 import {
   KEY_LOOK_SPEED,
   LOOK_PER_PIXEL,
@@ -163,6 +164,7 @@ export function DeckController() {
       fade.current = null
       abandoning.current = false
       resetDeckRuntime()
+      setPlayerDeck(null)
       useUiStore.getState().setHover(null)
     }
   }, [active, camera, gl])
@@ -445,6 +447,7 @@ export function DeckController() {
       pose.current = stepOnDeck(pose.current, dx, dz, geometry.deckA)
     }
 
+    setPlayerDeck(ship.uid, pose.current.x, pose.current.z, g.deck.station ?? -1)
     // station proximity → HUD prompt
     const near = manning ? null : nearestStation(geometry.stations, pose.current.x, pose.current.z)
     runtime.setNear(near ? { index: near.index, usable: geometry.stations[near.index].usable } : null)

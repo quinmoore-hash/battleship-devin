@@ -7,6 +7,7 @@ import { usePerf } from '../../perf/store'
 import { BoardGrid } from '../../scene/BoardGrid'
 import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
 import { Fleet, Ship } from '../../ships'
+import { CrewLayer } from '../../crew'
 import { isHotSeat, other, placementBoard, useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
 import { ShotMarkers } from '../../vfx/markers'
@@ -250,6 +251,8 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const active = useDirector((s) => s.active)
   const impacted = useDirector((s) => s.impacted)
   const perf = usePerf()
+  const crewOn = useGameStore((s) => s.settings.crew)
+  const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
 
   // while the director flies a ball, the world shows the board as it was before that shot
   const inFlight: PendingShot | null = active?.event.type === 'shot' && !impacted ? { by: active.event.by, target: active.event.target } : null
@@ -314,6 +317,8 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
       <Fleet ships={ownRest} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={restLod} firing={firing} sinkProgress={own.sink} />
       {standing.length > 0 && <Fleet ships={standing} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={standingLod} firing={firing} sinkProgress={own.sink} />}
       <Fleet ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} quality={quality} lod={lod} firing={firing} sinkProgress={foe.sink} />
+      {crewOn && <CrewLayer ships={own.ships} livery={own.livery} boardOrigin={own.origin} sinkProgress={own.sink} low={perf.lod === 2} reducedMotion={reducedMotion} />}
+      {crewOn && <CrewLayer ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} sinkProgress={foe.sink} low={perf.lod === 2} reducedMotion={reducedMotion} />}
       <ShotMarkers shots={own.shotsOnIt} boardOrigin={own.origin} fires={false} />
       <ShotMarkers shots={foe.shotsOnIt} boardOrigin={foe.origin} fires={!over} />
       {/* permanent light slots: fires + muzzle/impact flashes borrow these so the scene's light count never changes (no shader recompiles mid-battle) */}
