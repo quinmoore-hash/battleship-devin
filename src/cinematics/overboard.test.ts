@@ -4,7 +4,8 @@ import { FLEET, type PlacedShip } from '../engine'
 import { BOARD_LAYOUT } from '../scene/layout'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { createDirector } from './director'
-import { cellAtLocalX, deckEye, overboardFor, overboardNextUid, povFor, standingCell, standingCellFor, worldToLocal } from './pov'
+import { cellAtLocalX, deckEye, overboardFor, overboardNextUid, playerEye, povFor, standingCell, standingCellFor, worldToLocal } from './pov'
+import { playerDeck, setPlayerDeck } from '../crew/playerPose'
 import { OVERBOARD_SECONDS, buildSequence } from './sequence'
 import type { CinematicEvent } from './types'
 import { localToWorld } from '../vfx/cannon/anchors'
@@ -29,6 +30,7 @@ let unsub: (() => void) | null = null
 afterEach(() => {
   unsub?.()
   deckEye.position = null
+  setPlayerDeck(null)
   deckCameraLease.owner = 'deck'
 })
 
@@ -60,6 +62,21 @@ describe('which hull section am I standing on', () => {
     }
   })
 
+  it('playerEye: the controller\'s published position on the standing ship (at eye height), else the demo camera, else nothing', () => {
+    const pov = povFor(hitAt(1), onDeck, fleets, 'human')!
+    expect(playerEye(pov)).toBeNull()
+    deckEye.position = [1, 2, 3]
+    expect(playerEye(pov)).toEqual([1, 2, 3])
+    setPlayerDeck('sloop', -1.2, 0.1) // standing on another ship: not ours
+    expect(playerEye(pov)).toEqual([1, 2, 3])
+    setPlayerDeck('frigate', -1.2, 0.1)
+    expect(playerDeck.uid).toBe('frigate')
+    const eye = playerEye(pov)!
+    expect(eye).toEqual(localToWorld([-1.2, deckY + 0.17, 0.1], pose))
+    expect(worldToLocal(eye, pose)[0]).toBeCloseTo(-1.2, 5)
+    expect(standingCellFor(pov, eye)).toBe(frigate.spec.length - 1)
+  })
+
   it('standingCellFor: the manned gun decides, else the eye; unknown without either', () => {
     const pov = povFor(hitAt(1), onDeck, fleets, 'human')!
     expect(standingCellFor(pov, null)).toBeNull()
@@ -72,7 +89,7 @@ describe('which hull section am I standing on', () => {
     const eye = localToWorld([0.5, deckY + 0.17, -0.2], pose) // over cell 1, port side
     const pov = povFor(hitAt(1), onDeck, fleets, 'human')!
     const ob = overboardFor(pov, hitAt(1), fleets.human, eye)!
-    expect(ob).toMatchObject({ cell: 1, nextUid: 'sloop', boarded: false })
+    expect(ob).toMatchObject({ cell: 1, nextUid: 'sloop' })
     expect(ob.point).toEqual(eye)
     expect(ob.splashAt[1]).toBe(BOARD_LAYOUT.surfaceY)
     expect(worldToLocal(ob.splashAt, pose)[1]).toBeLessThan(-SHIPS.frigate.anchors.hull.beam / 2) // over the port rail

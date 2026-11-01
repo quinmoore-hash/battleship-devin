@@ -406,8 +406,9 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       camera.fov = deckPov ? smooth.current.fov : fitFov(smooth.current.fov, camera.aspect)
       camera.updateProjectionMatrix()
     }
-    // back at the deck pose: hand the camera back (the overboard beat hands it back under the fade, from the director)
-    if (deckPov && !deckPov.overboard && beat?.name === 'return' && k >= 0.999) {
+    // back at the deck pose: hand the camera back. Thrown overboard: the controller's fade is black when the return beat
+    // starts (it climbs aboard the next ship under it), so the camera goes back right away.
+    if (deckPov && beat?.name === 'return' && (deckPov.overboard || k >= 0.999)) {
       camera.fov = DECK_FOV
       camera.updateProjectionMatrix()
       releaseLease()

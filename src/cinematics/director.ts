@@ -3,13 +3,12 @@ import { duckMusic, playCinematicAudio, playSfx, playSfxAt } from '../audio'
 import type { PlacedShip, Player } from '../engine'
 import { defaultQuality } from '../scene'
 import { deckBus, deckCameraLease, type DeckState } from '../deck/contract'
-import { useDeckStore } from '../deck/deckStore'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
 import type { CannonRef } from '../ships/types'
 import { sinkProgressAt } from '../vfx/sinking/timeline'
 import type { Vec3 } from '../scene/layout'
 import { ownBoardOrigin, planShot, type ShotPlan } from './battery'
-import { POV, deckEye, nextAfloatUid, overboardFor, povBeatEvents, povFor, readDeckState, shipWorldPosition, stationBattery, stationMuzzle, type PovContext } from './pov'
+import { POV, nextAfloatUid, overboardFor, playerEye, povBeatEvents, povFor, readDeckState, shipWorldPosition, stationBattery, stationMuzzle, type PovContext } from './pov'
 import { allowShake, beatAt, buildSequence, createSequenceClock, maxBalls, timeScaleAt, type BeatName, type BeatState, type Budget, type Sequence, type SequenceClock } from './sequence'
 import type { CinematicDirector, CinematicEvent } from './types'
 
@@ -171,24 +170,10 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     deckBus.emit({ type: 'camera', owner: 'deck' })
   }
 
-  /** Thrown overboard: once the water has closed over the player, climb aboard the next ship (under the deck fade). */
-  const climbAboard = (a: ActiveCinematic) => {
-    const ob = a.pov?.overboard
-    if (!ob || ob.boarded) return
-    ob.boarded = true
-    const g = useGameStore.getState()
-    if (g.deck.on) g.boardShip(ob.nextUid)
-    releaseCamera()
-  }
-
   const finish = () => {
     const { active } = store.getState()
     if (!active) return
     abandonShip(active)
-    if (active.pov?.overboard) {
-      climbAboard(active)
-      useDeckStore.getState().setFade(0)
-    }
     releaseCamera()
     if (active.event.type === 'sink' && active.clock.skipped) active.audio?.cancel()
     const settled: Partial<DirectorState> = { active: null, busy: false, firing: {}, impacted: false, timeScale: 1, letterbox: false, completed: store.getState().completed + 1 }
@@ -278,7 +263,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       const fleets = fleetsOf()
       const pov = povFor(event, deckOf(), fleets, store.getState().perspective)
       // the ball took the section the player stands on → the thrown-overboard beat extends the shot
-      const overboard = pov ? overboardFor(pov, event, fleets[pov.perspective], deckEye.position) : null
+      const overboard = pov ? overboardFor(pov, event, fleets[pov.perspective], playerEye(pov)) : null
       if (pov && overboard) pov.overboard = overboard
       const seq = buildSequence(event, level, reducedMotionOf(), budgetOf(), pov !== null, overboard !== null)
       // on deck a manned gun fires the shot; otherwise (and for Broadside's explicit battery) the usual pick
@@ -309,8 +294,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         if (event.type === 'shot') enterBeat(active, 'return')
         abandonShip(active)
         if (overboard) {
-          deckBus.emit({ type: 'thrown-overboard', nextUid: overboard.nextUid, cell: overboard.cell, point: overboard.point })
-          climbAboard(active)
+          deckBus.emit({ type: 'thrown-overboard', nextUid: overboard.nextUid, cell: overboard.cell, point: overboard.point, seconds: 0 })
         }
         store.setState({ active: null, busy: false, firing: {}, impacted: false, shake: 0, letterbox: false, completed: store.getState().completed + 1, ...(event.type === 'sink' ? { sinkProgress: { ...store.getState().sinkProgress, [event.uid ?? event.shipId]: 1 } } : {}) })
         return Promise.resolve()
@@ -344,13 +328,6 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       const name = beat?.name ?? null
       if (name !== active.beat) enterBeat(active, name)
       if (active.pov?.standingHit && clock.t >= POV.abandonAt) abandonShip(active)
-      const ob = active.pov?.overboard
-      if (ob && beat && name === 'return') {
-        // the deck fades to black, the player climbs aboard the next ship halfway, the fade lifts on it
-        const k = beat.duration > 0 ? Math.min(1, (clock.t - beat.start) / beat.duration) : 1
-        useDeckStore.getState().setFade(k < 0.5 ? k * 2 : (1 - k) * 2)
-        if (k >= 0.5) climbAboard(active)
-      }
       if (seq.sink && active.uid) {
         const p = sinkProgressAt(clock.t, seq.sink)
         const ts = timeScaleAt(seq, clock.t)
