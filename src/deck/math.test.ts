@@ -340,6 +340,15 @@ describe('walk acceleration and jump', () => {
     expect(pose.y).toBeCloseTo(d.walk[toLevel].y, 2)
   })
 
+  it('pinned at the Galleon bow tip (obstacle + rail), walking aft is never trapped (testing agent)', () => {
+    const d = resolveDeckAnchors(SHIPS.galleon.anchors, 'galleon')
+    const level = d.walk.findIndex((l) => l.points.some((q) => q[0] > 1.5))
+    expect(level).toBeGreaterThanOrEqual(0)
+    let pose: WalkPose = { x: 1.52, z: 0.02, y: d.walk[level].y, level }
+    for (let i = 0; i < 40; i++) pose = stepOnDeck(pose, -0.02, 0, d)
+    expect(pose.x).toBeLessThan(1.25)
+  })
+
   it('while airborne the horizontal clamp still holds: stepping off the rail mid-jump snaps back inside the plan', () => {
     const d = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
     let pose = spawnPose(d)
