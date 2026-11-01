@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { bindGameAudio } from './audio'
 import { CinematicCamera, CinematicLayer, Letterbox, director, useDirector } from './cinematics'
 import { DeckController } from './deck'
@@ -99,13 +99,6 @@ function Game() {
   // hot-seat: the director films from the active captain's side (always `human` in single player)
   const perspective = useGameStore((s) => s.perspective)
   useEffect(() => director.setPerspective(perspective), [perspective])
-  // the sea mounts one frame after the menu: the first WebGL frame compiles every shader on the main thread,
-  // and mounting both in one commit held the menu's (and the boot splash's) paint behind that compile
-  const [seaReady, setSeaReady] = useState(false)
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setSeaReady(true))
-    return () => cancelAnimationFrame(frame)
-  }, [])
   useEffect(() => {
     const unbindCinematics = bindCinematics()
     const unbindAudio = bindGameAudio({ director: directorPlaysAudio })
@@ -119,14 +112,12 @@ function Game() {
       <PerfBootstrap />
       <FpsWatchdog />
       <A11yBootstrap />
-      {seaReady && (
-        <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic && !onDeck}>
-          <GameWorld />
-          {inBattle && <CinematicLayer />}
-          {inBattle && !onDeck && <CinematicCamera />}
-          {phase === 'battle' && <DeckController />}
-        </OceanScene>
-      )}
+      <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic && !onDeck}>
+        <GameWorld />
+        {inBattle && <CinematicLayer />}
+        {inBattle && !onDeck && <CinematicCamera />}
+        {phase === 'battle' && <DeckController />}
+      </OceanScene>
       <GameUI menuExtras={{ rules: <MenuRules />, stats: <MenuStats /> }} />
       <ExtrasLayer />
       <Letterbox hint={false} />
