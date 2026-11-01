@@ -6,6 +6,7 @@ import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
 import { CAMERA_SHOTS, battleFraming, fitFov } from '../scene/CameraRig'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { DECK_FOV, deckBus, deckCameraLease } from '../deck/contract'
+import { useDeckStore } from '../deck/deckStore'
 import { ownBoardOrigin } from './battery'
 import { POV, deckEye, readDeckState, shipWorldPosition, type OverboardBeat } from './pov'
 import { director as defaultDirector, type ActiveCinematic, type Director } from './director'
@@ -406,9 +407,10 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       camera.fov = deckPov ? smooth.current.fov : fitFov(smooth.current.fov, camera.aspect)
       camera.updateProjectionMatrix()
     }
-    // back at the deck pose: hand the camera back. Thrown overboard: the controller's fade is black when the return beat
-    // starts (it climbs aboard the next ship under it), so the camera goes back right away.
-    if (deckPov && beat?.name === 'return' && (deckPov.overboard || k >= 0.999)) {
+    // back at the deck pose: hand the camera back. Thrown overboard: the controller's fade is black by the time the return
+    // beat starts (it climbs aboard the next ship under it), so the camera goes back as soon as the screen reads black.
+    const black = deckPov?.overboard ? useDeckStore.getState().fade >= 0.98 : false
+    if (deckPov && beat?.name === 'return' && (black || k >= 0.999)) {
       camera.fov = DECK_FOV
       camera.updateProjectionMatrix()
       releaseLease()
