@@ -171,12 +171,15 @@ describe('stations', () => {
   })
 
   it('the fallback deck is marked and raises the eye over the bulwark; authored decks keep the contract eye height', () => {
-    const fb = resolveDeckAnchors(SHIPS.sloop.anchors)
+    // every class ships authored `deck` data now (session C): strip it to exercise the fallback path
+    const { deck: _authoredDeck, ...bare } = SHIPS.sloop.anchors
+    const fb = resolveDeckAnchors(bare)
     expect(isFallbackDeck(fb)).toBe(true)
     expect(eyeFor(fb)).toBe(0.3)
     const authored: DeckAnchors = { spawn: [0, 1, 0], walk: [{ points: rect, y: 1 }], ramps: [], obstacles: [], stations: [] }
-    expect(isFallbackDeck(resolveDeckAnchors({ ...SHIPS.sloop.anchors, deck: authored }))).toBe(false)
+    expect(isFallbackDeck(resolveDeckAnchors({ ...bare, deck: authored }))).toBe(false)
     expect(eyeFor(authored)).toBe(0.17)
+    expect(isFallbackDeck(resolveDeckAnchors(SHIPS.sloop.anchors))).toBe(false)
   })
 })
 
