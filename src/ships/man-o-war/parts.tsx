@@ -707,6 +707,7 @@ export interface MastProps extends PartProps {
 }
 
 export function Mast({ m, lod, spec, index, sail, snap, flag }: MastProps) {
+  const sailSegs: [number, number] | undefined = lod === 2 ? [4, 3] : lod === 1 ? [8, 6] : undefined
   const H = spec.height
   const T = spec.top
   const C = spec.crosstrees
@@ -771,7 +772,7 @@ export function Mast({ m, lod, spec, index, sail, snap, flag }: MastProps) {
                     <mesh geometry={bx(0.03, 0.03, 0.05)} material={m.iron} position={[x, yy, -w / 2 + 0.03]} />
                   </>
                 )}
-                <SailCloth m={m} corners={corners} dir={[1, 0, 0]} belly={w * 0.14} state={sail} seed={index * 10 + i} />
+                <SailCloth m={m} corners={corners} dir={[1, 0, 0]} belly={w * 0.14} state={sail} seed={index * 10 + i} segs={sailSegs} />
               </group>
             )
           })}
@@ -780,6 +781,7 @@ export function Mast({ m, lod, spec, index, sail, snap, flag }: MastProps) {
               <mesh geometry={cyl(0.013, 0.013, 0.95, 8)} material={m.spar} position={[-0.44, 1.2, 0]} rotation-z={Math.PI / 2 - 0.42} castShadow />
               <mesh geometry={cyl(0.016, 0.016, 1.05, 8)} material={m.spar} position={[-0.5, 0.45, 0]} rotation-z={Math.PI / 2} castShadow />
               <SailCloth
+              segs={sailSegs}
                 m={m}
                 corners={[
                   [-0.04, 1.0, 0],
@@ -1063,7 +1065,7 @@ export function DeckFurniture({ m, livery, lod }: PartProps) {
       {/* hatch coaming + grating */}
       <mesh geometry={bx(0.64, 0.05, 0.42)} material={m.wale} position={[0.62, DECK.main + 0.025, 0]} castShadow />
       <mesh geometry={bx(0.6, 0.01, 0.38)} material={m.portDark} position={[0.62, DECK.main + 0.05, 0]} />
-      <InstancedPart geometry={railPostGeo()} material={m.spar} items={d.railPosts} castShadow={lod === 0} />
+      {lod < 2 && <InstancedPart geometry={railPostGeo()} material={m.spar} items={d.railPosts} castShadow={lod === 0} />}
       <InstancedPart geometry={bx(1, 1, 1)} material={m.wale} items={d.rails} />
       {lod < 2 && (
         <>

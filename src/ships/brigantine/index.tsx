@@ -269,7 +269,7 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
             return (
               <group key={`${x}${side}`}>
                 <Cannon position={cannonPosition(x, side)} rotationY={side === 'starboard' ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} lod={lod} scale={CANNON_SCALE} />
-                <GunPortLid x={x} side={side} open={fire ? 1 : 0.55} mats={mats} />
+                {lod < 2 && <GunPortLid x={x} side={side} open={fire ? 1 : 0.55} mats={mats} />}
                 {lod === 0 && <RopeCoil position={[x + 0.07, DECK_Y, side === 'starboard' ? 0.1 : -0.1]} livery={livery} />}
               </group>
             )

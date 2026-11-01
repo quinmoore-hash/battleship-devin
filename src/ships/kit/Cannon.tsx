@@ -50,7 +50,14 @@ function cannonGeometry(lod: Lod) {
   if (g) return { iron: g, oak: g.oak!, brass: g.brass ?? null }
   // baked lods (BUG-702): a gun is a few pixels long from the battle camera, so the barrel drops to 7 / 6 facets and
   // every other profile point: ~150 tris instead of ~550 per gun, with the carriage / rings / lids all still present
-  const radial = lod === 0 ? 18 : lod === 1 ? 7 : 6
+  if (lod === 2) {
+    // far silhouette: a tapered 5-facet barrel on a single carriage block (~40 tris) so gun rows still read as guns
+    const stub = new THREE.CylinderGeometry(0.035, 0.055, 0.66, 5).rotateX(Math.PI / 2).translate(0, 0.2, 0.08)
+    g = Object.assign(stub, { oak: box(0.2, 0.12, 0.42, 0, 0.09, 0.02), brass: null })
+    GEOM.set(key, g)
+    return { iron: g, oak: g.oak!, brass: null }
+  }
+  const radial = lod === 0 ? 18 : 7
   const pts = (lod >= 1 ? BARREL_PROFILE.filter((_, i) => i % 2 === 0 || i > 20) : BARREL_PROFILE).map(([r, z]) => new THREE.Vector2(r, z))
   const barrel = new THREE.LatheGeometry(pts, radial)
   barrel.rotateX(Math.PI / 2)
