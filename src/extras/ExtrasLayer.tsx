@@ -14,6 +14,7 @@ import { PhotoMode, usePhotoEvent, usePhotoMode } from './photo'
 import { ReplayPlayer, useReplay, useReplayEvent } from './replay'
 import { bindStatsRecorder } from './stats'
 import { StatsPanel } from './StatsPanel'
+import { RULES, RULES_STACK_HINT } from '../ui/rules'
 import './extras.css'
 
 export function ExtrasLayer() {
@@ -79,30 +80,21 @@ export function ModesPicker({ className = '', onChange }: { className?: string; 
   const storeSetModes = useGameStore((s) => s.setModes)
   const setModes = onChange ?? storeSetModes
   return (
-    <section className={`xt-panel xt-modes ${className}`} data-testid="modes-picker" aria-label="Game modes">
-      <strong>Rules of engagement</strong>
-      <label className="xt-toggle">
-        <input type="checkbox" data-testid="mode-salvo" checked={modes.salvo} onChange={(e) => setModes({ salvo: e.target.checked })} />
-        <span>
-          <b>Salvo</b>
-          <small>One shot per surviving ship, every turn — for both sides.</small>
-        </span>
-      </label>
-      <label className="xt-toggle">
-        <input type="checkbox" data-testid="mode-storm" checked={modes.storm} onChange={(e) => setModes({ storm: e.target.checked })} />
-        <span>
-          <b>Stormy seas</b>
-          <small>30% of shots are lost in the storm — no hit or miss shown; fire at the square again. Both sides.</small>
-        </span>
-      </label>
-      <label className="xt-toggle">
-        <input type="checkbox" data-testid="mode-black-flag" checked={modes.blackFlag} onChange={(e) => setModes({ blackFlag: e.target.checked })} />
-        <span>
-          <b>Black Flag</b>
-          <small>Pick your fleet, two power shots each, hidden treasure.</small>
-        </span>
-      </label>
-    </section>
+    <fieldset className={`xt-panel xt-modes ${className}`} data-testid="modes-picker">
+      <legend>
+        Rules of engagement <small className="xt-modes-optional">optional · stackable</small>
+      </legend>
+      {RULES.map((rule) => (
+        <label key={rule.id} className="xt-toggle" data-on={modes[rule.id] || undefined}>
+          <input type="checkbox" data-testid={`mode-${rule.id === 'blackFlag' ? 'black-flag' : rule.id}`} checked={modes[rule.id]} onChange={(e) => setModes({ [rule.id]: e.target.checked })} />
+          <span>
+            <b>{rule.label}</b>
+            <small>{rule.blurb}</small>
+          </span>
+        </label>
+      ))}
+      <p className="xt-modes-hint">{RULES_STACK_HINT}</p>
+    </fieldset>
   )
 }
 

@@ -274,7 +274,7 @@ Demo routes (`?…-demo`) are lazy chunks; the game bundle is split into `three`
 `postprocessing` (loaded on `high` only) and the app.
 
 ## Test hooks the e2e suite depends on
-`ui-root[data-phase]`, `ocean-canvas`, `ocean-fallback`, `main-menu[data-step]`, `mode-{single|two}`, `rules-next`, `menu-back`,
+`ui-root[data-phase]`, `ocean-canvas`, `ocean-fallback`, `main-menu[data-step]`, `mode-{single|two}`, `rules-optional`, `rules-summary` (live region), `rules-next`, `menu-back`,
 `difficulty-{easy|medium|hard}` (menu step 3 — e2e reaches it through `startSinglePlayer()` in `e2e/helpers.ts`), `captain-{1|2}-name`,
 `names-start`, `handoff[data-captain]`, `handoff-name`, `handoff-ready`, `placement[data-placing]`, `placement-title`,
 `battle[data-perspective]`, `your-waters-title`, `enemy-waters-title`, `report-title`, `placement`,

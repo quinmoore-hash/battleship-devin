@@ -1,6 +1,7 @@
 import { playSfx, useAudioSettings } from '../audio'
 import { useGameStore, type CinematicsLevel, type QualitySetting } from '../store/gameStore'
 import { Modal } from './Modal'
+import { RULES, RULES_OPTIONAL_COPY, rulesSummary } from './rules'
 import { SkySeaPicker } from './SkySeaPicker'
 
 /**
@@ -10,6 +11,9 @@ import { SkySeaPicker } from './SkySeaPicker'
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const settings = useGameStore((s) => s.settings)
   const updateSettings = useGameStore((s) => s.updateSettings)
+  const modes = useGameStore((s) => s.modes)
+  const setModes = useGameStore((s) => s.setModes)
+  const rulesLocked = useGameStore((s) => s.phase !== 'menu')
   const muted = useAudioSettings((s) => s.muted)
   const setSfx = useAudioSettings((s) => s.setSfxVolume)
   const setMusic = useAudioSettings((s) => s.setMusicVolume)
@@ -38,10 +42,27 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <Segmented value={settings.cinematics} options={['full', 'fast', 'off']} testId="setting-cinematics" onChange={(v) => updateSettings({ cinematics: v as CinematicsLevel })} />
           </label>
         </fieldset>
+        <fieldset className="settings-rules" data-testid="settings-rules" aria-describedby="settings-rules-note">
+          <legend>Rules of engagement</legend>
+          <p className="muted small" id="settings-rules-note">
+            {rulesLocked ? 'Set before you sail — these are fixed for the game under way; change them from the menu.' : RULES_OPTIONAL_COPY}
+          </p>
+          {RULES.map((rule) => (
+            <label key={rule.id} className="row row-check">
+              <input type="checkbox" checked={modes[rule.id]} disabled={rulesLocked} data-testid={`setting-rule-${rule.id}`} onChange={(e) => (playSfx('ui-click'), setModes({ [rule.id]: e.target.checked }))} />
+              <span>
+                <b>{rule.label}</b> <small className="muted">{rule.blurb}</small>
+              </span>
+            </label>
+          ))}
+          <p className="muted small settings-rules-summary" data-testid="settings-rules-summary" role="status" aria-live="polite">
+            Sailing under: <b>{rulesSummary(modes)}</b>
+          </p>
+        </fieldset>
         <fieldset className="settings-skysea">
           <legend>Sky &amp; sea</legend>
           <SkySeaPicker />
-          <p className="muted">Looks only — the rules of engagement are unchanged.</p>
+          <p className="muted">Looks only — the rules of engagement above are unchanged.</p>
         </fieldset>
         <fieldset>
           <legend>Sound</legend>

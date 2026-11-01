@@ -1937,6 +1937,16 @@
 .menu-dock {
   order: 5;
 }
+/* step 2 reads top-down: heading → the rule checkboxes → what you are sailing under → Sail on */
+.menu[data-step='rules'] .menu-dock {
+  order: 1;
+}
+.menu[data-step='rules'] .rules-summary {
+  order: 2;
+}
+.menu[data-step='rules'] .menu-actions {
+  order: 3;
+}
 .menu-foot {
   order: 6;
 }
@@ -2118,6 +2128,44 @@
   font-family: var(--font-display);
   font-style: italic;
   color: rgba(243, 234, 214, 0.85);
+}
+.menu-step-head p {
+  max-width: 44ch;
+  margin-inline: auto;
+}
+.rules-summary {
+  margin: -0.2rem 0 0;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  background: rgba(14, 26, 44, 0.55);
+  border: 1px solid rgba(214, 177, 102, 0.45);
+  color: var(--foam);
+  font-family: var(--font-display);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+.rules-summary small {
+  font-style: italic;
+  opacity: 0.8;
+}
+.rules-summary strong {
+  color: var(--brass-light, #f1d690);
+  letter-spacing: 0.02em;
+}
+.settings-rules .row-check {
+  align-items: flex-start;
+}
+.settings-rules .row-check input {
+  margin-top: 0.15rem;
+}
+.settings-rules .row-check span {
+  display: grid;
+}
+.settings-rules .row-check input:disabled + span {
+  opacity: 0.65;
+}
+.settings-rules-summary {
+  margin: 0;
 }
 .names-card {
   width: min(520px, calc(100vw - 32px));
