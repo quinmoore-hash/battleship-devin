@@ -1091,21 +1091,14 @@
   width: auto;
   padding: 0.6rem 0.7rem;
 }
-.ui-root[data-no3d='false'] .battle-body .side-right {
-  grid-column: 3;
-  grid-row: 2;
-}
-.ui-root[data-no3d='false'] .shot-log ol {
-  max-height: 120px;
-}
-@media (max-height: 980px) {
-  .ui-root[data-no3d='false'] .chart-player {
-    display: none;
-  }
+/* both charts always share the right column (BUG-708): the own-waters chart is how a player tells if they are winning */
+.ui-root[data-no3d='false'] .charts {
+  grid-row: 1 / span 2;
 }
 .ui-root[data-no3d='false'] .battle .grid-wrap,
 .ui-root[data-no3d='false'] .placement .grid-wrap {
-  --cell: clamp(13px, min(1.55vw, 2.6vh), 22px);
+  /* 2.3vh: two charts + the score strip fit under the top bar at 1024×700 (BUG-708) */
+  --cell: clamp(13px, min(1.55vw, 2.3vh), 22px);
 }
 .ui-root[data-no3d='false'] .charts .panel-title {
   font-size: 0.85rem;
@@ -1263,6 +1256,119 @@
 .shot-log li.log-lost .outcome {
   color: #6f8ea8;
   font-style: italic;
+}
+
+/* ---------- our waters chart + score strip (BUG-708) ---------- */
+.score-strip {
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.score-strip.lead-ahead {
+  box-shadow:
+    var(--shadow),
+    inset 0 0 24px rgba(58, 154, 99, 0.28);
+}
+.score-strip.lead-behind {
+  box-shadow:
+    var(--shadow),
+    inset 0 0 24px rgba(147, 28, 43, 0.3);
+}
+/* no-3D layout: the charts sit side by side, the strip spans the row above them */
+.ui-root[data-no3d='true'] .score-strip {
+  order: -1;
+  flex-basis: 100%;
+  max-width: 560px;
+}
+.chart-player .panel-title {
+  color: var(--teal);
+}
+.chart-player .helm {
+  font-size: 1.1rem;
+}
+/* a captain's own hulls: one hue per ship so the fleet reads ship by ship; hits / sunk keep the hull colour under the marker */
+.cell.cell-own-0 { --ship-hue: #9a7249; }
+.cell.cell-own-1 { --ship-hue: #6e8f5a; }
+.cell.cell-own-2 { --ship-hue: #5b7fa6; }
+.cell.cell-own-3 { --ship-hue: #a8763e; }
+.cell.cell-own-4 { --ship-hue: #8a6a9b; }
+.cell.cell-own-5 { --ship-hue: #4f8f8c; }
+.cell.cell-ship.cell-own {
+  background: linear-gradient(145deg, var(--ship-hue), var(--ship));
+}
+.cell.cell-hit.cell-own {
+  box-shadow:
+    inset 0 0 0 2px var(--ship-hue),
+    0 0 12px rgba(224, 100, 28, 0.7);
+}
+/* sunk on the own chart: darker, crossed through */
+.chart-player .cell-sunk {
+  background:
+    linear-gradient(45deg, transparent 44%, rgba(243, 234, 214, 0.75) 46% 54%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, rgba(243, 234, 214, 0.75) 46% 54%, transparent 56%),
+    #4a0b14;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.chart-player .cell-sunk::after {
+  display: none;
+}
+/* the shot log: a drawer under the top bar, toggled from the header (it used to be the "Captain's log" card) */
+.log-toggle .log-count {
+  display: inline-block;
+  min-width: 1.4em;
+  margin-left: 0.3em;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: var(--brass);
+  color: var(--ink);
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.log-toggle.is-open {
+  background: var(--brass-dark);
+}
+.log-drawer {
+  position: absolute;
+  top: calc(clamp(8px, 1.2vw, 18px) + 72px);
+  right: clamp(8px, 1.2vw, 18px);
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(60vh, 460px);
+  padding: 0.6rem 0.8rem;
+  overflow: auto;
+  z-index: 4;
+}
+.log-drawer .shot-log,
+.log-drawer .shot-log ol {
+  max-height: none;
+  overflow-x: hidden;
+}
+@media (max-width: 640px) {
+  /* four header buttons + the corner nav share 375 px: the log button keeps only its badge */
+  .log-toggle .log-text {
+    display: none;
+  }
+  .log-toggle::before {
+    content: '☰';
+  }
+  .battle-buttons {
+    gap: 6px;
+  }
+  .battle-buttons .btn {
+    padding: 0.4rem 0.5rem;
+  }
+  .log-drawer {
+    top: 56px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
 }
 
 /* ---------- game over ---------- */
@@ -1538,8 +1644,7 @@
     align-items: start;
     overflow: auto;
   }
-  .ui-root[data-no3d='false'] .charts,
-  .ui-root[data-no3d='false'] .battle-body .side-right {
+  .ui-root[data-no3d='false'] .charts {
     grid-column: 1;
     grid-row: auto;
   }
@@ -1663,12 +1768,6 @@
   .ui-root .battle .grid-wrap,
   .ui-root .placement .grid-wrap {
     --cell: clamp(18px, min(7.2vw, 4.4vh), 30px);
-  }
-  .chart-player {
-    display: none;
-  }
-  .ui-root[data-no3d='true'] .chart-player {
-    display: block;
   }
   .hint {
     position: static;

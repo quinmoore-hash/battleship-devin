@@ -16,3 +16,10 @@ export async function startTwoCaptains(page: Page, names: { human?: string; enem
   if (names.enemy !== undefined) await page.getByTestId('captain-2-name').fill(names.enemy)
   await page.getByTestId('names-start').click()
 }
+
+/** The shot log is a drawer under the battle top bar (toggle in the header); idempotent. */
+export async function openShotLog(page: Page) {
+  const toggle = page.getByTestId('shot-log-toggle')
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  await page.getByTestId('shot-log').waitFor()
+}

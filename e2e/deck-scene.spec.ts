@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { startSinglePlayer } from './helpers'
+import { openShotLog, startSinglePlayer } from './helpers'
 
 // "On deck" needs a WebGL scene (SwiftShader, scene project). Cinematics off keeps the turns short; Low tier keeps SwiftShader alive.
 async function toBattle(page: Page, rules: Array<'salvo' | 'storm' | 'black-flag'> = []) {
@@ -34,6 +34,7 @@ test('on deck: V toggles mid-turn without changing the game, a manned gun fires 
   await expect(page.getByTestId('deck-ship-name')).not.toHaveText('')
   await expect(page.getByTestId('deck-station')).toHaveText('Walking the deck')
   await expect(page.getByTestId('status')).toContainText('Your turn')
+  await openShotLog(page)
   await expect(page.getByTestId('shot-log')).toContainText('No shots yet')
 
   // not manning: the chart refuses with a nudge
@@ -59,6 +60,7 @@ test('on deck: V toggles mid-turn without changing the game, a manned gun fires 
   await page.getByTestId('enemy-grid-2-0').click()
   await page.getByTestId('enemy-grid-3-0').click()
   await page.getByTestId('enemy-grid-4-0').click()
+  await openShotLog(page)
   await expect(page.getByTestId('shot-log')).not.toContainText('No shots yet', { timeout: 60_000 })
   await expect(page.getByTestId('status')).toContainText('Your turn', { timeout: 60_000 })
 

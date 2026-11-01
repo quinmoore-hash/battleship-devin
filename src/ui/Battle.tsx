@@ -11,6 +11,7 @@ import { DeckHud, DeckToggle } from './DeckHud'
 import { Grid, type GridCellInfo } from './Grid'
 import { Modal } from './Modal'
 import { CompassRose, Hint } from './Ornaments'
+import { fleetScore, ownChartCell, ownChartModel, scoreLead, scoreStripText } from './ownChart'
 import { ShotLog } from './ShotLog'
 import { battleReport, formatDuration } from './stats'
 import { isCoarsePointer, useUiStore } from './uiStore'
@@ -79,6 +80,8 @@ export function BattleScreen() {
   const cinematics = useGameStore((s) => s.settings.cinematics)
 
   const [quitting, setQuitting] = useState(false)
+  // the shot log left the right column for the "Our waters" chart (BUG-708); it opens as a drawer under the top bar
+  const [logOpen, setLogOpen] = useState(false)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -168,8 +171,6 @@ export function BattleScreen() {
     return () => clearTimeout(t)
   }, [battleHintSeen, events.length, dismissHint])
   const enemyCells = useMemo(() => viewGrid(enemyView(foeBoard)), [foeBoard])
-  const playerView = useMemo(() => viewGrid(enemyView(ownBoard), ownBoard), [ownBoard])
-  const ownCells = useMemo(() => new Set(ownBoard.ships.flatMap((s) => s.cells.map((c) => `${c.x},${c.y}`))), [ownBoard])
   const report = useMemo(() => battleReport(events, playerBoard, enemyBoard, battleStartedAt), [events, playerBoard, enemyBoard, battleStartedAt, tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const chestsBy = (by: 'human' | 'enemy') => new Set(events.filter((e) => e.kind === 'treasure' && e.by === by).map((e) => coordKey(e.result.coord)))
@@ -215,15 +216,13 @@ export function BattleScreen() {
     const title = chest ? `${coordLabel(c)} — treasure` : seen !== undefined && state === 'unknown' ? `${coordLabel(c)} — spyglass: ${seen ? 'ship' : 'open water'}` : state === 'unknown' ? coordLabel(c) : `${coordLabel(c)} — ${state}`
     return { state, className: `${aimed && yourTurn ? 'is-aimed' : ''} ${pending && aimed ? 'is-pending' : ''}${extra}`, title }
   }
-  const playerCell = (c: Coord): GridCellInfo => {
-    const state = playerView[c.y][c.x]
-    const chest = enemyChests.has(coordKey(c))
-    return {
-      state: state === 'unknown' && ownCells.has(`${c.x},${c.y}`) ? 'ship' : state,
-      className: chest ? 'cell-treasure' : undefined,
-      title: chest ? `${coordLabel(c)} — the enemy found treasure` : undefined,
-    }
-  }
+  const ownFleet = fleets[perspective]
+  const ownModel = useMemo(() => ownChartModel(ownBoard, ownFleet, enemyChests), [ownBoard, ownFleet, enemyChests])
+  const playerCell = (c: Coord): GridCellInfo => ownChartCell(ownModel, c)
+  const myScore = fleetScore(ownBoard, fleets[perspective])
+  const foeScore = fleetScore(foeBoard, fleets[foeSide])
+  const scoreText = scoreStripText(myScore, foeScore, hotSeat ? { me: `${me}'s fleet`, foe: `${foeName}'s fleet` } : undefined)
+  const lead = scoreLead(myScore, foeScore)
 
   // one path for every square clicked (chart, 3D board, deck crosshair): see `useBattleController().aim`
   const onEnemyCell = (c: Coord) => {
@@ -263,6 +262,9 @@ export function BattleScreen() {
         </div>
         <div className="battle-buttons">
           <DeckToggle />
+          <button type="button" className={`btn btn-ghost log-toggle${logOpen ? ' is-open' : ''}`} data-testid="shot-log-toggle" aria-expanded={logOpen} aria-controls="shot-log-drawer" onClick={() => (playSfx('ui-click'), setLogOpen((o) => !o))}>
+            <span className="log-text">Log</span> <span className="log-count" data-testid="shot-log-count">{events.filter((e) => e.kind !== 'spyglass').length}</span>
+          </button>
           <button type="button" className="btn btn-ghost" data-testid="restart" onClick={() => (playSfx('ui-click'), startGame(difficulty))}>
             Restart
           </button>
@@ -308,19 +310,23 @@ export function BattleScreen() {
               </div>
             )}
           </div>
-          <div className="panel parchment chart-panel chart-player" aria-label="Your waters">
+          <p className={`panel parchment score-strip lead-${lead}`} data-testid="score-strip" data-lead={lead} role="status" aria-live="polite">
+            {scoreText}
+          </p>
+          <div className="panel parchment chart-panel chart-player" aria-label={hotSeat ? `${me}'s waters` : 'Our waters'}>
             <h2 className="panel-title small-title" data-testid="your-waters-title">
-              {hotSeat ? `${me}'s waters` : 'Your waters'}
+              {hotSeat ? `${me}'s waters` : 'Our waters'} <span className="helm" aria-hidden>⎈</span>
             </h2>
-            <Grid testId="player-grid" label="Your waters" cell={playerCell} disabled />
+            <Grid testId="player-grid" label={hotSeat ? `${me}'s waters` : 'Our waters'} cell={playerCell} disabled />
           </div>
         </section>
+      </div>
 
-        <aside className="panel parchment side-panel side-right ink-in">
-          <h2 className="panel-title small-title">Captain's log</h2>
+      {logOpen && (
+        <aside className="panel parchment log-drawer ink-in" id="shot-log-drawer" data-testid="shot-log-drawer" aria-label="Shot log">
           <ShotLog events={events} names={hotSeat ? { human: players.human.name, enemy: players.enemy.name } : undefined} />
         </aside>
-      </div>
+      )}
 
       <DeckHud ship={ownBoard.ships.find((x) => x.uid === deckShipUid) ?? null} yourTurn={yourTurn} />
 

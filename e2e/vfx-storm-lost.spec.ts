@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { startSinglePlayer } from './helpers'
+import { openShotLog, startSinglePlayer } from './helpers'
 
 // Stormy seas: a shot lost in the storm leaves no marker anywhere — not on the HTML chart (the cell stays `unknown` and
 // re-fireable) and not on the 3D water (no buoy). Counts the buoy instances in the live scene via `window.__perf`.
@@ -51,6 +51,7 @@ test('stormy seas: shots lost in the storm leave no chart mark and no buoy, and 
   const lostMine = Number(await storm.getAttribute('data-lost-mine'))
   expect(lostMine).toBeGreaterThanOrEqual(2)
   expect(refired).toBe(true)
+  await openShotLog(page)
   await expect(page.getByTestId('shot-log')).toContainText('lost in the storm')
 
   // chart: every landed shot has a mark, nothing else; water: exactly one buoy per miss on either board
