@@ -86,7 +86,7 @@ export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
     deckPolygon({ x0: G.forecastleX + 0.02, x1: G.xBow - 0.2, y: G.forecastleDeckY, halfWidth: hw, steps: 3 }),
   ]
   return {
-    spawn: [-1.05, G.quarterDeckY, 0.22],
+    spawn: [-0.9, G.quarterDeckY, 0.28],
     walk,
     ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1), breakRamp(0, 3, G.forecastleX, 0.12)],
     obstacles: [
