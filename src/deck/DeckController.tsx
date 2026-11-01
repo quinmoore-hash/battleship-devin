@@ -134,11 +134,13 @@ export function DeckController() {
     // face the enemy waters; on the fallback rectangle also stand at the rail on that side (no mast / cabin in the way)
     const { rotationY, position } = geometry.transform
     const worldYaw = Math.atan2(-(foeCenter[0] - position[0]), -(foeCenter[2] - position[2]))
-    const localYaw = worldYaw - rotationY
+    let localYaw = worldYaw - rotationY
     if (isFallbackDeck(geometry.deckA)) {
+      // stand at the rail nearer the enemy and look out over it (a bow-on ship would otherwise stare at its own masts / cabin)
       const f = lookForward(localYaw, 0)
-      const toward = Math.abs(f[2]) > 0.5 ? Math.sign(f[2]) : 0
-      if (toward) p = stepOnDeck(p, 0, toward * geometry.hull.beam, geometry.deckA)
+      const side = f[2] >= 0 ? 1 : -1
+      p = stepOnDeck(p, 0, side * geometry.hull.beam, geometry.deckA)
+      if (Math.abs(f[2]) <= 0.5) localYaw = side > 0 ? Math.PI : 0
     }
     pose.current = p
     look.current = { yaw: localYaw, pitch: -0.05 }
