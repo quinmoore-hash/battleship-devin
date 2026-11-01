@@ -133,7 +133,7 @@ export function deckGeometry(deckYAt: (x: number) => number, inset = 0.0): THREE
     uv.setXY(i, x, z)
   }
   // ShapeGeometry winds CCW in its own x/y plane; mapping shape-y onto world z mirrors that, so the planking
-  // faced down and was back-face culled from above (BUG-706: you saw the sea through the deck). Flip each triangle.
+  // faced down and was back-face culled from above (BUG-708: you saw the sea through the deck). Flip each triangle.
   const idx = g.index!
   for (let i = 0; i < idx.count; i += 3) {
     const b = idx.getX(i + 1)
