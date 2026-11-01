@@ -1350,6 +1350,19 @@
   overflow-x: hidden;
 }
 @media (max-width: 640px) {
+  /* four header buttons + the corner nav share 375 px: the log button keeps only its badge */
+  .log-toggle .log-text {
+    display: none;
+  }
+  .log-toggle::before {
+    content: '☰';
+  }
+  .battle-buttons {
+    gap: 6px;
+  }
+  .battle-buttons .btn {
+    padding: 0.4rem 0.5rem;
+  }
   .log-drawer {
     top: 56px;
     left: 8px;

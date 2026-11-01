@@ -263,7 +263,7 @@ export function BattleScreen() {
         <div className="battle-buttons">
           <DeckToggle />
           <button type="button" className={`btn btn-ghost log-toggle${logOpen ? ' is-open' : ''}`} data-testid="shot-log-toggle" aria-expanded={logOpen} aria-controls="shot-log-drawer" onClick={() => (playSfx('ui-click'), setLogOpen((o) => !o))}>
-            Log <span className="log-count" data-testid="shot-log-count">{events.filter((e) => e.kind !== 'spyglass').length}</span>
+            <span className="log-text">Log</span> <span className="log-count" data-testid="shot-log-count">{events.filter((e) => e.kind !== 'spyglass').length}</span>
           </button>
           <button type="button" className="btn btn-ghost" data-testid="restart" onClick={() => (playSfx('ui-click'), startGame(difficulty))}>
             Restart
