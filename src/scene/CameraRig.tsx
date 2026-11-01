@@ -251,7 +251,8 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
       target.current.z = THREE.MathUtils.damp(target.current.z, aim.target.z, lambda, dt)
       camera.lookAt(target.current)
       if (controls.current) controls.current.target.copy(target.current)
-      if (!settled.current && view !== 'menu' && camera.position.distanceTo(wanted) < 0.05) {
+      // a resize can leave the position in place while only the target (pitch) moves, so check both before handing over
+      if (!settled.current && view !== 'menu' && camera.position.distanceTo(wanted) < 0.05 && target.current.distanceTo(aim.target) < 0.05) {
         settled.current = true
       }
     } else if (controls.current) {
