@@ -3,7 +3,13 @@ import { SHIPS } from '../ships'
 import { BOARD_LAYOUT, boardCenter } from '../scene/layout'
 import type { DeckAnchors } from './contract'
 import {
+  GROUNDED,
+  JUMP_APEX,
+  JUMP_TIME,
   afloatUids,
+  approach,
+  startJump,
+  stepJump,
   clampToPolygon,
   cycleShip,
   deckHeightAt,
@@ -28,20 +34,58 @@ import {
 
 const rect = rectPolygon(4, 1, 0)
 
-describe('deck fallback rectangle', () => {
-  it('shrinks the hull by 0.06 and puts masts in as obstacles at deckY', () => {
-    const a = SHIPS['man-o-war'].anchors
-    const d = fallbackDeckAnchors(a)
+describe('deck fallback plan', () => {
+  it('follows the hull plan inset by 0.08, tapers toward the ends and puts masts in as obstacles', () => {
+    const a = SHIPS.sloop.anchors
+    const d = fallbackDeckAnchors(a, 'sloop')
     expect(d.walk).toHaveLength(1)
     expect(d.walk[0].y).toBe(a.deckY)
-    const xs = d.walk[0].points.map((p) => p[0])
     const zs = d.walk[0].points.map((p) => p[1])
-    expect(Math.max(...xs)).toBeCloseTo(a.hull.length / 2 - 0.06)
-    expect(Math.max(...zs)).toBeCloseTo(a.hull.beam / 2 - 0.06)
+    expect(Math.max(...zs)).toBeCloseTo(a.hull.beam / 2 - 0.08)
+    // the ends are narrower than the waist
+    const endZ = Math.max(...d.walk[0].points.filter((p) => p[0] > 0.9).map((p) => Math.abs(p[1])))
+    expect(endZ).toBeLessThan(a.hull.beam / 2 - 0.08)
     expect(d.obstacles).toHaveLength(a.masts.length)
-    expect(d.obstacles[0].radius).toBe(0.05)
+    expect(d.obstacles[0].center).toEqual([a.masts[0].base[0], a.masts[0].base[2]])
     expect(d.stations).toHaveLength(a.cannons.length)
-    expect(pointInPolygon([d.spawn[0], d.spawn[2]], d.walk[0].points)).toBe(true)
+  })
+
+  it('raised decks become their own levels joined by ramps at the breaks (frigate quarterdeck + forecastle, man-o-war castles + poop)', () => {
+    const f = fallbackDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    // model-space 0.4 / 0.58 / 0.54 × FIT 0.74
+    expect(f.walk.map((l) => +l.y.toFixed(3))).toEqual([0.296, 0.429, 0.4])
+    expect(f.ramps).toHaveLength(2)
+    // walking aft off the main deck across the break (x −0.789) climbs onto the quarterdeck
+    const start = stepOnDeck({ x: -0.7, z: 0.1, y: 0.296, level: 0 }, 0, 0, f)
+    expect(start.level).toBe(0)
+    const aft = stepOnDeck(start, -0.15, 0, f)
+    expect(aft.level).toBe(1)
+    expect(aft.y).toBeGreaterThan(0.296)
+    const m = fallbackDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
+    expect(m.walk.map((l) => l.y)).toEqual([0.55, 0.88, 1.16, 0.88])
+    expect(m.ramps).toHaveLength(3)
+    // and you cannot leave through the rail at any level
+    for (const lvl of m.walk) for (const [, z] of lvl.points) expect(Math.abs(z)).toBeLessThanOrEqual(SHIPS['man-o-war'].anchors.hull.beam / 2 - 0.08 + 1e-9)
+  })
+
+  it('stations under a castle (muzzle below the deck level they would stand on) are not reachable; waist guns are', () => {
+    const a = SHIPS['man-o-war'].anchors
+    const d = fallbackDeckAnchors(a, 'man-o-war')
+    const st = stationsOf(a, d)
+    const waist = st.filter((s) => s.stand[0] >= -0.55 && s.stand[0] <= 1.35 && s.muzzle[1] > a.deckY)
+    expect(waist.length).toBeGreaterThan(0)
+    for (const s of waist) expect(s.onDeck).toBe(true)
+    const underCastle = st.filter((s) => (s.stand[0] < -0.56 || s.stand[0] > 1.36) && s.muzzle[1] < 0.88)
+    expect(underCastle.length).toBeGreaterThan(0)
+    for (const s of underCastle) expect(s.onDeck).toBe(false)
+  })
+
+  it('an unknown class gets a flush tapered plan from its hull', () => {
+    const a = SHIPS.sloop.anchors
+    const d = fallbackDeckAnchors(a)
+    expect(d.walk).toHaveLength(1)
+    expect(d.ramps).toHaveLength(0)
+    expect(Math.max(...d.walk[0].points.map((p) => p[0]))).toBeCloseTo(a.hull.length / 2 - 0.08)
   })
 
   it('every class resolves to a walkable deck (authored or fallback) whose spawn is inside it', () => {
@@ -225,5 +269,72 @@ describe('look math', () => {
     expect(sinkProgressFor(false, undefined)).toBe(0)
     expect(sinkProgressFor(true, 0.4)).toBe(0.4)
     expect(sinkProgressFor(true, undefined)).toBe(1)
+  })
+})
+
+describe('walk acceleration and jump', () => {
+  it('approach is frame-rate independent: two 8 ms steps land where one 16 ms step does (to 1e-9)', () => {
+    const one = approach(0, 1, 0.016)
+    const two = approach(approach(0, 1, 0.008), 1, 0.008)
+    expect(two).toBeCloseTo(one, 9)
+    expect(approach(0, 1, 10)).toBeCloseTo(1, 4)
+  })
+
+  it('jump reaches JUMP_APEX at half time and lands at JUMP_TIME on a flat deck; no double jump', () => {
+    let air = startJump(GROUNDED)
+    expect(air.airborne).toBe(true)
+    expect(startJump(air)).toBe(air)
+    let t = 0
+    let apex = 0
+    const dt = 1 / 240
+    let landedAt = -1
+    while (t < 2 && landedAt < 0) {
+      air = stepJump(air, dt, 0.4, 0.4)
+      t += dt
+      apex = Math.max(apex, air.height)
+      if (!air.airborne) landedAt = t
+    }
+    expect(apex).toBeCloseTo(JUMP_APEX, 2)
+    expect(landedAt).toBeCloseTo(JUMP_TIME, 1)
+    expect(air).toBe(GROUNDED)
+  })
+
+  it('the same arc at 60 Hz and 120 Hz lands within a frame of each other', () => {
+    const land = (dt: number) => {
+      let air = startJump(GROUNDED)
+      let t = 0
+      while (air.airborne && t < 2) {
+        air = stepJump(air, dt, 0, 0)
+        t += dt
+      }
+      return t
+    }
+    expect(Math.abs(land(1 / 60) - land(1 / 120))).toBeLessThan(1 / 60 + 1e-9)
+  })
+
+  it('jumping across a break lands on the higher deck (height measured against the deck now under the feet)', () => {
+    let air = startJump(GROUNDED)
+    // first frames over the main deck (0.4), then the feet cross onto the quarterdeck (0.58)
+    air = stepJump(air, 0.1, 0.4, 0.4)
+    expect(air.height).toBeGreaterThan(0.05)
+    air = stepJump(air, 0.05, 0.4, 0.58)
+    // absolute foot height is kept: the height over the new deck is 0.18 lower
+    expect(air.height).toBeLessThan(0.08)
+    let t = 0
+    while (air.airborne && t < 2) {
+      air = stepJump(air, 1 / 60, 0.58, 0.58)
+      t += 1 / 60
+    }
+    expect(air).toBe(GROUNDED)
+    expect(t).toBeLessThan(JUMP_TIME)
+  })
+
+  it('while airborne the horizontal clamp still holds: stepping off the rail mid-jump snaps back inside the plan', () => {
+    const d = fallbackDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    let pose = spawnPose(d)
+    for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0, 0.05, d)
+    expect(Math.abs(pose.z)).toBeLessThanOrEqual(SHIPS.frigate.anchors.hull.beam / 2 - 0.08 + 1e-9)
+    for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0.1, 0, d)
+    expect(pose.x).toBeLessThanOrEqual(1.46 * 0.74 - 0.16 - 0.08 + 1e-9)
   })
 })

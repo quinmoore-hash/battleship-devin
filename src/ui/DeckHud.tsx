@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { playSfx } from '../audio'
 import { isAudioDebug, useDeckAudioStore, useDeckStore } from '../deck'
 import { coordLabel, FLEET_BY_ID, type PlacedShip } from '../engine'
@@ -7,7 +7,7 @@ import { SHIPS } from '../ships'
 import { useGameStore } from '../store/gameStore'
 import { isCoarsePointer, useUiStore } from './uiStore'
 
-/** "On deck" / "Overview" button in the battle header + the V key. Hidden under `?no3d` (no deck to stand on). */
+/** "Third person" / "Overview" button in the battle header + the V key. Hidden under `?no3d` (no deck to stand on). */
 export function DeckToggle() {
   const on = useGameStore((s) => s.deck.on)
   const setDeck = useGameStore((s) => s.setDeck)
@@ -34,50 +34,53 @@ export function DeckToggle() {
       data-testid="deck-toggle"
       data-on={on ? 'true' : 'false'}
       aria-pressed={on}
-      title={on ? 'Back to the overview (V)' : 'Stand on your deck (V)'}
+      title={on ? 'Back to the overview (V)' : 'Walk your own deck in third person (V)'}
       disabled={phase !== 'battle'}
       onClick={() => (playSfx('ui-click'), setDeck(!useGameStore.getState().deck.on))}
     >
-      {on ? 'Overview' : 'On deck'}
+      {on ? 'Overview' : 'Third person'}
       <kbd aria-hidden>V</kbd>
     </button>
   )
 }
 
-/** Crosshair, prompt line, the ship you stand on with its damage pips, Tab / Salvo counters and the fade curtain. */
+/** Prompt line, floating gun label, compass arrow, the ship you stand on with its damage pips, Tab / Salvo counters and the fade curtain. */
 export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn: boolean }) {
   const deck = useGameStore((s) => s.deck)
   const salvo = useGameStore((s) => s.modes.salvo)
   const pending = useGameStore((s) => s.salvo.pending.length)
   const size = useGameStore((s) => s.salvo.size)
   const armed = useUiStore((s) => s.armed)
+  const hover = useUiStore((s) => s.hover)
   const near = useDeckStore((s) => s.near)
-  const locked = useDeckStore((s) => s.locked)
-  const keyboardLook = useDeckStore((s) => s.keyboardLook)
-  const aim = useDeckStore((s) => s.aim)
+  const approach = useDeckStore((s) => s.approach)
   const fade = useDeckStore((s) => s.fade)
   const nudge = useDeckStore((s) => s.nudge)
+  const setLabelEl = useDeckStore((s) => s.setLabelEl)
+  const setCompassEl = useDeckStore((s) => s.setCompassEl)
   const manStation = useGameStore((s) => s.manStation)
   const touch = isCoarsePointer()
+  const labelRef = useCallback((el: HTMLElement | null) => setLabelEl(el), [setLabelEl])
+  const compassRef = useCallback((el: HTMLElement | null) => setCompassEl(el), [setCompassEl])
   if (!deck.on || !ship) return null
 
   const def = SHIPS[ship.spec.id]
   const spec = FLEET_BY_ID[ship.spec.id]
   const manning = deck.station !== null
   const gun = manning ? def.anchors.cannons[deck.station!] : null
+  const hovered = hover?.side === 'enemy' ? hover.coord : null
+  const click = touch ? 'Tap' : 'Click'
   const prompt = nudge
     ? nudge
     : manning
       ? yourTurn
         ? armed === 'spyglass'
-          ? 'Spyglass raised — click a square to look'
+          ? `Spyglass raised — ${click.toLowerCase()} a square on the chart to look`
           : armed === 'broadside'
-            ? 'Broadside — click the centre square (R rotates)'
-            : aim
-              ? `Fire at ${coordLabel(aim)} — click`
-              : touch
-                ? 'Tap a square on the chart to fire'
-                : 'Click a square — on the chart or across the water'
+            ? `Broadside — ${click.toLowerCase()} the centre square on the chart (R rotates)`
+            : hovered
+              ? `Fire at ${coordLabel(hovered)} — ${click.toLowerCase()}`
+              : `${click} a square on the chart to fire`
         : 'Gun manned — waiting for your turn'
       : near
         ? near.usable
@@ -86,24 +89,21 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
             : 'E — Man the gun'
           : 'No target that side'
         : touch
-          ? 'Drag to look · tap a gun to man it'
-          : locked
-            ? 'WASD walk · Shift run · E at a gun · Tab next ship'
-            : keyboardLook
-              ? 'Arrow keys look · WASD walk · E at a gun · Enter fires'
-              : 'Click the sea to grab the mouse'
+          ? 'Drag to look · tap a glowing gun to man it'
+          : approach !== null
+            ? 'Walk to the glowing gun · E mans it'
+            : 'WASD walk · Space jump · Shift run · drag to look · E at a glowing gun · Tab next ship'
   return (
     <>
       <div className="deck-fade" data-testid="deck-fade" style={{ opacity: fade }} aria-hidden={fade === 0} />
-      <div className="deck-crosshair" data-testid="deck-crosshair" data-manning={manning ? 'true' : 'false'} data-aim={aim ? coordLabel(aim) : undefined} aria-hidden>
-        <i />
-        <i />
+      <div className="deck-gun-label" data-testid="deck-gun-label" data-station={approach ?? undefined} ref={labelRef} aria-hidden>
+        {touch ? 'Tap — Man the gun' : 'E — Man the gun'}
       </div>
       {isAudioDebug() && <DeckAudioLog />}
       <div className="deck-prompt" data-testid="deck-prompt" role="status" aria-live="polite">
         {prompt}
       </div>
-      <div className="panel parchment deck-hud" data-testid="deck-hud" data-station={deck.station ?? undefined}>
+      <div className="panel parchment deck-hud" data-testid="deck-hud" data-station={deck.station ?? undefined} data-view={manning ? 'first' : 'third'}>
         <div className="deck-ship">
           <strong data-testid="deck-ship-name">{def.name}</strong>
           <span className="deck-pips" aria-label={`${ship.hits.length} of ${spec.length} sections hit`} data-testid="deck-pips">
@@ -127,13 +127,16 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
             </button>
           )}
           {manning && (
-            <button type="button" className="btn btn-ghost" data-testid="deck-step-away" onClick={() => (playSfx('ui-click'), manStation(null))}>
-              Step away
+            <button type="button" className="btn btn-ghost" data-testid="deck-step-away" title="E" onClick={() => (playSfx('ui-click'), manStation(null))}>
+              Step away <kbd aria-hidden>E</kbd>
             </button>
           )}
           <button type="button" className="btn btn-ghost" data-testid="deck-next-ship" title="Tab" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:deck-next')))}>
             Next ship <kbd aria-hidden>Tab</kbd>
           </button>
+          <span className="deck-compass" data-testid="deck-compass" title="Nearest gun that bears" aria-hidden>
+            <i ref={compassRef} />
+          </span>
         </div>
       </div>
     </>

@@ -48,19 +48,21 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           un-sunk ships are never shown to the other captain. Salvo, Stormy seas and Black Flag all apply to both captains. The winner is named on the
           report; Rematch lets the other captain place first.
         </dd>
-        <dt>On deck</dt>
+        <dt>Third person</dt>
         <dd data-testid="howto-on-deck">
-          Press <kbd>V</kbd> (or <em>On deck</em>) at any moment of the battle — your turn, the enemy's, mid-cinematic — to stand on one of your own
-          ships; press it again for the overview. Toggling never changes the game. Your crew work the deck around you — a hit throws the nearest hand overboard and a sinking ship empties its deck (Settings → Crew turns them off). <kbd>W</kbd>
+          Press <kbd>V</kbd> (or <em>Third person</em>) at any moment of the battle — your turn, the enemy's, mid-cinematic — to walk one of your
+          own ships as your pirate, seen from behind; press it again for the overview. Toggling never changes the game. Your crew work the deck around you — a hit throws the nearest hand overboard and a sinking ship empties its deck (Settings → Crew turns them off). <kbd>W</kbd>
           <kbd>A</kbd>
           <kbd>S</kbd>
-          <kbd>D</kbd> walk, mouse looks (click the sea to grab the mouse, <kbd>Esc</kbd> lets it go), <kbd>Shift</kbd> runs, <kbd>Tab</kbd> hops to your
-          next afloat ship. You cannot fall off or walk through the masts. Walk up to a cannon on the side facing the enemy waters and press{' '}
-          <kbd>E</kbd> to man it (guns on the far side say <em>No target that side</em>), then <b>click a square</b> — on the chart or out on the
-          water through the crosshair — and the gun swings to bear and fires there. No free aim: the same odds as the overview. Salvo counts
-          the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) and Spyglass (<kbd>G</kbd>) work from a gun, and a stormy sea still swallows
-          its 30 %. The enemy's balls splash around you or strike your hull; when your ship goes down you wake on the next one (<kbd>Tab</kbd>{' '}
-          to choose). Each captain in Two captains gets their own deck. Not available without 3D.
+          <kbd>D</kbd> walk, drag the mouse to look around, <kbd>Shift</kbd> runs, <kbd>Space</kbd> jumps (never over the rail), <kbd>Tab</kbd>{' '}
+          hops to your next afloat ship. You cannot fall off, walk through the bulwarks or the masts; the quarterdeck and forecastle are steps
+          up. The guns that bear on the enemy waters glow brass with a ring on the deck and a compass arrow points to the nearest; walk up and
+          press <kbd>E</kbd> to man one — the camera drops into the gunner's eye (first person). The mouse never aims: <b>click a square on
+          the chart</b> (or a visible enemy square on the water) and the gun swings to bear and fires there. No free aim: the same odds as the
+          overview. Salvo counts the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) and Spyglass (<kbd>G</kbd>) work from a gun — pick
+          the square on the chart — and a stormy sea still swallows its 30 %. <kbd>E</kbd> again steps away. The enemy's balls splash around
+          you or strike your hull; when your ship goes down you wake on the next one (<kbd>Tab</kbd> to choose). Each captain in Two captains
+          gets their own deck. Not available without 3D.
         </dd>
         <dt>Sky &amp; sea (looks only)</dt>
         <dd data-testid="howto-sky-sea">

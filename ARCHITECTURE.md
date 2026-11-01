@@ -17,7 +17,7 @@ src/
   vfx/         particles & effects: cannon fire (muzzle flash, smoke, cannonball, splash), damage
                (splinters, fire, smoke, hull holes), sinking (list/flood/bubbles/debris/flotsam), markers.
   cinematics/  director: scripted camera + VFX + audio sequences per shot / sink / win-lose. Skippable.
-  deck/        "On deck" first-person seat: DeckController (walk / look / collide / cannon stations / click-a-square
+  deck/        "Third person" seat: DeckController (walk / jump / orbit camera / first person at a gun / cannon stations / chart
                firing), transient deck runtime for the HUD, pure deck math, and the A/B/C shared `contract.ts`.
   ui/          HTML/React overlay: menu, settings, how-to-play, placement HUD, battle HUD, game over.
   audio/       Howler SFX + music + ambience, volume/mute, persisted settings.
@@ -200,13 +200,17 @@ fire→impact beat distance; a skip before impact cancels it and plays the impac
 Enemy shots fire from an unseen gun line past the far edge of the Navy waters (showing the real ship would leak its
 position). `?cinematics-demo` exercises every sequence.
 
-### deck (`src/deck`) — "On deck"
+### deck (`src/deck`) — "Third person"
 ```tsx
 <DeckController />                      // inside <OceanScene> during the battle; owns the camera while `deck.on`
-useDeckStore((s) => s.near | s.locked | s.keyboardLook | s.aim | s.fade | s.nudge | s.active)   // HUD runtime, not game state
+<Pirate ref livery gait />              // the player's low-poly figure (2 draws, ~130 tris), `createGait()`; reusable by `src/crew`
+useDeckStore((s) => s.near | s.approach | s.fade | s.nudge | s.active | s.labelEl | s.compassEl)   // HUD runtime, not game state
 deckBus.on(fn) / deckBus.emit({ type: 'shake' | 'look-at' | 'abandon-ship', … }) / deckBus.hasListeners()
-resolveDeckAnchors(anchors) → DeckAnchors   // `anchors.deck` (session C) or the fallback rectangle (hull × beam − 0.06, masts as obstacles)
+resolveDeckAnchors(anchors, id) → DeckAnchors   // `anchors.deck` (session C) or the fallback: hull plan (tapered, inset 0.08) split into
+                                                // the main deck + raised decks of `DECK_PROFILES[id]` joined by ramps, masts as obstacles
 stationsOf(anchors, deck) / stationUsable(station, rotationY, shipPos, enemyCenter) / afloatUids / cycleShip
+thirdPersonPose(feet, orbit, blockers) / springArm / blendProgress   // camera.ts: orbit behind the pirate, spring arm, 0.4 s blend
+startJump / stepJump / approach                                      // math.ts: Space hop (JUMP_APEX 0.12 u, JUMP_TIME 0.5 s), ACCEL_TIME 0.1 s
 ```
 The store owns the seat: `deck: DeckState { on, shipUid, station }`, `deckOnBy: Record<Player, boolean>` and the contract's
 `setDeck(on)` / `boardShip(uid)` / `manStation(i)` (`src/deck/contract.ts`; `Settings` gains `deckSensitivity` / `deckInvertY`).
@@ -214,14 +218,22 @@ Invariants: `setDeck(true)` stands on the remembered ship if afloat, else the fi
 the deck resets whenever the phase leaves `battle`; hot-seat keeps one flag per captain and `endHandoff` restores it on their own
 fleet; a standing ship that sinks is switched at once when no `deckBus` listener exists (tests, `?no3d`), otherwise the mounted
 controller plays `abandon-ship` (1.2 s fade, then `boardShip(next)` / `setDeck(false)`) — session B emits it from its sink
-sequence, the controller emits its own once the director is idle. V / `deck-toggle` works in every battle state (not under
+sequence, the controller emits its own once the director is idle; a `thrown-overboard { nextUid }` event (session B) tumbles the
+pirate and does the same with a 0.9 s fade; unknown events are ignored. V / `deck-toggle` works in every battle state (not under
 `?no3d`, not while the curtain is up). Camera: `CameraView 'deck'` makes the rig stand down; `<CinematicCamera>` is not mounted
-while on deck (the director's VFX / audio still play; its `shake` impulses are consumed by the controller); the camera is
-composed per frame from the ship's `<Fleet>` pose (wave height + sink pose) × the walk pose × yaw/pitch, `DECK_NEAR` / `DECK_FOV`
-while on deck. Firing is one path for every square: `useBattleController().aim(coord)` (chart, 3D board, deck crosshair /
-Enter) — armed Black Flag power from `useUiStore().armed`, a manned gun required on deck (else "Man a gun to fire"), the manned
-gun swings (`director.firing`) 220 ms before `fire()`. Only guns whose world-space `direction` points at the enemy board can be
-manned ("No target that side"); below-deck guns are not stations. Perf: the standing ship is the one lod-0 ship on High only —
+while on deck (the director's VFX / audio still play; its `shake` impulses are consumed by the controller). Per frame, in order:
+ship pose (wave height + sink pose — the `<Fleet>` `Afloat` formula, same clock) → walk / jump pose on the deck polygons
+(`stepOnDeck` every frame, airborne too, so the rail is never cleared) → **third person** (orbit `TP_BACK` 0.55 / `TP_UP` 0.28
+behind the pirate's head, spring arm against the deck floor, raised decks and masts, `TP_FOV` 62) or **first person** at a
+manned gun (`gunnerPose`, `DECK_FOV` 70, a ±0.7 rad glance) → smoothstep blend over `BLEND_SECONDS` (reduced motion cuts) → world
+through the same ship matrix; the pirate and the `GunMarkers` (2 instanced draws: brass rings on the usable stands + a glow over
+the breech) are children of a group whose matrix *is* that ship pose. The mouse is never locked and never aims: drag orbits
+(third) or glances (first). Firing is one path for every square: `useBattleController().aim(coord)` (chart, or a visible 3-D
+enemy cell while manning) — armed Black Flag power from `useUiStore().armed`, a manned gun required on deck (else "Man a gun to
+fire"), the manned gun swings (`director.firing`) 220 ms before `fire()`. Only guns whose world-space `direction` points at the
+enemy board can be manned ("No target that side"); guns enclosed under a castle / below deck are not stations. Gun finding: the
+floating "E — Man the gun" label (`deck-gun-label`, within `STATION_APPROACH` 0.6 u), the compass arrow (`deck-compass`) to the
+nearest usable gun and a 3 s first-entry hint. Perf: the standing ship is the one lod-0 ship on High only —
 Medium rides the baked lod-1 copy and drops the other own ships to lod 2 while on deck (a live lod-0 man-o'-war alone is ~420
 draws). Keyboard-only: pointer lock refused → arrow keys look, WASD walk, Enter fires at the crosshair; touch: drag to look, tap
 a gun (or the HUD button) to man it, tap the chart to fire.
@@ -308,7 +320,7 @@ Black Flag: `mode-black-flag`, `fleet-picker`, `fleet-preset-{classic|armada|wol
 `stat-black-flag`, `howto-black-flag`; chart cells carry `cell-spied(-ship|-water)` / `cell-treasure` classes,
 `setting-{sfx|music|mute|reduced-motion|colorblind}`, `setting-{cinematics|quality}-{option}`, `settings-close`,
 On deck: `deck-toggle[data-on]` (key V), `battle[data-deck]`, `deck-hud[data-station]`, `deck-ship-name`, `deck-pips`, `deck-station`,
-`deck-salvo`, `deck-prompt`, `deck-crosshair[data-manning][data-aim]`, `deck-man`, `deck-step-away`, `deck-next-ship`, `deck-fade`,
+`deck-salvo`, `deck-prompt`, `deck-gun-label[data-station]`, `deck-compass`, `deck-hud[data-view=third|first]`, `deck-man`, `deck-step-away`, `deck-next-ship`, `deck-fade`,
 `setting-deck-sensitivity`, `setting-deck-invert-y`, `howto-on-deck`,
 `ui-root[data-colorblind][data-no3d][data-tod][data-weather]`, Sky & sea picker `skysea-picker`, `skysea-time`, `skysea-weather`
 (menu corner and Settings). If you redesign the UI, keep these (or update `e2e/` in the same PR).

@@ -8,17 +8,29 @@ import { worldToCell, type Vec3 } from '../scene/layout'
 import type { ShipAnchors, Side } from '../ships/types'
 import { EYE_HEIGHT, type DeckAnchors } from './contract'
 
-/** Walking / running speed, ship units per second (a sailor is EYE_HEIGHT ≈ 0.17 u tall). */
-export const WALK_SPEED = 0.25
-export const RUN_SPEED = 0.5
-/** The player's collision radius against obstacles. */
-export const PLAYER_RADIUS = 0.03
+/**
+ * Walking / running speed, ship units per second (a sailor is EYE_HEIGHT ≈ 0.17 u tall). 0.6 u/s crosses a frigate's
+ * waist (≈ 2 u between the deck breaks) in ~3.3 s and its beam in 1.6 s; Shift runs 1.7× that.
+ */
+export const WALK_SPEED = 0.6
+export const RUN_SPEED = 1.0
+/** Seconds for the velocity to reach ~63 % of the wanted speed (and to coast to a stop): short, so turns stay crisp. */
+export const ACCEL_TIME = 0.1
+/** Jump: apex height above the deck and total air time on a flat deck (gravity / take-off speed follow from both). */
+export const JUMP_APEX = 0.12
+export const JUMP_TIME = 0.5
+export const JUMP_GRAVITY = (8 * JUMP_APEX) / (JUMP_TIME * JUMP_TIME)
+export const JUMP_SPEED = (4 * JUMP_APEX) / JUMP_TIME
+/** The player's collision radius against obstacles (the pirate figure is ~0.06 u wide). */
+export const PLAYER_RADIUS = 0.035
 /** How close (u) to a station's stand the player must be to man the gun. */
-export const STATION_REACH = 0.12
+export const STATION_REACH = 0.22
+/** Within this distance of a usable gun the floating "E — Man the gun" label shows. */
+export const STATION_APPROACH = 0.6
 /** Fallback stand: this far inboard of the muzzle. */
 export const STAND_INSET = 0.12
-/** Fallback rectangle: hull length × beam shrunk by this margin. */
-export const FALLBACK_INSET = 0.06
+/** Fallback deck: hull plan shrunk by this margin so the figure's shoulders stay inboard of the bulwark. */
+export const FALLBACK_INSET = 0.08
 export const MAST_RADIUS = 0.05
 /** Half-width of the band around a ramp segment over which the deck height blends between the two levels. */
 export const RAMP_BLEND = 0.12
@@ -46,23 +58,144 @@ export function rectPolygon(length: number, beam: number, inset = 0): Pt[] {
 }
 
 /**
- * Walkable deck for a class that has not authored `ShipAnchors.deck` yet (`DECK_ANCHORS_FALLBACK`): the hull rectangle
- * at `deckY`, masts as round obstacles, one station per cannon 0.12 u inboard of its muzzle, spawn on the quarterdeck.
+ * Per-class deck profile for the fallback (`DECK_ANCHORS_FALLBACK`): where the raised decks start and how high they
+ * sit, and how much the plan tapers toward the ends. Read from each class's hull form constants; replaced wholesale
+ * by session C's authored `ShipAnchors.deck`.
  */
-export function fallbackDeckAnchors(a: ShipAnchors): DeckAnchors {
-  const { length, beam } = a.hull
-  const hx = length / 2 - FALLBACK_INSET
+export interface DeckProfile {
+  /** Transom / stem x of the walkable plan (the hull length anchor includes the bowsprit on some classes). */
+  xStern: number
+  xBow: number
+  /** Raised decks aft (quarterdeck / poop) and forward (forecastle): `x` is the break, `y` the deck height. Aft list stern-most last. */
+  aft: { x: number; y: number }[]
+  fore: { x: number; y: number } | null
+  /** Plan half-width at the transom and at the stem, as a fraction of the half beam (1 = no taper). */
+  sternTaper: number
+  bowTaper: number
+  /** Deck furniture you cannot walk through and the camera must not sit in (pumps, capstan, bitts): circles in x/z. */
+  furniture?: { x: number; z: number; r: number }[]
+}
+
+/**
+ * Profiles in each class's *model* space, fitted like its anchors (`fitAnchors`: scale about the origin, shift along x) so
+ * they match the rendered hull. Numbers come from the hull form constants named in the comments.
+ */
+const fitProfile = (p: DeckProfile, scale: number, dx: number): DeckProfile => ({
+  xStern: p.xStern * scale + dx,
+  xBow: p.xBow * scale + dx,
+  aft: p.aft.map((d) => ({ x: d.x * scale + dx, y: d.y * scale })),
+  fore: p.fore ? { x: p.fore.x * scale + dx, y: p.fore.y * scale } : null,
+  sternTaper: p.sternTaper,
+  bowTaper: p.bowTaper,
+  furniture: p.furniture?.map((f) => ({ x: f.x * scale + dx, z: f.z * scale, r: f.r * scale })),
+})
+
+export const DECK_PROFILES: Record<string, DeckProfile> = {
+  // src/ships/frigate/form.ts (FIT 0.74 / −0.16): deckY 0.4, quarterdeck 0.58 aft of −0.85, forecastle 0.54 forward of 1.16
+  frigate: fitProfile({ xStern: -1.42, xBow: 1.46, aft: [{ x: -0.85, y: 0.58 }], fore: { x: 1.16, y: 0.54 }, sternTaper: 0.72, bowTaper: 0.3 }, 0.74, -0.16),
+  // src/ships/man-o-war/spec.ts: main 0.55, castles 0.88 (quarter −0.55, fore 1.35), poop 1.16 aft of −1.85
+  'man-o-war': {
+    xStern: -2.42,
+    xBow: 2.42,
+    aft: [{ x: -0.55, y: 0.88 }, { x: -1.85, y: 1.16 }],
+    fore: { x: 1.35, y: 0.88 },
+    sternTaper: 0.7,
+    bowTaper: 0.4,
+    // parts.tsx: pumps beside the mainmast, capstan and binnacle on the quarterdeck, belfry at the forecastle break
+    furniture: [{ x: -0.32, z: 0.14, r: 0.04 }, { x: -0.32, z: -0.14, r: 0.04 }, { x: -0.95, z: 0, r: 0.1 }, { x: -1.5, z: 0, r: 0.08 }, { x: 1.41, z: 0, r: 0.1 }],
+  },
+  // src/ships/galleon/hull.ts: main 0.6, quarterdeck 1.02 aft of −0.45, poop 1.42 aft of −1.15, forecastle 0.98 forward of 0.95
+  galleon: { xStern: -1.85, xBow: 1.72, aft: [{ x: -0.45, y: 1.02 }, { x: -1.15, y: 1.42 }], fore: { x: 0.95, y: 0.98 }, sternTaper: 0.7, bowTaper: 0.35 },
+  // src/ships/brigantine/hull.ts (FIT 0.84 / −0.18): deck 0.35, cabin top 0.5 aft of −1.08
+  brigantine: fitProfile({ xStern: -1.5, xBow: 1.5, aft: [{ x: -1.08, y: 0.5 }], fore: null, sternTaper: 0.75, bowTaper: 0.3 }, 0.84, -0.18),
+  // src/ships/sloop/hull.ts: one flush deck
+  sloop: { xStern: -1.0, xBow: 1.0, aft: [], fore: null, sternTaper: 0.7, bowTaper: 0.3 },
+}
+
+/** Flush rectangle profile for an unknown class. */
+export const flushProfile = (a: ShipAnchors): DeckProfile => ({ xStern: -a.hull.length / 2, xBow: a.hull.length / 2, aft: [], fore: null, sternTaper: 0.8, bowTaper: 0.4 })
+
+/** Half-width of the walkable plan at `x`: full beam midships, tapering linearly over the last 30 % toward each end. */
+export function planHalfWidth(x: number, halfBeam: number, prof: DeckProfile): number {
+  const len = prof.xBow - prof.xStern
+  const t = (x - prof.xStern) / len
+  const taperLen = 0.3
+  let f = 1
+  if (t > 1 - taperLen) f = 1 + (prof.bowTaper - 1) * ((t - (1 - taperLen)) / taperLen)
+  else if (t < taperLen) f = 1 + (prof.sternTaper - 1) * ((taperLen - t) / taperLen)
+  return Math.max(0.02, halfBeam * clamp(f, 0, 1))
+}
+
+/** Convex CCW polygon of the plan between `x0` and `x1` (two stations per end so the taper reads). */
+function planPolygon(x0: number, x1: number, halfBeam: number, inset: number, prof: DeckProfile): Pt[] {
+  const xs = [x0, x0 + (x1 - x0) * 0.5, x1]
+  const w = (x: number) => Math.max(0.01, planHalfWidth(x, halfBeam, prof) - inset)
+  const low: Pt[] = xs.map((x) => [x, -w(x)] as Pt)
+  const high: Pt[] = xs.map((x) => [x, w(x)] as Pt).reverse()
+  return [...low, ...high]
+}
+
+/**
+ * Walkable deck for a class that has not authored `ShipAnchors.deck` yet (`DECK_ANCHORS_FALLBACK`): the hull plan
+ * (tapered toward bow and stern, inset so you cannot lean through the bulwark) split into the main deck and the raised
+ * decks of `DECK_PROFILES[id]`, joined by ramps at every break; masts as round obstacles; one station per cannon
+ * `STAND_INSET` inboard of its muzzle on the deck level under it (guns enclosed under a castle are not reachable);
+ * spawn in the waist, off the centreline.
+ */
+export function fallbackDeckAnchors(a: ShipAnchors, id?: string): DeckAnchors {
+  const prof = (id && DECK_PROFILES[id]) || flushProfile(a)
+  const halfBeam = a.hull.beam / 2
+  const inset = FALLBACK_INSET
+  const aft = [...prof.aft].sort((p, q) => q.x - p.x) // nearest the waist first
+  const mainStart = aft.length ? aft[0].x : prof.xStern + inset
+  const mainEnd = prof.fore ? prof.fore.x : prof.xBow - inset
+  const walk: DeckAnchors['walk'] = [{ points: planPolygon(mainStart, mainEnd, halfBeam, inset, prof), y: a.deckY }]
+  const ramps: DeckAnchors['ramps'] = []
+  const breakSeg = (x: number): [Pt, Pt] => {
+    const w = planHalfWidth(x, halfBeam, prof) - inset + 0.01
+    return [
+      [x, -w],
+      [x, w],
+    ]
+  }
+  let prev = 0
+  for (let i = 0; i < aft.length; i++) {
+    const x0 = i + 1 < aft.length ? aft[i + 1].x : prof.xStern + inset
+    walk.push({ points: planPolygon(x0, aft[i].x, halfBeam, inset, prof), y: aft[i].y })
+    const [p, q] = breakSeg(aft[i].x)
+    ramps.push({ from: prev, to: walk.length - 1, a: p, b: q })
+    prev = walk.length - 1
+  }
+  if (prof.fore) {
+    walk.push({ points: planPolygon(prof.fore.x, prof.xBow - inset, halfBeam, inset, prof), y: prof.fore.y })
+    const [p, q] = breakSeg(prof.fore.x)
+    ramps.push({ from: 0, to: walk.length - 1, a: p, b: q })
+  }
+  const levelY = (x: number): number => {
+    let y = a.deckY
+    for (const d of aft) if (x < d.x) y = d.y
+    if (prof.fore && x >= prof.fore.x) y = prof.fore.y
+    return y
+  }
+  // spawn in the waist between the aft break and the first mast forward of it (the camera orbits behind you without
+  // hitting the mast), off the centreline; the controller mirrors z onto the enemy's side
+  const mastAhead = a.masts.map((m) => m.base[0]).filter((x) => x > mainStart + 0.2 && x < mainEnd).sort((p, q) => p - q)[0]
+  const spawnX = clamp(mastAhead !== undefined ? mainStart + (mastAhead - mainStart) * 0.35 : mainStart + (mainEnd - mainStart) * 0.3, mainStart + 0.08, mainEnd - 0.08)
   return {
-    // the waist, aft of the main mast and off the centreline so the mast is not in your face: open main deck on every
-    // class (the stern often carries a cabin / poop the fallback rectangle knows nothing about)
-    spawn: [clamp(-0.45, -hx + 0.05, hx - 0.05), a.deckY, Math.min(0.25, beam * 0.2)],
-    walk: [{ points: rectPolygon(length, beam, FALLBACK_INSET), y: a.deckY }],
-    ramps: [],
-    obstacles: a.masts.map((m) => ({ center: [m.base[0], m.base[2]] as Pt, radius: MAST_RADIUS })),
-    stations: a.cannons.map((c) => ({
-      stand: [c.muzzle[0] - c.direction[0] * STAND_INSET, a.deckY, c.muzzle[2] - c.direction[2] * STAND_INSET] as Vec3,
-      yaw: yawToward(c.direction[0], c.direction[2]),
-    })),
+    spawn: [spawnX, a.deckY, Math.min(0.25, Math.max(0.08, (planHalfWidth(spawnX, halfBeam, prof) - inset) * 0.5))],
+    walk,
+    ramps,
+    obstacles: [
+      ...a.masts.map((m) => ({ center: [m.base[0], m.base[2]] as Pt, radius: MAST_RADIUS })),
+      ...(prof.furniture ?? []).map((f) => ({ center: [f.x, f.z] as Pt, radius: f.r })),
+    ],
+    stations: a.cannons.map((c) => {
+      const x = c.muzzle[0] - c.direction[0] * STAND_INSET
+      return {
+        stand: [x, levelY(x), c.muzzle[2] - c.direction[2] * STAND_INSET] as Vec3,
+        yaw: yawToward(c.direction[0], c.direction[2]),
+      }
+    }),
   }
 }
 
@@ -72,9 +205,9 @@ export const FALLBACK_EYE = 0.3
 const fallbackDecks = new WeakSet<DeckAnchors>()
 
 /** The authored deck when session C has shipped it, else the fallback (see `isFallbackDeck`). */
-export function resolveDeckAnchors(a: ShipAnchors & { deck?: DeckAnchors }): DeckAnchors {
+export function resolveDeckAnchors(a: ShipAnchors & { deck?: DeckAnchors }, id?: string): DeckAnchors {
   if (a.deck && a.deck.walk.length > 0) return a.deck
-  const d = fallbackDeckAnchors(a)
+  const d = fallbackDeckAnchors(a, id)
   fallbackDecks.add(d)
   return d
 }
@@ -238,6 +371,38 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
   return { x: p[0], z: p[1], y: deckHeightAt(p, level, deck), level }
 }
 
+/** Exponential approach of `v` toward `target` with time constant `tau` (frame-rate independent). */
+export const approach = (v: number, target: number, dt: number, tau = ACCEL_TIME): number => v + (target - v) * (1 - Math.exp(-dt / tau))
+
+export interface AirPose {
+  /** Feet height above the deck surface (0 = on the deck). */
+  height: number
+  /** Vertical speed, u/s (positive up). */
+  vy: number
+  airborne: boolean
+}
+
+export const GROUNDED: AirPose = { height: 0, vy: 0, airborne: false }
+
+/** Take off, unless already in the air (no double jump). */
+export function startJump(air: AirPose): AirPose {
+  return air.airborne ? air : { height: 0, vy: JUMP_SPEED, airborne: true }
+}
+
+/**
+ * One frame of the hop. `deckBefore` / `deckAfter` are the deck heights under the feet at the start and end of the
+ * frame (walking across a ramp while airborne lands on the new level): the absolute foot height follows gravity and
+ * the hop ends the moment it meets the deck. `dt` is clamped by the caller.
+ */
+export function stepJump(air: AirPose, dt: number, deckBefore: number, deckAfter: number): AirPose {
+  if (!air.airborne) return air
+  const vy = air.vy - JUMP_GRAVITY * dt
+  const absolute = deckBefore + air.height + ((air.vy + vy) / 2) * dt
+  const height = absolute - deckAfter
+  if (height <= 0 && vy <= 0) return GROUNDED
+  return { height: Math.max(0, height), vy, airborne: true }
+}
+
 /** Where boarding puts the player: the spawn, snapped onto the deck. */
 export function spawnPose(deck: DeckAnchors): WalkPose {
   const p: Pt = [deck.spawn[0], deck.spawn[2]]
@@ -291,6 +456,8 @@ export interface Station {
   /** Where the gunner stands (ship space) and the yaw they face. */
   stand: Vec3
   yaw: number
+  /** Inboard end of the barrel (authored `breech` when present, else 0.1 u behind the muzzle): where the glow marker sits. */
+  breech: Vec3
   /** False for guns below the main deck (a lower gun deck): visible in the hull, not reachable from the deck. */
   onDeck: boolean
 }
@@ -308,7 +475,8 @@ export function stationsOf(a: ShipAnchors, deck: DeckAnchors): Station[] {
       direction: c.direction,
       stand,
       yaw: authored ? authored.yaw : yawToward(c.direction[0], c.direction[2]),
-      onDeck: c.muzzle[1] >= a.deckY - 0.05,
+      breech: authored?.breech ?? [c.muzzle[0] - c.direction[0] * 0.1, c.muzzle[1], c.muzzle[2] - c.direction[2] * 0.1],
+      onDeck: c.muzzle[1] >= stand[1] - 0.05,
     }
   })
 }

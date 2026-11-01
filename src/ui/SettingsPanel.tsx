@@ -80,20 +80,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </label>
         </fieldset>
         <fieldset className="settings-deck">
-          <legend>On deck</legend>
+          <legend>Third person</legend>
           <label className="row">
             <span>Look sensitivity</span>
             <input type="range" min={0.2} max={3} step={0.1} value={settings.deckSensitivity} data-testid="setting-deck-sensitivity" aria-valuetext={`${settings.deckSensitivity.toFixed(1)}×`} onChange={(e) => updateSettings({ deckSensitivity: e.target.valueAsNumber })} />
           </label>
           <label className="row row-check">
             <input type="checkbox" checked={settings.deckInvertY} data-testid="setting-deck-invert-y" onChange={(e) => updateSettings({ deckInvertY: e.target.checked })} />
-            <span>Invert Y (mouse look)</span>
+            <span>Invert Y (drag to look)</span>
           </label>
           <label className="row row-check">
             <input type="checkbox" checked={settings.crew} data-testid="setting-crew" onChange={(e) => updateSettings({ crew: e.target.checked })} />
             <span>Crew on deck (pirates working the ships; off removes them)</span>
           </label>
-          <p className="muted small">Press V in battle to stand on your own deck. Same shots, same odds — just a different seat.</p>
+          <p className="muted small">Press V in battle to walk your own deck in third person; man a gun for the first-person view. Same shots, same odds — just a different seat.</p>
         </fieldset>
         <fieldset>
           <legend>Accessibility</legend>
