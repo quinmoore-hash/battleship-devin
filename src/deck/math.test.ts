@@ -335,6 +335,8 @@ describe('walk acceleration and jump', () => {
     pose = stepOnDeck(pose, 0, 0, d)
     for (let i = 0; i < 60 && pose.level !== toLevel; i++) pose = stepOnDeck(pose, dir * 0.01, 0, d)
     expect(pose.level).toBe(toLevel)
+    // the ramp blends the height; a few more steps and the feet are on the upper planks
+    for (let i = 0; i < 15; i++) pose = stepOnDeck(pose, dir * 0.01, 0, d)
     expect(pose.y).toBeCloseTo(d.walk[toLevel].y, 2)
   })
 
