@@ -66,10 +66,23 @@ export function fallbackDeckAnchors(a: ShipAnchors): DeckAnchors {
   }
 }
 
-/** The authored deck when session C has shipped it, else the fallback. */
+/** Eye height over the fallback rectangle: the models' waist bulwarks are ~0.27 u, so the contract's 0.17 would see only planks. */
+export const FALLBACK_EYE = 0.3
+
+const fallbackDecks = new WeakSet<DeckAnchors>()
+
+/** The authored deck when session C has shipped it, else the fallback (see `isFallbackDeck`). */
 export function resolveDeckAnchors(a: ShipAnchors & { deck?: DeckAnchors }): DeckAnchors {
-  return a.deck && a.deck.walk.length > 0 ? a.deck : fallbackDeckAnchors(a)
+  if (a.deck && a.deck.walk.length > 0) return a.deck
+  const d = fallbackDeckAnchors(a)
+  fallbackDecks.add(d)
+  return d
 }
+
+export const isFallbackDeck = (d: DeckAnchors): boolean => fallbackDecks.has(d)
+
+/** Eye height above the feet for this deck. */
+export const eyeFor = (d: DeckAnchors): number => (isFallbackDeck(d) ? FALLBACK_EYE : EYE_HEIGHT)
 
 // ---- polygons -------------------------------------------------------------------------------------------------
 
@@ -323,20 +336,19 @@ export function nearestStation(stations: readonly Station[], x: number, z: numbe
   return best
 }
 
-/** Camera pose while manning: just behind and above the breech, sighting along the barrel. */
+/**
+ * Camera pose while manning: sighting along the barrel from just above and behind the muzzle. The muzzle is the one
+ * anchor guaranteed to be outside the planking (enclosed gun decks, castles), so the enemy waters are always in view.
+ */
 export function gunnerPose(s: Station): { position: Vec3; yaw: number; pitch: number } {
-  const [dx, dy, dz] = s.direction
+  const [dx, , dz] = s.direction
   const h = Math.hypot(dx, dz) || 1
   const fx = dx / h
   const fz = dz / h
-  // the breech is ~0.3 u inboard of the muzzle; the eye sits a little behind it and high enough to sight over the rail
-  const breechX = s.muzzle[0] - fx * 0.3
-  const breechZ = s.muzzle[2] - fz * 0.3
-  const eyeY = Math.max(s.muzzle[1] + 0.2 + dy, s.stand[1] + EYE_HEIGHT + 0.04)
   return {
-    position: [breechX - fx * 0.15, eyeY, breechZ - fz * 0.15],
+    position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06],
     yaw: yawToward(fx, fz),
-    pitch: -0.06,
+    pitch: -0.08,
   }
 }
 

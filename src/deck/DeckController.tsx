@@ -17,7 +17,7 @@ import { ownBoardKey, useGameStore } from '../store/gameStore'
 import { useBattleController } from '../ui/battleController'
 import { useUiStore } from '../ui/uiStore'
 import { lastHitIndex, placedShipSeed, sinkPose } from '../vfx/sinking'
-import { DECK_FOV, DECK_NEAR, EYE_HEIGHT, deckBus, type DeckBusEvent } from './contract'
+import { DECK_FOV, DECK_NEAR, deckBus, type DeckBusEvent } from './contract'
 import { resetDeckRuntime, useDeckStore } from './deckStore'
 import {
   KEY_LOOK_SPEED,
@@ -29,6 +29,8 @@ import {
   angleDelta,
   clamp,
   cycleShip,
+  eyeFor,
+  isFallbackDeck,
   gunnerPose,
   lookForward,
   nearestStation,
@@ -128,13 +130,19 @@ export function DeckController() {
     if (!active || !geometry || !ship) return
     if (standUid.current === ship.uid) return
     standUid.current = ship.uid
-    const p = spawnPose(geometry.deckA)
-    pose.current = p
-    // face the enemy waters
+    let p = spawnPose(geometry.deckA)
+    // face the enemy waters; on the fallback rectangle also stand at the rail on that side (no mast / cabin in the way)
     const { rotationY, position } = geometry.transform
     const worldYaw = Math.atan2(-(foeCenter[0] - position[0]), -(foeCenter[2] - position[2]))
-    look.current = { yaw: worldYaw - rotationY, pitch: -0.05 }
-    camLocal.current.set(p.x, p.y + EYE_HEIGHT, p.z)
+    const localYaw = worldYaw - rotationY
+    if (isFallbackDeck(geometry.deckA)) {
+      const f = lookForward(localYaw, 0)
+      const toward = Math.abs(f[2]) > 0.5 ? Math.sign(f[2]) : 0
+      if (toward) p = stepOnDeck(p, 0, toward * geometry.hull.beam, geometry.deckA)
+    }
+    pose.current = p
+    look.current = { yaw: localYaw, pitch: -0.05 }
+    camLocal.current.set(p.x, p.y + eyeFor(geometry.deckA), p.z)
   }, [active, geometry, ship, foeCenter])
 
   // --- camera lens + runtime flags while active ----------------------------------------------------------------
@@ -456,7 +464,7 @@ export function DeckController() {
     }
 
     // camera in ship space: eye over the feet, or eased in behind the breech while manning
-    const target = manning ? gunnerPose(manning).position : [pose.current.x, pose.current.y + EYE_HEIGHT, pose.current.z]
+    const target = manning ? gunnerPose(manning).position : [pose.current.x, pose.current.y + eyeFor(geometry.deckA), pose.current.z]
     const ease = 1 - Math.exp(-10 * dt)
     camLocal.current.x += (target[0] - camLocal.current.x) * ease
     camLocal.current.y += (target[1] - camLocal.current.y) * ease

@@ -7,7 +7,9 @@ import {
   clampToPolygon,
   cycleShip,
   deckHeightAt,
+  eyeFor,
   fallbackDeckAnchors,
+  isFallbackDeck,
   gunnerPose,
   lookForward,
   nearestStation,
@@ -157,12 +159,23 @@ describe('stations', () => {
     expect(nearestStation(stations, below.stand[0], below.stand[2], 0.01)).toBeNull()
   })
 
-  it('gunnerPose sights along the barrel from behind the breech', () => {
+  it('gunnerPose sights along the barrel from just above the muzzle (outside the planking)', () => {
     const s = stations.find((x) => x.onDeck && x.side === 'port')!
     const pose = gunnerPose(s)
-    expect(pose.position[2]).toBeGreaterThan(s.muzzle[2]) // port muzzle is at −z; the gunner stands inboard (+z of it)
+    expect(pose.position[2]).toBeGreaterThan(s.muzzle[2]) // port muzzle is at −z; the eye is a hair inboard of it
+    expect(pose.position[2] - s.muzzle[2]).toBeLessThan(0.1)
+    expect(pose.position[1]).toBeGreaterThan(s.muzzle[1])
     const f = lookForward(pose.yaw, 0)
     expect(f[2]).toBeLessThan(-0.99)
+  })
+
+  it('the fallback deck is marked and raises the eye over the bulwark; authored decks keep the contract eye height', () => {
+    const fb = resolveDeckAnchors(SHIPS.sloop.anchors)
+    expect(isFallbackDeck(fb)).toBe(true)
+    expect(eyeFor(fb)).toBe(0.3)
+    const authored: DeckAnchors = { spawn: [0, 1, 0], walk: [{ points: rect, y: 1 }], ramps: [], obstacles: [], stations: [] }
+    expect(isFallbackDeck(resolveDeckAnchors({ ...SHIPS.sloop.anchors, deck: authored }))).toBe(false)
+    expect(eyeFor(authored)).toBe(0.17)
   })
 })
 
