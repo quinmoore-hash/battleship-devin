@@ -1044,13 +1044,9 @@
   letter-spacing: 0;
   flex: none;
 }
-.chart-panel.is-folded .panel-title {
-  margin-bottom: 0;
-  border-bottom: 0;
-  padding-bottom: 0;
-}
+/* the fold only exists under 900px: a chart folded on a phone must reappear when the window grows (no toggle there) */
 .chart-body[hidden] {
-  display: none;
+  display: block;
 }
 .target-readout {
   /* fixed width: the readout must never change the panel size (it would re-wrap the charts under the pointer) */
@@ -1678,6 +1674,14 @@
   }
   .chart-fold {
     display: grid;
+  }
+  .chart-panel.is-folded .panel-title {
+    margin-bottom: 0;
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .chart-body[hidden] {
+    display: none;
   }
   .side-panel {
     display: none;

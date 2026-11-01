@@ -194,6 +194,7 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
   const prevView = useRef<CameraView | null>(null)
   const tmpPos = useRef(new THREE.Vector3())
   const framing = useRef<ShotFrame>({ position: new THREE.Vector3(), target: new THREE.Vector3(), fov: 42 })
+  const framedAspect = useRef(0)
 
   useEffect(() => {
     if (prevView.current === view) return
@@ -221,6 +222,11 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
     }
     const dt = Math.min(delta, 0.1)
     const camera = state.camera as THREE.PerspectiveCamera
+    if (Math.abs(camera.aspect - framedAspect.current) > 1e-3) {
+      // viewport resized / phone rotated: the shot depends on the aspect, so fly to the new framing
+      framedAspect.current = camera.aspect
+      settled.current = false
+    }
     const aim = frameShot(view, camera.aspect, state.size.width, framing.current)
     const wanted = tmpPos.current
     if (view === 'menu') {
