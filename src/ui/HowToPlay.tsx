@@ -21,7 +21,10 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
         </li>
       </ol>
       <h3>Rules of engagement</h3>
-      <p className="muted small">Tick any combination in the menu; all off is Classic.</p>
+      <p className="muted small" data-testid="howto-rules-intro">
+        All optional, combine any: tick any, all or none on the menu's Step 2. Nothing ticked is classic Battleship; ticked rules stack, so
+        Salvo + Stormy seas + Black Flag at once is fair game.
+      </p>
       <dl className="howto-rules" data-testid="howto-rules">
         <dt>Classic</dt>
         <dd>One shot per turn, every shot visible, five ships each.</dd>

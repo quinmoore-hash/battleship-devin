@@ -6,6 +6,7 @@ import { playSfx } from '../audio'
 import { is3dDisabled } from '../scene/flags'
 import { useGameStore } from '../store/gameStore'
 import { DIFFICULTIES } from './difficulties'
+import { RULES_OPTIONAL_COPY, rulesSummary, sailOnLabel } from './rules'
 import { CompassRose, Skull, WaxSeal } from './Ornaments'
 import { SkySeaPicker } from './SkySeaPicker'
 import { useUi } from './UiContext'
@@ -40,6 +41,7 @@ export function MainMenu({ extras }: { extras?: MenuExtras } = {}) {
   const startGame = useGameStore((s) => s.startGame)
   const players = useGameStore((s) => s.players)
   const setPlayers = useGameStore((s) => s.setPlayers)
+  const modes = useGameStore((s) => s.modes)
   const { openModal } = useUi()
   const [step, setStep] = useState<MenuStep>('mode')
   const [names, setNames] = useState({ human: players.human.name, enemy: players.enemy.name })
@@ -124,20 +126,26 @@ export function MainMenu({ extras }: { extras?: MenuExtras } = {}) {
       {step === 'rules' && (
         <>
           <header className="menu-step-head ink-in">
-            <h2>Rules of engagement</h2>
-            <p>{twoCaptains ? 'Both captains sail under the same rules. Tick none for classic Battleship.' : 'Tick any combination. None ticked is classic Battleship.'}</p>
+            <h2 id="rules-heading">Rules of engagement</h2>
+            <p id="rules-optional" data-testid="rules-optional">
+              {RULES_OPTIONAL_COPY}
+              {twoCaptains && ' Both captains sail under the same rules.'}
+            </p>
           </header>
           {extras?.rules && (
-            <div className="menu-dock ink-in" style={{ animationDelay: '90ms' }}>
+            <div className="menu-dock ink-in" style={{ animationDelay: '90ms' }} role="group" aria-labelledby="rules-heading" aria-describedby="rules-optional">
               {extras.rules}
             </div>
           )}
+          <p className="rules-summary ink-in" style={{ animationDelay: '140ms' }} data-testid="rules-summary" data-picked={Object.values(modes).filter(Boolean).length} role="status" aria-live="polite">
+            <small>Sailing under:</small> <strong>{rulesSummary(modes)}</strong>
+          </p>
           <nav className="menu-actions ink-in" style={{ animationDelay: '180ms' }}>
             <button type="button" className="btn btn-ghost-light" data-testid="menu-back" onClick={() => go('mode')}>
               ← Back
             </button>
             <button type="button" className="btn btn-crimson btn-big" data-testid="rules-next" onClick={() => go(twoCaptains ? 'names' : 'foe')}>
-              {twoCaptains ? 'Next: name the captains' : 'Next: choose your foe'}
+              {sailOnLabel(modes)}
             </button>
           </nav>
         </>
