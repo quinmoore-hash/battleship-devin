@@ -27,7 +27,29 @@ export interface PovContext {
   standingHit: boolean
   /** `abandon-ship` already emitted for this sequence. */
   abandoned: boolean
+  /** Set when the incoming ball took the very section the player stood on (or the gun they manned): see `overboardFor`. */
+  overboard?: OverboardBeat
 }
+
+/** The thrown-overboard beat of one incoming hit. */
+export interface OverboardBeat {
+  /** Cell index (into `PlacedShip.cells`) the player stood on = the hit cell. */
+  cell: number
+  /** Where the player climbs aboard afterwards: the next afloat own ship, or this ship again when it is the last one. */
+  nextUid: string
+  /** Where the player stood (world) when the ball struck — splinters burst here. */
+  point: Vec3
+  /** Where the player hits the water (world, at the surface): over the nearest rail. */
+  splashAt: Vec3
+  /** `boardShip` has been called for this beat. */
+  boarded: boolean
+}
+
+/**
+ * The deck camera's world position, written each idle frame by `CinematicCamera` while the player is on deck (the director runs
+ * outside the canvas and needs it to tell which hull section the player stands on). Null off deck.
+ */
+export const deckEye: { position: Vec3 | null } = { position: null }
 
 export const POV = {
   /** `shake` on your own gun firing. */
@@ -44,6 +66,8 @@ export const POV = {
   sinkLookSeconds: 1.2,
   /** Seconds into the sink of the standing ship before `abandon-ship` is emitted. */
   abandonAt: 1.5,
+  /** Fractions of the overboard beat: tumbling off the deck until `tumble`, in the water until the fade (the rest). */
+  overboardTumble: 0.35,
 } as const
 
 type FleetsLike = Record<Player, readonly PlacedShip[]>
@@ -179,4 +203,60 @@ export function povBeatEvents(
 export function shipWorldPosition(ship: PlacedShip, owner: Player): Vec3 {
   const pose = shipWorldTransform(ship, ownBoardOrigin(owner))
   return [pose.position[0], pose.position[1] + SHIPS[ship.spec.id].anchors.deckY, pose.position[2]]
+}
+
+/** Cell index along the ship for a ship-space x (bow +x = cell 0, matching the classes' `gunCell`); clamped to the hull. */
+export function cellAtLocalX(x: number, length: number): number {
+  return Math.min(length - 1, Math.max(0, Math.floor(length / 2 - x)))
+}
+
+/** Ship-space x / z of a world point for a ship at `pose` (inverse of `localToWorld`). */
+export function worldToLocal(point: Vec3, pose: ShipPose): [number, number] {
+  const c = Math.cos(pose.rotationY)
+  const sn = Math.sin(pose.rotationY)
+  const dx = point[0] - pose.position[0]
+  const dz = point[2] - pose.position[2]
+  return [dx * c - dz * sn, dx * sn + dz * c]
+}
+
+/** Which hull section (cell index) of `ship` a world point is over. */
+export function standingCell(ship: PlacedShip, pose: ShipPose, point: Vec3): number {
+  return cellAtLocalX(worldToLocal(point, pose)[0], ship.spec.length)
+}
+
+/** The section the player is on: the manned gun's cell, else the cell under the deck camera (null when neither is known). */
+export function standingCellFor(pov: PovContext, eye: Vec3 | null): number | null {
+  if (!pov.standing) return null
+  const anchors = SHIPS[pov.standing.spec.id].anchors
+  if (pov.deck.station !== null) {
+    const c = anchors.cannons[pov.deck.station]
+    if (c) return c.cell
+  }
+  if (!eye) return null
+  return standingCell(pov.standing, shipWorldTransform(pov.standing, ownBoardOrigin(pov.perspective)), eye)
+}
+
+/** Where to climb aboard after going overboard: the next afloat own ship after `hitUid` in fleet order; the same ship when it is the last afloat. */
+export function overboardNextUid(own: readonly PlacedShip[], hitUid: string): string {
+  return nextAfloatUid(own, hitUid) ?? hitUid
+}
+
+/**
+ * The thrown-overboard beat for an incoming hit on the standing ship, or null when the ball took another section
+ * (or the player's position is unknown). Lost-in-the-storm shots never reach here (they are not hits).
+ */
+export function overboardFor(pov: PovContext, event: CinematicEvent, own: readonly PlacedShip[], eye: Vec3 | null): OverboardBeat | null {
+  if (event.type !== 'shot' || pov.outgoing || !pov.standingHit || !pov.standing) return null
+  if (event.result.outcome !== 'hit' && event.result.outcome !== 'sunk') return null
+  const ship = pov.standing
+  const hitCell = ship.cells.findIndex((c) => c.x === event.result.coord.x && c.y === event.result.coord.y)
+  const mine = standingCellFor(pov, eye)
+  if (hitCell < 0 || mine === null || mine !== hitCell) return null
+  const pose = shipWorldTransform(ship, ownBoardOrigin(pov.perspective))
+  const anchors = SHIPS[ship.spec.id].anchors
+  const [lx, lz] = eye ? worldToLocal(eye, pose) : [ship.spec.length / 2 - (hitCell + 0.5), 0]
+  const side = lz < 0 ? -1 : 1
+  const point: Vec3 = eye ?? localToWorld([lx, anchors.deckY + 0.17, 0], pose)
+  const splash = localToWorld([lx, 0, side * (anchors.hull.beam / 2 + 0.6)], pose)
+  return { cell: hitCell, nextUid: overboardNextUid(own, ship.uid), point, splashAt: [splash[0], BOARD_LAYOUT.surfaceY, splash[2]], boarded: false }
 }

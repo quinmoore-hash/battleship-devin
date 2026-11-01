@@ -16,6 +16,7 @@ export type BeatName =
   | 'sink' // the dying ship, slow-mo in the middle
   | 'flyover' // battle-start / victory fly-by
   | 'hold'
+  | 'overboard' // on deck: the ball took the section the player stood on — tumble into the sea, a moment in the water
 
 export interface Beat {
   name: BeatName
@@ -43,8 +44,11 @@ export interface Sequence {
   pov?: boolean
 }
 
+/** Extra seconds a shot sequence runs when the player is thrown overboard (tumble ≈ 35 %, swim ≈ 50 %, fade ≈ 15 %); reduced motion: a quick fade. */
+export const OVERBOARD_SECONDS = { full: 2.9, fast: 1.2, reduced: 0.5 } as const
+
 /** Fraction of `full` each beat of a shot takes; sums to 1. */
-export const SHOT_BEATS: Record<Exclude<BeatName, 'sink' | 'flyover' | 'hold'>, number> = {
+export const SHOT_BEATS: Record<Exclude<BeatName, 'sink' | 'flyover' | 'hold' | 'overboard'>, number> = {
   approach: 0.2,
   fire: 0.1,
   flight: 0.22,
@@ -63,7 +67,7 @@ function beatsFrom(parts: [BeatName, number][], total: number): Beat[] {
   })
 }
 
-export function buildSequence(event: CinematicEvent, level: CinematicsLevel, reducedMotion = false, budget: Budget = 'high', pov = false): Sequence {
+export function buildSequence(event: CinematicEvent, level: CinematicsLevel, reducedMotion = false, budget: Budget = 'high', pov = false, overboard = false): Sequence {
   const timing = CINEMATIC_TIMING[event.type]
   const duration = level === 'off' ? 0 : timing[level]
   const speedScale = level === 'off' ? Infinity : timing.full / duration
@@ -71,14 +75,17 @@ export function buildSequence(event: CinematicEvent, level: CinematicsLevel, red
   const base = { type: event.type, level, budget, duration, speedScale, reducedMotion, ...(pov ? { pov: true } : {}) }
   if (level === 'off') return { ...base, beats: [] }
   switch (event.type) {
-    case 'shot':
-      return {
-        ...base,
-        beats: beatsFrom(
-          (Object.keys(SHOT_BEATS) as (keyof typeof SHOT_BEATS)[]).map((k) => [k, SHOT_BEATS[k]]),
-          duration,
-        ),
-      }
+    case 'shot': {
+      const parts = (Object.keys(SHOT_BEATS) as (keyof typeof SHOT_BEATS)[]).map((k): [BeatName, number] => [k, SHOT_BEATS[k]])
+      if (!(pov && overboard)) return { ...base, beats: beatsFrom(parts, duration) }
+      // the overboard beat slots in between impact and return and extends the sequence by its own length
+      const extra = reducedMotion ? OVERBOARD_SECONDS.reduced : level === 'full' ? OVERBOARD_SECONDS.full : OVERBOARD_SECONDS.fast
+      const beats = beatsFrom(parts, duration)
+      const ret = beats[beats.length - 1]
+      ret.start += extra
+      beats.splice(beats.length - 1, 0, { name: 'overboard', start: ret.start - extra, duration: extra })
+      return { ...base, duration: duration + extra, beats }
+    }
     case 'sink': {
       const sink = sinkTimeline(level)
       const slow = !reducedMotion && budget === 'high' && sink.slowMo ? sink.slowMo : undefined

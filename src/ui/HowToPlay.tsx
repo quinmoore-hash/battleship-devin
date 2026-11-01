@@ -62,7 +62,11 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           the very muzzle you stand behind (while walking, the nearest gun that bears fires for you). No free aim: the same odds as the
           overview. Salvo counts the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) and Spyglass (<kbd>G</kbd>) work from a gun — pick
           the square on the chart — and a stormy sea still swallows its 30 %. <kbd>E</kbd> again steps away. The enemy's balls splash around
-          you or strike your hull; when your ship goes down you wake on the next one (<kbd>Tab</kbd> to choose). Each captain in Two captains
+          you or strike your hull. When a gun fires — yours or theirs — the camera rides the ball to where it lands and comes back to the deck
+          (Fast cuts, Off stays put; <kbd>V</kbd> mid-flight returns to the overview). A hit on another section of your ship tears that section
+          open: planks tumble into the sea and it burns for the rest of the fight. A hit on the very section you stand on throws you overboard — a
+          splash, a moment in the water, and you climb aboard your next afloat ship. When your ship goes down you wake on the next one
+          (<kbd>Tab</kbd> to choose). Each captain in Two captains
           gets their own deck. Not available without 3D.
         </dd>
         <dt>Sky &amp; sea (looks only)</dt>

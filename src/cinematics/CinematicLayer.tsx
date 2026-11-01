@@ -11,7 +11,7 @@ import { ParticleBurst } from '../vfx/ParticleFx'
 import { Broadside, type BroadsideHandle } from '../vfx/cannon/Broadside'
 import type { BroadsideShot } from '../vfx/cannon/ballistics'
 import { Splash } from '../vfx/cannon/Splash'
-import { Fire, ImpactFlash, Smoke, SplinterBurst } from '../vfx/damage'
+import { Fire, HullBreach, ImpactFlash, Smoke, SplinterBurst } from '../vfx/damage'
 import { seededRandom } from '../vfx/random'
 import { Bubbles, Debris, HullWash, Steam, Whirlpool, debrisPieces, lastHitIndex, placedShipSeed, placedSinkPose, sinkBias } from '../vfx/sinking'
 import { ownBoardOrigin, type ShotPlan } from './battery'
@@ -26,15 +26,22 @@ export interface CinematicLayerProps {
 }
 
 type Residual =
-  | { id: number; kind: 'splash'; position: Vec3; seed: number; scale: number }
+  | { id: number; kind: 'splash'; position: Vec3; seed: number; scale: number; delay?: number }
   | { id: number; kind: 'hit'; position: Vec3; normal: Vec3; seed: number; scale: number }
   | { id: number; kind: 'burn'; position: Vec3; seed: number; born: number; deck?: boolean }
+  /** A section of the ship the player stands on breaks up: rail and plank chunks tumble into the sea, splashes where they land. */
+  | { id: number; kind: 'breakup'; position: Vec3; normal: Vec3; seed: number }
+  /** The charred, ragged gap that section leaves for the rest of the game. */
+  | { id: number; kind: 'gap'; position: Vec3; normal: Vec3; seed: number }
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
 type NewResidual = DistributiveOmit<Residual, 'id'>
 
 const DEFAULT_LIVERY: Record<Player, Livery> = { human: 'pirate', enemy: 'navy' }
 const BURN_SECONDS = 4.5
+/** On-deck blaze at a hit section: full for this long, then it dims to `EMBERS` of its size and stays. */
+const DECK_BLAZE_SECONDS = 10
+const EMBERS = 0.4
 /** A shot lost in the storm only shows a muted splash where it went astray: no marker, no impact, no fire. */
 const LOST_SPLASH_SCALE = 0.55
 /** Fireworks budget: bursts × particles. */
@@ -137,6 +144,15 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
       else if (plan.result.outcome === 'lost') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed, scale: LOST_SPLASH_SCALE })
       else {
         add({ kind: 'hit', position: point, normal: plan.normal, seed, scale: standingHit ? 1.6 : 1 })
+        const ob = active.pov?.overboard
+        if (ob) {
+          // the ball took the player's own section: splinters burst where they stood, the sea closes over them a moment later
+          add({ kind: 'hit', position: ob.point, normal: [0, 1, 0], seed: seed + 7, scale: 1.3 })
+          add({ kind: 'splash', position: ob.splashAt, seed: seed + 3, scale: 1.2, delay: (active.seq.beats.find((b) => b.name === 'overboard')?.duration ?? 1) * 0.3 })
+        } else if (standingHit) {
+          add({ kind: 'breakup', position: point, normal: plan.normal, seed: seed + 5 })
+          add({ kind: 'gap', position: point, normal: plan.normal, seed: seed + 9 })
+        }
         if (ignite) {
           const v = plan.victim
           const deckPoint: Vec3 | null = standingHit && v ? [plan.cellCenter[0], v.pose.position[1] + SHIPS[v.ship.spec.id].anchors.deckY, plan.cellCenter[2]] : null
@@ -144,7 +160,7 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
         }
       }
     },
-    [plan, seed, add, director, active.id, ignite, standingHit, nearby],
+    [plan, seed, add, director, active.id, ignite, standingHit, nearby, active.pov?.overboard, active.seq.beats],
   )
 
   if (!fired || shots.length === 0) return null
@@ -152,9 +168,43 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
 }
 
 function ResidualFx({ fx, onDone }: { fx: Residual; onDone: () => void }) {
-  if (fx.kind === 'splash') return <Splash position={fx.position} seed={fx.seed} scale={fx.scale} onDone={onDone} />
+  if (fx.kind === 'splash') return <Splash position={fx.position} seed={fx.seed} scale={fx.scale} delay={fx.delay} onDone={onDone} />
   if (fx.kind === 'hit') return <HitFx fx={fx} onDone={onDone} />
+  if (fx.kind === 'breakup') return <BreakupFx fx={fx} onDone={onDone} />
+  if (fx.kind === 'gap') return <HullBreach position={fx.position} normal={fx.normal} seed={fx.seed} radius={0.26} glowing />
   return <BurnFx fx={fx} onDone={onDone} />
+}
+
+/** Budget: one instanced shard mesh (12 big chunks) + two small splashes, all transient; the gap is one persistent decal. */
+const BREAKUP_SPLASHES: [number, number, number][] = [
+  [0.55, 0.35, 0.6],
+  [1.0, -0.3, 0.55],
+]
+
+/** A hull section of the standing ship breaks up: bulwark and plank chunks tumble out and down into the sea, each landing with a splash. */
+function BreakupFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'breakup' }>; onDone: () => void }) {
+  const done = useRef(0)
+  const one = () => {
+    done.current++
+    if (done.current >= 1 + BREAKUP_SPLASHES.length) onDone()
+  }
+  const n = fx.normal
+  const out: Vec3 = [n[0], 0.35, n[2]]
+  return (
+    <>
+      <SplinterBurst position={fx.position} normal={out} seed={fx.seed} count={12} size={3.4} speed={[0.9, 2.6]} waterY={BOARD_LAYOUT.surfaceY} onDone={one} />
+      {BREAKUP_SPLASHES.map(([delay, along, outward], i) => (
+        <Splash
+          key={i}
+          position={[fx.position[0] + n[0] * outward - n[2] * along, BOARD_LAYOUT.surfaceY, fx.position[2] + n[2] * outward + n[0] * along]}
+          seed={fx.seed + i}
+          scale={0.55}
+          delay={delay}
+          onDone={one}
+        />
+      ))}
+    </>
+  )
 }
 
 function HitFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'hit' }>; onDone: () => void }) {
@@ -179,6 +229,13 @@ function BurnFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'burn' }>; onDon
   useFrame((_, delta) => {
     if (finished.current) return
     t.current += Math.min(delta, 0.1)
+    if (fx.deck) {
+      // the section the player's ship lost keeps burning for the rest of the game: full blaze, then embers after ~10 s (cheaper)
+      const a = t.current
+      const k = a < 0.6 ? a / 0.6 : a < DECK_BLAZE_SECONDS ? 1 : Math.max(EMBERS, 1 - (a - DECK_BLAZE_SECONDS) / 3)
+      group.current?.scale.setScalar(k)
+      return
+    }
     const u = t.current / BURN_SECONDS
     const k = u < 0.15 ? u / 0.15 : Math.max(0.001, 1 - (u - 0.15) / 0.85)
     group.current?.scale.setScalar(k)

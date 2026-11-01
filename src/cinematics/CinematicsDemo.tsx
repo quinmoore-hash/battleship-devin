@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { useStore } from 'zustand'
 import { FLEET, isSunk, randomPlacement, type Coord, type PlacedShip, type Player, type ShotResult } from '../engine'
 import { OceanScene } from '../scene'
-import { DECK_FOV, DECK_NEAR, EYE_HEIGHT } from '../deck/contract'
+import { DECK_FOV, DECK_NEAR, EYE_HEIGHT, deckCameraLease } from '../deck/contract'
 import { BOARD_LAYOUT, boardCenter, cellToWorld, type Vec3 } from '../scene/layout'
 import { Fleet, SHIPS, shipWorldTransform } from '../ships'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
@@ -15,7 +15,7 @@ import { CinematicCamera } from './CinematicCamera'
 import { CinematicLayer } from './CinematicLayer'
 import { Letterbox } from './Letterbox'
 import { director } from './director'
-import { readDeckState, standingShip } from './pov'
+import { deckEye, readDeckState, standingCell, standingShip } from './pov'
 import { localToWorld } from '../vfx/cannon/anchors'
 import type { CinematicEvent } from './types'
 
@@ -154,6 +154,18 @@ export function CinematicsDemo() {
     if (result.outcome === 'sunk') await director.play({ type: 'sink', owner: 'human', shipId: ship.spec.id, uid: ship.uid }, level)
   }
 
+  /** Enemy ball into the very section DeckEye stands on: the thrown-overboard beat (tumble, swim, fade, climb aboard the next ship). */
+  const enemyHitMyCell = async () => {
+    const ship = standingShip(human.ships, readDeckState())
+    if (!ship) return say('no standing ship to hit')
+    const pose = shipWorldTransform(ship, BOARD_LAYOUT.player.origin)
+    const cell = ship.cells[standingCell(ship, pose, deckEye.position ?? deckEyePosition(ship))]
+    if (ship.hits.some((h) => h.x === cell.x && h.y === cell.y)) return say('my section is already hit')
+    const result: ShotResult = { coord: cell, outcome: ship.hits.length + 1 >= ship.spec.length ? 'sunk' : 'hit', shipId: ship.spec.id, shipUid: ship.uid }
+    await playShot('enemy', result)
+    if (result.outcome === 'sunk') await director.play({ type: 'sink', owner: 'human', shipId: ship.spec.id, uid: ship.uid }, level)
+  }
+
   const fire = async (by: Player, outcome: 'hit' | 'miss' | 'sunk') => {
     const side = by === 'human' ? enemy : human
     let result = pickTarget(side, outcome)
@@ -216,6 +228,9 @@ export function CinematicsDemo() {
         <button style={btn} onClick={enemyHitDeck} data-testid="enemy-hit-deck">
           Enemy shot: hit my ship
         </button>
+        <button style={btn} onClick={enemyHitMyCell} data-testid="enemy-hit-my-cell">
+          Enemy shot: hit my section
+        </button>
         <button style={btn} onClick={() => fire('human', 'hit')} data-testid="fire-hit">
           Fire: hit
         </button>
@@ -267,6 +282,7 @@ function DeckEye({ ships }: { ships: PlacedShip[] }) {
   const target = useRef(new THREE.Vector3())
   const last = useRef<Vec3 | null>(null)
   useFrame((state) => {
+    if (deckCameraLease.owner === 'director') return // the director borrowed the camera (follow-cam / overboard)
     const ship = standingShip(ships, readDeckState())
     const camera = state.camera as THREE.PerspectiveCamera
     if (!ship) return

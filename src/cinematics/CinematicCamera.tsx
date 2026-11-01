@@ -5,7 +5,9 @@ import type { Player } from '../engine'
 import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
 import { CAMERA_SHOTS, battleFraming, fitFov } from '../scene/CameraRig'
 import { SHIPS, shipWorldTransform } from '../ships'
+import { DECK_FOV, deckBus, deckCameraLease } from '../deck/contract'
 import { ownBoardOrigin } from './battery'
+import { POV, deckEye, readDeckState, shipWorldPosition, type OverboardBeat } from './pov'
 import { director as defaultDirector, type ActiveCinematic, type Director } from './director'
 import { beatAt, type Beat, type BeatState } from './sequence'
 import { follow, smoothstep } from './shared'
@@ -40,6 +42,12 @@ const tmp = {
 const set = (v: THREE.Vector3, p: Vec3) => v.set(p[0], p[1], p[2])
 const beatScratch: BeatState = { beat: null, k: 1, index: -1 }
 
+function releaseLease() {
+  if (deckCameraLease.owner !== 'director') return
+  deckCameraLease.owner = 'deck'
+  deckBus.emit({ type: 'camera', owner: 'deck' })
+}
+
 function horizontal(out: THREE.Vector3, from: Vec3, to: Vec3): THREE.Vector3 {
   out.set(to[0] - from[0], 0, to[2] - from[2])
   return out.lengthSq() > 1e-6 ? out.normalize() : out.set(0, 0, -1)
@@ -58,14 +66,127 @@ const overviewPoses: Record<Player, Pose> = {
 }
 
 /**
+ * On deck the follow-cam is tighter than the overview's: a chase position just behind and above the ball from the muzzle to the
+ * fall of shot, a short hold on the result, then back to the deck pose the director borrowed. Thrown overboard: the eye tumbles
+ * off the rail into the sea (sky, then water), bobs half-submerged looking back at the ship, and holds under the fade.
+ */
+function povShotPose(out: Pose, active: ActiveCinematic, plan: NonNullable<ActiveCinematic['plan']>, beat: Beat | null, k: number, start: Pose, deck: DeckPov): boolean {
+  const m = plan.muzzles
+  const M = tmp.a.set(0, 0, 0)
+  if (m.length) {
+    for (const mz of m) M.add(set(tmp.b, mz.position))
+    M.multiplyScalar(1 / m.length)
+  } else if (plan.shooter) set(M, plan.shooter.position)
+  else set(M, plan.impact).add(tmp.b.set(0, 1.5, plan.by === 'enemy' ? -9 : 9))
+  const fireDir = horizontal(tmp.dir, [M.x, M.y, M.z], plan.impact)
+  const right = tmp.right.set(fireDir.z, 0, -fireDir.x)
+  const outgoing = !!active.pov?.outgoing
+  const behind: Pose = { position: tmp.b, target: tmp.n, fov: 52 }
+  behind.position.copy(M).addScaledVector(fireDir, outgoing ? -1.6 : -3).addScaledVector(right, outgoing ? 0.7 : 1.2).addScaledVector(UP, outgoing ? 0.8 : 1.3)
+  behind.target.copy(M).addScaledVector(fireDir, 5).addScaledVector(UP, 0.2)
+  switch (beat?.name) {
+    case 'approach':
+      lerpPose(out, start, behind, smoothstep(k))
+      return false
+    case 'fire':
+      out.position.copy(behind.position).addScaledVector(fireDir, 0.4 * k)
+      out.target.copy(behind.target)
+      out.fov = behind.fov
+      return false
+    case 'flight': {
+      if (follow.active) {
+        const dir = tmp.n.copy(follow.velocity)
+        if (dir.lengthSq() < 1e-6) dir.copy(fireDir)
+        dir.normalize()
+        const h = tmp.side.set(dir.x, 0, dir.z)
+        if (h.lengthSq() < 1e-6) h.copy(fireDir)
+        h.normalize()
+        out.position.copy(follow.position).addScaledVector(h, -2.2).addScaledVector(right, 0.6).addScaledVector(UP, 0.9)
+        out.target.copy(follow.position).addScaledVector(dir, 2.5)
+      } else {
+        const B = tmp.n.copy(M).lerp(set(tmp.side, plan.impact), k)
+        B.y += Math.sin(Math.PI * k) * 2
+        out.position.copy(B).addScaledVector(fireDir, -2.2).addScaledVector(right, 0.6).addScaledVector(UP, 0.9)
+        out.target.copy(B).addScaledVector(fireDir, 2.5)
+      }
+      out.fov = 55
+      return false
+    }
+    case 'impact': {
+      const I = set(tmp.a, plan.impact)
+      const n = set(tmp.n, plan.normal)
+      const side = tmp.side.crossVectors(UP, n).normalize()
+      const miss = plan.result.outcome === 'miss' || plan.result.outcome === 'lost'
+      const hull = plan.victim ? SHIPS[plan.victim.ship.spec.id].anchors.hull : null
+      const r = miss ? 3.6 : hull ? hull.beam * 0.9 + 2.2 : 2.6
+      const dir = tmp.b.copy(n).multiplyScalar(hull ? 0.9 : 0.75).addScaledVector(side, hull ? 0.45 : 0.65).normalize().applyAxisAngle(UP, k * 0.3)
+      out.position.copy(I).addScaledVector(dir, r).addScaledVector(UP, miss ? 1.4 : (hull ? hull.height * 0.45 + 0.5 : 0.9) + k * 0.2)
+      out.target.copy(I).addScaledVector(UP, miss ? 0.1 : hull ? hull.height * 0.2 + 0.15 : 0.2)
+      out.fov = miss ? 50 : 44
+      return false
+    }
+    case 'overboard': {
+      const ob = deck.overboard
+      if (!ob) {
+        lerpPose(out, start, deck.home, smoothstep(k))
+        return false
+      }
+      const P = set(tmp.a, ob.point)
+      const W = set(tmp.b, ob.splashAt)
+      const shipAt = active.pov?.standing ? shipWorldPosition(active.pov.standing, active.pov.perspective) : ob.point
+      if (k < POV.overboardTumble) {
+        // off the rail: up and out, then down to the water, the view swinging from the deck to the sky and into the sea
+        const u = k / POV.overboardTumble
+        out.position.lerpVectors(P, W, smoothstep(u))
+        out.position.y = THREE.MathUtils.lerp(P.y, W.y + 0.08, u * u) + Math.sin(Math.PI * u) * 0.35
+        const skyT = tmp.n.set(P.x, P.y + 6, P.z).addScaledVector(tmp.side.subVectors(W, P).setY(0), 2)
+        if (u < 0.5) out.target.lerpVectors(start.target, skyT, smoothstep(u / 0.5))
+        else out.target.lerpVectors(skyT, tmp.side.set(W.x, W.y - 0.4, W.z), smoothstep((u - 0.5) / 0.5))
+        out.fov = THREE.MathUtils.lerp(deck.home.fov, 80, u)
+        return false
+      }
+      // in the water: half-submerged, bobbing, looking back at the ship
+      out.position.copy(W)
+      out.position.y = W.y + 0.07 + Math.sin(deck.t * 2.1) * 0.03
+      out.target.set(shipAt[0], shipAt[1] + 0.45, shipAt[2])
+      out.fov = 72
+      return false
+    }
+    default:
+      if (deck.overboard) {
+        // under the fade: hold the water view, the controller takes over once the player has climbed aboard
+        out.position.copy(start.position)
+        out.target.copy(start.target)
+        out.fov = start.fov
+        return true
+      }
+      lerpPose(out, start, deck.home, smoothstep(k))
+      return false
+  }
+}
+
+/**
  * The wanted camera pose for `active` at `beat` / `k`. `start` is the camera pose when the beat began, so
  * eases run from wherever the camera actually was. Returns `cut` = true when the pose should be applied
  * without smoothing (a hard cut). `perspective` is the side the camera films from (hot-seat: the active captain);
  * the overview / return shots and the victory orbit use that board.
  */
-export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null, k: number, start: Pose, perspective: Player = 'human'): boolean {
+export interface DeckPov {
+  /** The deck camera when the director borrowed it: where `return` eases back to. */
+  home: Pose
+  overboard: OverboardBeat | null
+  /** Seconds since the sequence started (the swim bob). */
+  t: number
+}
+
+export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null, k: number, start: Pose, perspective: Player = 'human', deck: DeckPov | null = null): boolean {
   const { event, plan } = active
   const overviewPose = overviewPoses[perspective]
+  if (deck && event.type === 'shot' && plan) {
+    const cut = povShotPose(out, active, plan, beat, k, start, deck)
+    // reduced motion on deck: cuts instead of moves
+    return cut || active.seq.reducedMotion
+  }
   if (event.type === 'shot' && plan) {
     // the AI fires from the unseen gun line (no shooter); a hot-seat captain's Navy ships are real and filmed like the pirates'
     const enemy = plan.by === 'enemy' && plan.shooter === null
@@ -200,17 +321,41 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
   const shakeT = useRef(0)
   const offset = useRef(new THREE.Vector3())
 
+  const home = useRef<{ id: number; pose: Pose } | null>(null)
   useFrame((state, delta) => {
     const s = director.store.getState()
     const active = s.active
     const camera = state.camera as THREE.PerspectiveCamera
     battleFraming(camera.aspect, state.size.width, overviewPoses.human)
     battleFraming(camera.aspect, state.size.width, overviewPoses.enemy, 'battle-far')
-    if (!active || active.pov) {
-      // on deck the deck controller owns the camera; the director only drives VFX / audio and the deck bus
+    const deckOn = readDeckState().on
+    if (!active) {
+      // idle on deck: remember where the player's eye is (the director maps it to a hull section for the overboard beat)
+      deckEye.position = deckOn ? [camera.position.x, camera.position.y, camera.position.z] : null
       lastKey.current = ''
       shake.current = 0
+      home.current = null
       return
+    }
+    // on deck the director only drives the camera for shots it borrowed it for (sinks / horns / victories leave it with the deck);
+    // V mid-sequence drops the deck → the sequence finishes on the overview path and the lease is handed back
+    const borrowed = deckCameraLease.owner === 'director'
+    const povDrive = !!active.pov && active.event.type === 'shot' && deckOn && borrowed
+    if (active.pov && !povDrive) {
+      if (borrowed) releaseLease()
+      if (deckOn) {
+        lastKey.current = ''
+        shake.current = 0
+        return
+      }
+    } else if (!active.pov && deckOn) {
+      // V mid-overview-sequence: the deck controller owns the camera now
+      lastKey.current = ''
+      return
+    }
+    if (povDrive && home.current?.id !== active.id) {
+      camera.getWorldDirection(tmp.a)
+      home.current = { id: active.id, pose: { position: camera.position.clone(), target: camera.position.clone().addScaledVector(tmp.a, 12), fov: camera.fov } }
     }
     const dt = Math.min(delta, 0.1)
     const { beat, k } = beatAt(active.seq, active.clock.t, beatScratch)
@@ -225,8 +370,9 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       smooth.current.target.copy(start.current.target)
       smooth.current.fov = camera.fov
     }
-    const cut = wantedPose(want.current, active, beat, k, start.current, s.perspective)
-    const lambda = beat?.name === 'flight' ? 9 : beat?.name === 'impact' ? 5 : 14
+    const deckPov: DeckPov | null = povDrive && home.current ? { home: home.current.pose, overboard: active.pov?.overboard ?? null, t: active.clock.t } : null
+    const cut = wantedPose(want.current, active, beat, k, start.current, s.perspective, deckPov)
+    const lambda = beat?.name === 'flight' ? 9 : beat?.name === 'impact' ? 5 : beat?.name === 'overboard' ? 16 : 14
     if (cut) {
       smooth.current.position.copy(want.current.position)
       smooth.current.target.copy(want.current.target)
@@ -249,11 +395,21 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
     offset.current.set(Math.sin(t * 37.1) * amp, Math.sin(t * 51.7 + 1.3) * amp * 0.8, Math.sin(t * 43.3 + 2.1) * amp * 0.6)
 
     camera.position.copy(smooth.current.position).add(offset.current)
-    if (camera.position.y < MIN_Y) camera.position.y = MIN_Y
+    if (!deckPov && camera.position.y < MIN_Y) camera.position.y = MIN_Y
     camera.lookAt(smooth.current.target)
+    if (deckPov?.overboard && beat?.name === 'overboard' && k < POV.overboardTumble && !active.seq.reducedMotion) {
+      // the tumble: roll about the view axis, hardest halfway down
+      camera.rotateZ(Math.sin((k / POV.overboardTumble) * Math.PI) * 1.1)
+    }
     if (Math.abs(camera.fov - smooth.current.fov) > 1e-3) {
-      camera.fov = fitFov(smooth.current.fov, camera.aspect)
+      camera.fov = deckPov ? smooth.current.fov : fitFov(smooth.current.fov, camera.aspect)
       camera.updateProjectionMatrix()
+    }
+    // back at the deck pose: hand the camera back (the overboard beat hands it back under the fade, from the director)
+    if (deckPov && !deckPov.overboard && beat?.name === 'return' && k >= 0.999) {
+      camera.fov = DECK_FOV
+      camera.updateProjectionMatrix()
+      releaseLease()
     }
   })
   return null

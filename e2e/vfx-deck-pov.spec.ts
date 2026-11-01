@@ -42,3 +42,33 @@ test('on deck: an incoming hit is visible at eye height and the manned gun fires
   await expect(page.getByTestId('status')).toContainText('3 done', { timeout: 30_000 })
   expect(errors).toEqual([])
 })
+
+test('on deck: a ball into my own section throws me overboard — follow-cam, tumble, swim, then the next ship', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text())
+  })
+  await page.goto('/?cinematics-demo&quality=low')
+  await expect(page.getByTestId('cinematics-panel')).toBeVisible()
+  await expect(page.getByTestId('ocean-canvas').locator('canvas')).toBeVisible()
+  await page.getByTestId('deck-toggle').check()
+  await page.getByTestId('level').selectOption('full')
+  await page.waitForTimeout(500)
+
+  await page.getByTestId('enemy-hit-my-cell').click()
+  await expect(page.getByTestId('status')).toContainText('playing')
+  // the director borrowed the camera: letterbox on, follow-cam riding the ball in
+  await expect(page.getByTestId('letterbox')).toHaveAttribute('data-visible', 'true', { timeout: 20_000 })
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: 'test-results/deck-overboard-followcam.png' })
+  await page.waitForTimeout(1800)
+  await page.screenshot({ path: 'test-results/deck-overboard-tumble.png' })
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: 'test-results/deck-overboard-swim.png' })
+  await expect(page.getByTestId('status')).toContainText('1 done', { timeout: 40_000 })
+  await expect(page.getByTestId('letterbox')).toHaveAttribute('data-visible', 'false', { timeout: 10_000 })
+  await page.waitForTimeout(600)
+  await page.screenshot({ path: 'test-results/deck-overboard-after.png' })
+  expect(errors).toEqual([])
+})
