@@ -51,7 +51,7 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
         <dt>On deck</dt>
         <dd data-testid="howto-on-deck">
           Press <kbd>V</kbd> (or <em>On deck</em>) at any moment of the battle — your turn, the enemy's, mid-cinematic — to stand on one of your own
-          ships; press it again for the overview. Toggling never changes the game. <kbd>W</kbd>
+          ships; press it again for the overview. Toggling never changes the game. Your crew work the deck around you — a hit throws the nearest hand overboard and a sinking ship empties its deck (Settings → Crew turns them off). <kbd>W</kbd>
           <kbd>A</kbd>
           <kbd>S</kbd>
           <kbd>D</kbd> walk, mouse looks (click the sea to grab the mouse, <kbd>Esc</kbd> lets it go), <kbd>Shift</kbd> runs, <kbd>Tab</kbd> hops to your

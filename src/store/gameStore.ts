@@ -76,6 +76,8 @@ export interface Settings extends DeckSettings {
   sfxVolume: number
   musicVolume: number
   reducedMotion: boolean
+  /** Pirate crew on the decks (BUG-709); off removes every figure. */
+  crew: boolean
   cinematics: CinematicsLevel
   /** Render quality (see `src/perf`). Persisted by the perf store. */
   quality: QualitySetting
@@ -255,11 +257,11 @@ export interface GameState extends DeckActions {
 
 let eventId = 0
 
-const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false, timeOfDay: 'golden', weather: 'calm', deckSensitivity: 1, deckInvertY: false }
+const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false, timeOfDay: 'golden', weather: 'calm', deckSensitivity: 1, deckInvertY: false, crew: true }
 
 /** Settings the player chose that survive a reload (one key, `battleship-devin.settings`). `reducedMotion` defaults to the OS preference. */
 export const SETTINGS_STORAGE_KEY = 'battleship-devin.settings'
-const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind', 'reducedMotion', 'quality', 'timeOfDay', 'weather', 'deckSensitivity', 'deckInvertY']
+const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind', 'reducedMotion', 'quality', 'timeOfDay', 'weather', 'deckSensitivity', 'deckInvertY', 'crew']
 
 /** OS preference — only the default; the player's explicit toggle (persisted) wins afterwards (BUG-314). */
 export const prefersReducedMotion = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -287,6 +289,7 @@ export function loadSettings(
     if (isSkyWeather(p.weather)) out.weather = p.weather
     if (typeof p.deckSensitivity === 'number' && p.deckSensitivity >= 0.2 && p.deckSensitivity <= 3) out.deckSensitivity = p.deckSensitivity
     if (typeof p.deckInvertY === 'boolean') out.deckInvertY = p.deckInvertY
+    if (typeof p.crew === 'boolean') out.crew = p.crew
   } catch {
     /* corrupt or unavailable storage: defaults */
   }

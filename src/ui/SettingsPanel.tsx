@@ -89,6 +89,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={settings.deckInvertY} data-testid="setting-deck-invert-y" onChange={(e) => updateSettings({ deckInvertY: e.target.checked })} />
             <span>Invert Y (mouse look)</span>
           </label>
+          <label className="row row-check">
+            <input type="checkbox" checked={settings.crew} data-testid="setting-crew" onChange={(e) => updateSettings({ crew: e.target.checked })} />
+            <span>Crew on deck (pirates working the ships; off removes them)</span>
+          </label>
           <p className="muted small">Press V in battle to stand on your own deck. Same shots, same odds — just a different seat.</p>
         </fieldset>
         <fieldset>
