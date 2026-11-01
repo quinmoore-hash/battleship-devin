@@ -6,6 +6,7 @@ import { ExtrasLayer, MenuRules, MenuStats, useGameTimeOfDay, useGameWeather } f
 import { OceanScene } from './scene'
 import { useGameStore } from './store/gameStore'
 import { GameUI } from './ui'
+import { bindDeckAudio } from './cinematics/deckAudio'
 import { bindCinematics, directorPlaysAudio } from './ui/cinematicsBinding'
 import { GameWorld } from './ui/world/GameWorld'
 import { A11yBootstrap } from './perf/a11y/A11yBootstrap'
@@ -104,7 +105,9 @@ function Game() {
   useEffect(() => {
     const unbindCinematics = bindCinematics()
     const unbindAudio = bindGameAudio({ director: directorPlaysAudio })
+    const unbindDeck = bindDeckAudio()
     return () => {
+      unbindDeck()
       unbindAudio()
       unbindCinematics()
     }

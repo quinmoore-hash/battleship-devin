@@ -35,6 +35,9 @@ export type CanonicalSfx =
   | 'crew-groan'
   | 'crew-brace'
   | 'crew-panic'
+  /** On deck: battle-start horn, water over the rail while your ship sinks. */
+  | 'horn'
+  | 'water-rush'
 
 /** Names used by the pre-pirate UI (`src/ui`). They keep working and map onto the new set. */
 export type LegacySfx = 'fire' | 'hit' | 'miss' | 'sunk' | 'victory' | 'defeat' | 'place'
@@ -60,6 +63,8 @@ export function resolveSfx(name: Sfx): CanonicalSfx {
 const CANONICAL_FILES: Record<CanonicalSfx, readonly string[]> = {
   'cannon-fire': ['cannon-fire-1', 'cannon-fire-2', 'cannon-fire-3'],
   'cannon-whistle': ['cannon-whistle'],
+  horn: ['horn'],
+  'water-rush': ['water-rush'],
   'splash-miss': ['splash-miss-1', 'splash-miss-2', 'splash-miss-3'],
   'impact-wood': ['impact-wood-1', 'impact-wood-2', 'impact-wood-3'],
   'fire-loop': ['fire-loop'],

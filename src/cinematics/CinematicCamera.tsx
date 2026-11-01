@@ -206,7 +206,8 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
     const camera = state.camera as THREE.PerspectiveCamera
     battleFraming(camera.aspect, state.size.width, overviewPoses.human)
     battleFraming(camera.aspect, state.size.width, overviewPoses.enemy, 'battle-far')
-    if (!active) {
+    if (!active || active.pov) {
+      // on deck the deck controller owns the camera; the director only drives VFX / audio and the deck bus
       lastKey.current = ''
       shake.current = 0
       return

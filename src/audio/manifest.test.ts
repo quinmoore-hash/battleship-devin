@@ -11,7 +11,7 @@ const GENERATOR = fileURLToPath(new URL('../../scripts/generate-audio.mjs', impo
 const REQUIRED: CanonicalSfx[] = [
   'cannon-fire', 'cannon-whistle', 'splash-miss', 'impact-wood', 'fire-loop', 'hull-creak', 'mast-snap', 'sinking-groan', 'bubbles',
   'crew-shout-hit', 'crew-cheer', 'bell-victory', 'drum-defeat', 'ui-click', 'ui-hover', 'place-ship', 'rotate-ship', 'sail-flap', 'thunder', 'gull',
-  'footstep', 'footstep-land', 'rope-strain', 'water-lap', 'wind-sails', 'crew-call', 'gun-call-run-out', 'gun-call-fire', 'crew-groan', 'crew-brace', 'crew-panic',
+  'footstep', 'footstep-land', 'rope-strain', 'water-lap', 'wind-sails', 'crew-call', 'gun-call-run-out', 'gun-call-fire', 'crew-groan', 'crew-brace', 'crew-panic', 'horn', 'water-rush',
 ]
 
 describe('audio manifest', () => {

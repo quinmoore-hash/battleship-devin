@@ -39,6 +39,8 @@ export interface Sequence {
   /** Normalised windows: [start, end] of real time at which slow motion plays (sink only). */
   slowMo?: { from: number; to: number; scale: number }
   reducedMotion: boolean
+  /** Built while the player stood on deck: beats and timings are identical, but the camera is not driven. */
+  pov?: boolean
 }
 
 /** Fraction of `full` each beat of a shot takes; sums to 1. */
@@ -61,11 +63,12 @@ function beatsFrom(parts: [BeatName, number][], total: number): Beat[] {
   })
 }
 
-export function buildSequence(event: CinematicEvent, level: CinematicsLevel, reducedMotion = false, budget: Budget = 'high'): Sequence {
+export function buildSequence(event: CinematicEvent, level: CinematicsLevel, reducedMotion = false, budget: Budget = 'high', pov = false): Sequence {
   const timing = CINEMATIC_TIMING[event.type]
   const duration = level === 'off' ? 0 : timing[level]
   const speedScale = level === 'off' ? Infinity : timing.full / duration
-  const base = { type: event.type, level, budget, duration, speedScale, reducedMotion }
+  // the POV flag is only ever added, never set to false, so overview sequences keep today's exact shape
+  const base = { type: event.type, level, budget, duration, speedScale, reducedMotion, ...(pov ? { pov: true } : {}) }
   if (level === 'off') return { ...base, beats: [] }
   switch (event.type) {
     case 'shot':

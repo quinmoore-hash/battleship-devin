@@ -1,9 +1,12 @@
+import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import * as THREE from 'three'
 import { useStore } from 'zustand'
 import { FLEET, isSunk, randomPlacement, type Coord, type PlacedShip, type Player, type ShotResult } from '../engine'
 import { OceanScene } from '../scene'
-import { BOARD_LAYOUT } from '../scene/layout'
-import { Fleet } from '../ships'
+import { DECK_FOV, DECK_NEAR, EYE_HEIGHT } from '../deck/contract'
+import { BOARD_LAYOUT, boardCenter, cellToWorld, type Vec3 } from '../scene/layout'
+import { Fleet, SHIPS, shipWorldTransform } from '../ships'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
 import { GridBuoys } from '../vfx/markers/GridBuoys'
 import { ShotMarkers } from '../vfx/markers/ShotMarkers'
@@ -12,6 +15,8 @@ import { CinematicCamera } from './CinematicCamera'
 import { CinematicLayer } from './CinematicLayer'
 import { Letterbox } from './Letterbox'
 import { director } from './director'
+import { readDeckState, standingShip } from './pov'
+import { localToWorld } from '../vfx/cannon/anchors'
 import type { CinematicEvent } from './types'
 
 interface Side {
@@ -52,6 +57,17 @@ export function CinematicsDemo() {
   const [level, setLevel] = useState<CinematicsLevel>('full')
   const [weather, setWeather] = useState<'calm' | 'stormy'>('calm')
   const [log, setLog] = useState<string[]>([])
+  // "On deck" POV: the demo has no battle (the store keeps `deck` off outside one), so `?deck-pov=<uid>:<station>` fakes the slice for the director
+  const [deck, setDeckOn] = useState(() => readDeckState().on)
+  const setDeck = (on: boolean) => {
+    const url = new URL(location.href)
+    // the frigate has the most readable weather deck at eye height; otherwise the first afloat ship
+    const ship = human.ships.find((s) => s.spec.id === 'frigate' && !isSunk(s)) ?? standingShip(human.ships, readDeckState())
+    if (on) url.searchParams.set('deck-pov', `${ship?.uid ?? ''}:0`)
+    else url.searchParams.delete('deck-pov')
+    history.replaceState(null, '', url)
+    setDeckOn(on)
+  }
   const busy = useStore(director.store, (s) => s.busy)
   const firing = useStore(director.store, (s) => s.firing)
   const sinkProgress = useStore(director.store, (s) => s.sinkProgress)
@@ -120,6 +136,24 @@ export function CinematicsDemo() {
     return { coord: left[left.length - 1], outcome: 'sunk', shipId: ship.spec.id, shipUid: ship.uid }
   }
 
+  /** Enemy ball into the ship the player stands on (first un-hit cell), for the eye-height damage check. */
+  const enemyHitDeck = async () => {
+    const ship = standingShip(human.ships, readDeckState())
+    if (!ship) return say('no standing ship to hit')
+    // the cell farthest from where DeckEye stands (stern), so the blaze is in front of the camera, not under it
+    const eye = deckEyePosition(ship)
+    const open = ship.cells.filter((c) => !ship.hits.some((h) => h.x === c.x && h.y === c.y))
+    const far = (c: Coord) => {
+      const w = cellToWorld(c, BOARD_LAYOUT.player.origin)
+      return (w[0] - eye[0]) ** 2 + (w[2] - eye[2]) ** 2
+    }
+    const cell = open.sort((a, b) => far(b) - far(a))[0]
+    if (!cell) return say('no standing ship to hit')
+    const result: ShotResult = { coord: cell, outcome: ship.hits.length + 1 >= ship.spec.length ? 'sunk' : 'hit', shipId: ship.spec.id, shipUid: ship.uid }
+    await playShot('enemy', result)
+    if (result.outcome === 'sunk') await director.play({ type: 'sink', owner: 'human', shipId: ship.spec.id, uid: ship.uid }, level)
+  }
+
   const fire = async (by: Player, outcome: 'hit' | 'miss' | 'sunk') => {
     const side = by === 'human' ? enemy : human
     let result = pickTarget(side, outcome)
@@ -151,7 +185,8 @@ export function CinematicsDemo() {
 
   return (
     <>
-      <OceanScene view="battle" interactive={!busy} cameraOverride={busy} weather={weather}>
+      <OceanScene view="battle" interactive={!busy && !deck} cameraOverride={busy || deck} weather={weather}>
+        {deck && <DeckEye ships={human.ships} />}
         <GridBuoys origin={BOARD_LAYOUT.player.origin} />
         <GridBuoys origin={BOARD_LAYOUT.enemy.origin} color="#2b3a55" />
         <Fleet ships={human.ships} livery="pirate" boardOrigin={BOARD_LAYOUT.player.origin} firing={firing} sinkProgress={sinkProgress} />
@@ -175,6 +210,12 @@ export function CinematicsDemo() {
         <label>
           <input type="checkbox" checked={reducedMotion} onChange={(e) => updateSettings({ reducedMotion: e.target.checked })} /> reduced motion
         </label>
+        <label>
+          <input type="checkbox" checked={deck} onChange={(e) => setDeck(e.target.checked)} data-testid="deck-toggle" /> On deck (POV)
+        </label>
+        <button style={btn} onClick={enemyHitDeck} data-testid="enemy-hit-deck">
+          Enemy shot: hit my ship
+        </button>
         <button style={btn} onClick={() => fire('human', 'hit')} data-testid="fire-hit">
           Fire: hit
         </button>
@@ -210,4 +251,46 @@ export function CinematicsDemo() {
       </div>
     </>
   )
+}
+
+/** Where DeckEye stands: eye height on the main (weather) deck, just aft of midships and off the centreline mast. */
+function deckEyePosition(ship: PlacedShip): Vec3 {
+  const pose = shipWorldTransform(ship, BOARD_LAYOUT.player.origin)
+  return localToWorld([-0.9, SHIPS[ship.spec.id].anchors.deckY + EYE_HEIGHT, 0.2], pose)
+}
+
+/**
+ * Demo-only stand-in for the deck controller's camera: eye height on the standing ship's quarterdeck, looking at
+ * whatever the director is doing (your gun, the incoming impact) and otherwise along the deck toward the enemy.
+ */
+function DeckEye({ ships }: { ships: PlacedShip[] }) {
+  const target = useRef(new THREE.Vector3())
+  const last = useRef<Vec3 | null>(null)
+  useFrame((state) => {
+    const ship = standingShip(ships, readDeckState())
+    const camera = state.camera as THREE.PerspectiveCamera
+    if (!ship) return
+    const pose = shipWorldTransform(ship, BOARD_LAYOUT.player.origin)
+    const anchors = SHIPS[ship.spec.id].anchors
+    const eye = deckEyePosition(ship)
+    camera.position.set(eye[0], eye[1], eye[2])
+    const active = director.active
+    if (active?.plan) {
+      const cc = active.plan.cellCenter
+      last.current = active.pov?.standingHit
+        ? [cc[0], pose.position[1] + anchors.deckY, cc[2]] // the blaze on the planks at the hit cell
+        : active.plan.impact // outgoing: past the gun at the fall of shot
+    }
+    let look = last.current ?? boardCenter(BOARD_LAYOUT.enemy)
+    // a point (almost) straight below the eye makes lookAt flip; look along the deck toward the bow instead
+    if ((look[0] - eye[0]) ** 2 + (look[2] - eye[2]) ** 2 < 0.2) look = localToWorld([ship.spec.length / 2, anchors.deckY, 0], pose)
+    target.current.set(look[0], look[1], look[2])
+    camera.lookAt(target.current)
+    if (camera.fov !== DECK_FOV || camera.near !== DECK_NEAR) {
+      camera.fov = DECK_FOV
+      camera.near = DECK_NEAR
+      camera.updateProjectionMatrix()
+    }
+  })
+  return null
 }

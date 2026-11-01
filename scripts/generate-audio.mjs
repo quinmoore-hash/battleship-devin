@@ -51,6 +51,8 @@ const SOUNDS = {
   'sail-flap': [sfx.sailFlap],
   thunder: [sfx.thunder],
   'gull-1': [() => sfx.gull(41)], 'gull-2': [() => sfx.gull(42)],
+  horn: [sfx.horn, DECK],
+  'water-rush': [sfx.waterRush, DECK],
   'music-intro': [musicIntro, { oggQ: 3, mp3Kbps: 96 }],
   'music-menu': [musicMenu, { oggQ: 1, mp3Kbps: 64 }],
   'music-battle': [musicBattle, { oggQ: 1, mp3Kbps: 64 }],

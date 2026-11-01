@@ -64,6 +64,8 @@ const DESCRIPTIONS: Record<CanonicalSfx, string> = {
   'crew-groan': 'on deck: groan at a miss',
   'crew-brace': 'on deck: "Brace!" (synth placeholder)',
   'crew-panic': 'on deck: cries as she goes down',
+  horn: "ship's horn, two blasts (battle start on deck)",
+  'water-rush': 'water over the rail (your ship sinking, on deck)',
 }
 
 // top-down pad: x maps to world x, y maps to world z (enemy fleet at the top, player fleet at the bottom)
