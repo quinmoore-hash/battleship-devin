@@ -139,7 +139,7 @@ describe('director: camera lease and the thrown-overboard beat', () => {
     run(d, ob.start - 0.1)
     expect(events.filter((e) => e.type === 'thrown-overboard')).toHaveLength(0)
     run(d, 0.2)
-    expect(events.filter((e) => e.type === 'thrown-overboard')).toEqual([{ type: 'thrown-overboard', nextUid: 'sloop', cell: 1, point: deckEye.position }])
+    expect(events.filter((e) => e.type === 'thrown-overboard')).toEqual([{ type: 'thrown-overboard', nextUid: 'sloop', cell: 1, point: deckEye.position, seconds: expect.any(Number) }])
     while (d.active) d.tick(0.1)
     expect(events.filter((e) => e.type === 'thrown-overboard')).toHaveLength(1)
     expect(deckCameraLease.owner).toBe('deck')

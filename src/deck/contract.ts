@@ -90,7 +90,7 @@ export type DeckBusEvent =
    * plays the tumble / swim beat and then calls `boardShip(nextUid)` itself (`nextUid` = next afloat own ship, or the same ship
    * when it is the last one afloat); the camera owner may play its own tumble in either view.
    */
-  | { type: 'thrown-overboard'; nextUid: string; cell: number; point: Vec3 }
+  | { type: 'thrown-overboard'; nextUid: string; cell: number; point: Vec3; seconds?: number }
 
 type Listener = (e: DeckBusEvent) => void
 const listeners = new Set<Listener>()
