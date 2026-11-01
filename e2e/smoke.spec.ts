@@ -10,6 +10,8 @@ for (const difficulty of ['easy', 'medium', 'hard'] as const) {
     await page.goto('/?no3d')
     await expect(page.getByTestId('ocean-fallback')).toBeVisible()
     await expect(page.getByTestId('main-menu')).toBeVisible()
+    // the inline index.html boot splash hands over to React once the menu is mounted
+    await expect(page.locator('#boot-splash')).toHaveCount(0)
     await startSinglePlayer(page, difficulty)
 
     await expect(page.getByTestId('placement')).toBeVisible()

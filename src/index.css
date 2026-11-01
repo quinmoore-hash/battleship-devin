@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Pirata+One&family=IM+Fell+English:ital@0;1&family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&display=swap');
+/* web fonts are linked from index.html so they are not render-blocking behind this stylesheet */
 
 :root {
   --font-title: 'Pirata One', 'IM Fell English', Georgia, serif;

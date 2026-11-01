@@ -63,7 +63,7 @@ test('two captains: hot-seat game to victory with curtains, flipped HUD, named w
   }
   await expect(gameover).toBeVisible()
   await expect(page.getByTestId('report-title')).toHaveText('Anne rules the Caribbean')
-  await expect(page.getByTestId('report-replay')).toBeVisible()
+  await expect(page.getByTestId('report-no3d-note')).toBeVisible() // BUG-601: no Replay / Photo buttons without the 3D sea
 
   // rematch: Jack places first this time
   await page.getByTestId('rematch').click()

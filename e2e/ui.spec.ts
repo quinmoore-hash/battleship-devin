@@ -50,7 +50,7 @@ test('battle HUD: compass status, captain’s log, restart, skip hint and quit c
   await expect(page.getByTestId('main-menu')).toBeVisible()
 })
 
-test('game over report has time, rank, and dispatches replay / photo events for the extras module', async ({ page }) => {
+test('game over report has time, rank, and swaps the Replay / Photo buttons for a note under no3d', async ({ page }) => {
   await page.goto('/?no3d')
   await page.getByTestId('open-settings').click()
   await page.getByTestId('setting-cinematics-off').click()
@@ -69,19 +69,10 @@ test('game over report has time, rank, and dispatches replay / photo events for 
   await expect(gameover).toBeVisible()
   await expect(page.getByTestId('stat-time')).toHaveText(/\d+:\d\d/)
   await expect(page.getByTestId('rank')).not.toBeEmpty()
-  // the extras module owns the replay / photo overlays; here only check the buttons exist and dispatch their events
-  const fired = await page.evaluate(
-    () =>
-      new Promise<string[]>((resolve) => {
-        const got: string[] = []
-        for (const name of ['battleship:replay', 'battleship:photo']) window.addEventListener(name, (e) => (got.push(name), e.stopImmediatePropagation()), { capture: true })
-        document.querySelector<HTMLButtonElement>('[data-testid=report-replay]')!.click()
-        document.querySelector<HTMLButtonElement>('[data-testid=report-photo]')!.click()
-        setTimeout(() => resolve(got), 50)
-      }),
-  )
-  expect(fired).toEqual(['battleship:replay', 'battleship:photo'])
-  await page.keyboard.press('Escape')
+  // the extras module owns the replay / photo overlays (3D canvases): under `?no3d` the report shows a note instead of the buttons (BUG-601)
+  await expect(page.getByTestId('report-replay')).toHaveCount(0)
+  await expect(page.getByTestId('report-photo')).toHaveCount(0)
+  await expect(page.getByTestId('report-no3d-note')).toBeVisible()
   await page.getByTestId('rematch').click()
   await expect(page.getByTestId('placement')).toBeVisible()
 })

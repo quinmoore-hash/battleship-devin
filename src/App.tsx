@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react'
 import { bindGameAudio } from './audio'
 import { CinematicCamera, CinematicLayer, Letterbox, director, useDirector } from './cinematics'
 import { DeckController } from './deck'
@@ -51,8 +51,27 @@ function demoRoute() {
   return null
 }
 
+/** The inline boot splash in index.html hands over to React here: the menu (or demo) is mounted, so the ocean may keep streaming in behind it. */
+function dismissBootSplash() {
+  const splash = document.getElementById('boot-splash')
+  if (!splash) return
+  const fade = () => {
+    splash.setAttribute('data-done', '')
+    window.setTimeout(() => splash.remove(), 320)
+  }
+  // the production stylesheet loads async (vite.config.ts): keep the splash over the menu until it has applied
+  const css = document.querySelector<HTMLLinkElement>('link[data-app-css]')
+  if (css && !css.sheet) {
+    const timer = window.setTimeout(fade, 3000)
+    css.addEventListener('load', () => (window.clearTimeout(timer), fade()), { once: true })
+    return
+  }
+  fade()
+}
+
 export default function App() {
   const Demo = demoRoute()
+  useLayoutEffect(dismissBootSplash, [])
   if (Demo) {
     return (
       <Suspense fallback={null}>
@@ -80,6 +99,13 @@ function Game() {
   // hot-seat: the director films from the active captain's side (always `human` in single player)
   const perspective = useGameStore((s) => s.perspective)
   useEffect(() => director.setPerspective(perspective), [perspective])
+  // the sea mounts one frame after the menu: the first WebGL frame compiles every shader on the main thread,
+  // and mounting both in one commit held the menu's (and the boot splash's) paint behind that compile
+  const [seaReady, setSeaReady] = useState(false)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setSeaReady(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
   useEffect(() => {
     const unbindCinematics = bindCinematics()
     const unbindAudio = bindGameAudio({ director: directorPlaysAudio })
@@ -93,12 +119,14 @@ function Game() {
       <PerfBootstrap />
       <FpsWatchdog />
       <A11yBootstrap />
-      <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic && !onDeck}>
-        <GameWorld />
-        {inBattle && <CinematicLayer />}
-        {inBattle && !onDeck && <CinematicCamera />}
-        {phase === 'battle' && <DeckController />}
-      </OceanScene>
+      {seaReady && (
+        <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic && !onDeck}>
+          <GameWorld />
+          {inBattle && <CinematicLayer />}
+          {inBattle && !onDeck && <CinematicCamera />}
+          {phase === 'battle' && <DeckController />}
+        </OceanScene>
+      )}
       <GameUI menuExtras={{ rules: <MenuRules />, stats: <MenuStats /> }} />
       <ExtrasLayer />
       <Letterbox hint={false} />

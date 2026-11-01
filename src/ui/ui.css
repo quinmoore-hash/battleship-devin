@@ -1334,6 +1334,16 @@
   justify-content: center;
   gap: 0.6rem;
 }
+/* `?no3d`: Replay / Photo mode are 3D canvases, so the report explains instead of offering them (BUG-601) */
+.report-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.95rem;
+  text-align: center;
+  opacity: 0.8;
+}
 .report-seal {
   position: absolute;
   right: 22px;

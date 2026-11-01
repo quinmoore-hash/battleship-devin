@@ -9,6 +9,7 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 import { coordKey, coordLabel, type Difficulty } from '../engine'
 import { useDirector } from '../cinematics'
 import { usePerf } from '../perf'
+import { is3dDisabled } from '../scene/flags'
 import { isHotSeat, lostShots, useGameStore, type GameModes } from '../store/gameStore'
 import { PhotoMode, usePhotoEvent, usePhotoMode } from './photo'
 import { ReplayPlayer, useReplay, useReplayEvent } from './replay'
@@ -29,14 +30,16 @@ export function ExtrasLayer() {
   const flyover = useDirector((s) => s.busy)
   // replay / photo follow the detected tier instead of always rendering full detail (BUG-317)
   const quality = usePerf().quality
+  // the replay / photo overlays are 3D canvases: nothing to show over the `?no3d` gradient (BUG-601)
+  const no3d = is3dDisabled()
   useSalvoQueueShim()
 
   return (
     <>
       {phase === 'battle' && <BattleStrip />}
       {phase === 'gameover' && !flyover && <GameOverLog difficulty={difficulty} />}
-      {replay.snapshot && <ReplayPlayer snapshot={replay.snapshot} onClose={replay.close} quality={quality} />}
-      {photo.request && <PhotoMode {...photo.request} onClose={photo.close} quality={quality} />}
+      {!no3d && replay.snapshot && <ReplayPlayer snapshot={replay.snapshot} onClose={replay.close} quality={quality} />}
+      {!no3d && photo.request && <PhotoMode {...photo.request} onClose={photo.close} quality={quality} />}
     </>
   )
 }
