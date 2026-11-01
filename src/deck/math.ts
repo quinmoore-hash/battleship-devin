@@ -348,24 +348,14 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
     }
     if (!moved) p = clampToPolygon(p, here.points)
   }
-  const raw: Pt = [p[0], p[1]]
-  p = pushOutOfObstacles(p, deck.obstacles)
+  // an obstacle the player already stands inside (pinned between it and the rail at a narrow bow tip, or a landing)
+  // does not push this frame, so they can always walk out of it; everything else pushes as usual
+  const solid = deck.obstacles.filter((o) => Math.hypot(start[0] - o.center[0], start[1] - o.center[1]) >= o.radius + PLAYER_RADIUS - 1e-6)
+  p = pushOutOfObstacles(p, solid)
   p = clampToPolygon(p, deck.walk[level].points)
-  // pinned between an obstacle and the rail (a narrow bow tip): never let the push-out trap the player — a step that
-  // does not go deeper into any obstacle than where they already stand is allowed through
-  if (obstaclePenetration(p, deck.obstacles) > 1e-6) {
-    const alt = clampToPolygon(raw, deck.walk[level].points)
-    if (obstaclePenetration(alt, deck.obstacles) <= obstaclePenetration(start, deck.obstacles) + 1e-6) p = alt
-  }
   return { x: p[0], z: p[1], y: deckHeightAt(p, level, deck), level }
 }
 
-/** How far (u) `p` sits inside the deepest obstacle circle grown by the player radius; 0 when clear. */
-export function obstaclePenetration(p: Pt, obstacles: DeckAnchors['obstacles'], radius = PLAYER_RADIUS): number {
-  let worst = 0
-  for (const o of obstacles) worst = Math.max(worst, o.radius + radius - Math.hypot(p[0] - o.center[0], p[1] - o.center[1]))
-  return worst
-}
 
 /** Exponential approach of `v` toward `target` with time constant `tau` (frame-rate independent). */
 export const approach = (v: number, target: number, dt: number, tau = ACCEL_TIME): number => v + (target - v) * (1 - Math.exp(-dt / tau))
