@@ -26,6 +26,11 @@ export function fitFov(fov: number, aspect: number): number {
   const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) / aspect)
   return Math.min(THREE.MathUtils.radToDeg(half) * 2, 80)
 }
+/** Inverse of `fitFov`: the landscape design fov that `fitFov` widens to `vertical` on a portrait `aspect`. */
+export function unfitFov(vertical: number, aspect: number): number {
+  if (!(aspect < 1)) return vertical
+  return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(vertical / 2)) * aspect))
+}
 
 export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target: THREE.Vector3; fov: number }> = {
   menu: { position: new THREE.Vector3(0, 11, 36), target: new THREE.Vector3(0, 0.5, midZ), fov: 42 },
@@ -77,6 +82,56 @@ const NEAR_HALF_WIDTH = 6.2
 const NEAR_LABEL_Z = playerCenter[2] + 5.7
 /** The same for the far (Navy) board seen from `battle-far`. */
 const FAR_LABEL_Z = enemyCenter[2] - 5.7
+/**
+ * Portrait framing (BUG-707): the near board fills `free` of the width (the projected label row sits below the view
+ * axis, so it needs more than its slant angle); `minFov` keeps a strip of sky above the far board on tablets.
+ */
+const PORTRAIT = { free: 0.86, minFov: 60 }
+/** Battle pivot distance ceiling: under the OrbitControls `maxDistance` (48) so the rig never fights the clamp. */
+const ORBIT_REACH = 44
+/** Half-width of the player board with its column labels and the z of its near column-label row (placement shot). */
+const PLACEMENT_HALF_WIDTH = 6.6
+const PLACEMENT_LABEL_Z = playerCenter[2] + 6.7
+const PLACEMENT_FREE = 0.8
+/** The game-over shot raised and pulled back for portrait: the horizon leaves the middle of the screen and the whole
+ *  enemy board (the sunk fleet) clears the left edge. */
+const PORTRAIT_GAMEOVER = {
+  position: new THREE.Vector3(-24, 13, enemyCenter[2] + 19),
+  target: new THREE.Vector3(1, 0.6, enemyCenter[2] + 1),
+}
+
+export interface ShotFrame {
+  position: THREE.Vector3
+  target: THREE.Vector3
+  fov: number
+}
+
+/**
+ * Per-viewport framing for every fixed shot: landscape returns the `CAMERA_SHOTS` values untouched; portrait reframes
+ * `battle` / `battle-far` (`battleFraming`), pulls `placement` back along its own line of sight until the player
+ * board clears the sides, and `gameover` likewise (BUG-707). `fov` is the landscape design value for `fitFov`.
+ */
+export function frameShot(view: CameraView, aspect: number, width: number, out: ShotFrame): ShotFrame {
+  const shot = CAMERA_SHOTS[view]
+  out.position.copy(shot.position)
+  out.target.copy(shot.target)
+  out.fov = shot.fov
+  if (view === 'battle' || view === 'battle-far') {
+    battleFraming(aspect, width, out, view)
+  } else if (view === 'placement' && aspect < 1) {
+    const half = THREE.MathUtils.degToRad(fitFov(shot.fov, aspect) / 2)
+    const hHalf = Math.atan(Math.tan(half) * aspect)
+    const slant = PLACEMENT_HALF_WIDTH / Math.tan(hHalf * PLACEMENT_FREE)
+    const elevation = Math.atan2(shot.position.y, shot.position.z - PLACEMENT_LABEL_Z)
+    out.position.set(shot.position.x, Math.sin(elevation) * slant, PLACEMENT_LABEL_Z + Math.cos(elevation) * slant)
+    const centre = elevation - 0.88 * half
+    out.target.set(shot.position.x, 0, out.position.z - out.position.y / Math.tan(centre))
+  } else if (view === 'gameover' && aspect < 1) {
+    out.position.copy(PORTRAIT_GAMEOVER.position)
+    out.target.copy(PORTRAIT_GAMEOVER.target)
+  }
+  return out
+}
 
 /**
  * Battle overview framing for a viewport (BUG-530): the camera position is fixed, the vertical fov is the
@@ -95,10 +150,21 @@ export function battleFraming(aspect: number, width: number, out: { target: THRE
     const free = Math.max(0.3, (width - hudSidePx(width)) / width)
     const hHalf = Math.atan(NEAR_HALF_WIDTH / slant) / free
     design = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalf) / aspect)), 30, 46)
+  } else {
+    // portrait (BUG-707): `fitFov(46)` would widen the vertical fov to 80°, parking the horizon mid-screen and both boards
+    // in the bottom third. There is no side HUD under 900px, so use the narrowest fov at which the near board still
+    // fills the width; the 0.88 pitch rule below then tilts down until the boards sit under the horizon.
+    const hHalf = Math.atan(NEAR_HALF_WIDTH / slant) / PORTRAIT.free
+    const vertical = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hHalf) / aspect)), PORTRAIT.minFov, 80)
+    design = unfitFov(vertical, aspect)
   }
   const half = THREE.MathUtils.degToRad(fitFov(design, aspect) / 2)
   const centre = Math.atan(pos.y / dNear) - 0.88 * half
   out.target.set(0, 0.3, pos.z - dir * ((pos.y - 0.3) / Math.tan(centre)))
+  // The target is also the OrbitControls pivot, whose `maxDistance` would otherwise drag the camera forward when the
+  // shallow portrait pitch puts the water intersection far out (landscape pivots sit well inside the reach).
+  const reach = out.target.distanceTo(pos)
+  if (reach > ORBIT_REACH) out.target.lerpVectors(pos, out.target, ORBIT_REACH / reach)
   out.fov = design
   return out
 }
@@ -127,7 +193,8 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
   const settled = useRef(false)
   const prevView = useRef<CameraView | null>(null)
   const tmpPos = useRef(new THREE.Vector3())
-  const framing = useRef({ target: new THREE.Vector3(), fov: 42 })
+  const framing = useRef<ShotFrame>({ position: new THREE.Vector3(), target: new THREE.Vector3(), fov: 42 })
+  const framedAspect = useRef(0)
 
   useEffect(() => {
     if (prevView.current === view) return
@@ -136,8 +203,8 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
     settled.current = false
     if (wasNull) {
       // first mount: start in place (no fly-in from the default camera position)
-      const camera = get().camera
-      const shot = CAMERA_SHOTS[view]
+      const { camera, size } = get()
+      const shot = frameShot(view, size.width / size.height, size.width, framing.current)
       if (view === 'menu') {
         camera.position.set(0, MENU_ORBIT.height, MENU_ORBIT.radius).add(shot.target)
       } else {
@@ -155,18 +222,22 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
     }
     const dt = Math.min(delta, 0.1)
     const camera = state.camera as THREE.PerspectiveCamera
-    const shot = CAMERA_SHOTS[view]
-    const aim = view === 'battle' || view === 'battle-far' ? battleFraming(camera.aspect, state.size.width, framing.current, view) : shot
+    if (Math.abs(camera.aspect - framedAspect.current) > 1e-3) {
+      // viewport resized / phone rotated: the shot depends on the aspect, so fly to the new framing
+      framedAspect.current = camera.aspect
+      settled.current = false
+    }
+    const aim = frameShot(view, camera.aspect, state.size.width, framing.current)
     const wanted = tmpPos.current
     if (view === 'menu') {
       const a = state.clock.elapsedTime * MENU_ORBIT.speed
       wanted.set(
-        shot.target.x + Math.sin(a) * MENU_ORBIT.radius,
+        aim.target.x + Math.sin(a) * MENU_ORBIT.radius,
         MENU_ORBIT.height + Math.sin(a * 0.7) * 1.2,
-        shot.target.z + Math.cos(a) * MENU_ORBIT.radius,
+        aim.target.z + Math.cos(a) * MENU_ORBIT.radius,
       )
     } else {
-      wanted.copy(shot.position)
+      wanted.copy(aim.position)
     }
 
     const userDriving = interactive && settled.current && controls.current?.enabled
@@ -180,7 +251,8 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
       target.current.z = THREE.MathUtils.damp(target.current.z, aim.target.z, lambda, dt)
       camera.lookAt(target.current)
       if (controls.current) controls.current.target.copy(target.current)
-      if (!settled.current && view !== 'menu' && camera.position.distanceTo(wanted) < 0.05) {
+      // a resize can leave the position in place while only the target (pitch) moves, so check both before handing over
+      if (!settled.current && view !== 'menu' && camera.position.distanceTo(wanted) < 0.05 && target.current.distanceTo(aim.target) < 0.05) {
         settled.current = true
       }
     } else if (controls.current) {
