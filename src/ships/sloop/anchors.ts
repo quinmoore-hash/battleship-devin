@@ -4,8 +4,10 @@ import { CANNON_BORE_HEIGHT, CANNON_MUZZLE_OFFSET, cellCenterX, deckEdgeHalfWidt
 import type { DeckAnchors } from '../../deck/contract'
 import { deckPolygon, gunStations, mastObstacles } from '../kit/deck'
 
-/** Deck furniture the player walks around (ship frame): hatch grating, mast + bitts, stern barrels and bell. */
+/** Deck furniture the player walks around (ship frame): hatch grating, stern barrels, rope coils and the cabin trunk (x −0.93…−0.68, ±0.12). */
 export const SLOOP_DECK_OBSTACLES: DeckAnchors['obstacles'] = [
+  { center: [-0.86, 0], radius: 0.13 },
+  { center: [-0.74, 0], radius: 0.13 },
   { center: [0.55, 0], radius: 0.1 },
   { center: [-0.15, 0.2], radius: 0.09 },
   { center: [-0.16, -0.22], radius: 0.1 },
@@ -17,11 +19,11 @@ export const SLOOP_DECK_OBSTACLES: DeckAnchors['obstacles'] = [
 export function buildSloopDeck(cannons: ShipAnchors['cannons'], masts: ShipAnchors['masts']): DeckAnchors {
   const walk = [deckPolygon({ x0: -0.92, x1: 0.88, y: SLOOP_DIMS.deckHeight, halfWidth: (x) => deckEdgeHalfWidth(x) - 0.035, inset: 0.06, steps: 8 })]
   return {
-    spawn: [-0.68, SLOOP_DIMS.deckHeight, 0.08],
+    spawn: [-0.55, SLOOP_DIMS.deckHeight, 0.1],
     walk,
     ramps: [],
     obstacles: [...mastObstacles(masts, 0.08), ...SLOOP_DECK_OBSTACLES],
-    stations: gunStations(cannons, walk, () => SLOOP_DIMS.deckHeight, { back: 0.06 }),
+    stations: gunStations(cannons, walk, () => SLOOP_DIMS.deckHeight, { back: 0.06, barrel: CANNON_MUZZLE_OFFSET + 0.25 * 0.45 }),
   }
 }
 

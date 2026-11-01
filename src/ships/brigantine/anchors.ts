@@ -74,7 +74,7 @@ export function buildBrigantineDeck(): DeckAnchors {
       { center: [-1.3, 0], radius: 0.1 },
       { center: [-1.17, -0.14], radius: 0.07 },
     ],
-    stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y),
+    stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y, { barrel: CANNON_MUZZLE_LEN + 0.25 * CANNON_SCALE }),
   }
 }
 

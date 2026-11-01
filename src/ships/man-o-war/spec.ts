@@ -218,7 +218,7 @@ export function buildManOWarDeck(): DeckAnchors {
       { center: [-1.68, 0], radius: 0.1 },
       { center: [-2.1, 0], radius: 0.14 },
     ],
-    stations: gunStations(MOW_CANNONS, walk, deckY),
+    stations: gunStations(MOW_CANNONS, walk, deckY, { barrel: 0.14 + 0.3 }),
   }
 }
 

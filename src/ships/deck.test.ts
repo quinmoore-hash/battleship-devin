@@ -8,11 +8,11 @@ import { FRIGATE_MODEL_ANCHORS } from './frigate/anchors'
 import { FIT as FRIGATE_FIT } from './frigate/form'
 
 /**
- * Stand-to-muzzle reach. Horizontally: muzzles poke up to 0.2 outboard of the planking (sloop/man-o'-war) and the
- * stand keeps 0.06–0.08 inside the bulwark. Vertically: guns under a castle (galleon stern pair under the poop,
- * man-o'-war lower gun deck) are served from the walkable deck above them.
+ * Stand-to-breech reach (horizontal): the gunner stands just inboard of the gun's breech on its own side. Vertically,
+ * guns under a castle (galleon stern pair under the poop, man-o'-war lower gun deck) are served from the walkable
+ * deck above them, so the stand can be up to a deck height above the bore.
  */
-const STATION_REACH_XZ = 0.4
+const STATION_REACH_XZ = 0.3
 const STATION_REACH_Y = 0.9
 
 const dist2 = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1])
@@ -58,7 +58,14 @@ describe.each(FLEET.map((s) => s.id))('%s deck anchors', (id) => {
       const c = a.cannons[i]
       const level = deck.walk.find((w) => Math.abs(w.y - s.stand[1]) < 1e-6 && insideConvex(w.points, [s.stand[0], s.stand[2]]))
       expect(level, `${id} station ${i}`).toBeDefined()
-      expect(dist2([s.stand[0], s.stand[2]], [c.muzzle[0], c.muzzle[2]]), `${id} station ${i} reach`).toBeLessThanOrEqual(STATION_REACH_XZ)
+      expect(s.breech, `${id} station ${i} breech`).toBeDefined()
+      const b = s.breech!
+      // breech on the gun's side, between the muzzle and the centreline, on the bore axis
+      expect(Math.sign(b[2])).toBe(Math.sign(c.muzzle[2]))
+      expect(Math.abs(b[2])).toBeLessThan(Math.abs(c.muzzle[2]))
+      expect(b[0]).toBeCloseTo(c.muzzle[0], 6)
+      expect(b[1]).toBeCloseTo(c.muzzle[1], 6)
+      expect(dist2([s.stand[0], s.stand[2]], [b[0], b[2]]), `${id} station ${i} reach`).toBeLessThanOrEqual(STATION_REACH_XZ)
       expect(Math.abs(s.stand[1] - c.muzzle[1])).toBeLessThanOrEqual(STATION_REACH_Y)
       // yaw points from the stand toward the muzzle (same side of the ship)
       const toMuzzle = Math.sign(c.muzzle[2] - s.stand[2])

@@ -94,8 +94,10 @@ export function deckPolygon({ x0, x1, y, halfWidth, inset = 0.08, steps = 6 }: D
 }
 
 export interface StationSpec {
-  /** How far inboard of the muzzle the gunner stands (horizontal, metres); clamped so the stand stays inside the walk polygon. */
+  /** How far inboard of the breech the gunner stands (horizontal, metres); clamped so the stand stays inside the walk polygon. */
   back?: number
+  /** Barrel length from muzzle to breech (kit `Cannon`: 0.45 × its scale). */
+  barrel?: number
 }
 
 /**
@@ -103,7 +105,7 @@ export interface StationSpec {
  * gun's firing direction. `deckYAt(x)` says which level the gun is served from (lower gun decks are served from
  * the weather deck above them, so their stand is further from the muzzle vertically).
  */
-export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['walk'], deckYAt: (x: number) => number, { back = 0.08 }: StationSpec = {}): DeckAnchors['stations'] {
+export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['walk'], deckYAt: (x: number) => number, { back = 0.08, barrel = 0.2 }: StationSpec = {}): DeckAnchors['stations'] {
   return cannons.map((c) => {
     const sign = c.side === 'starboard' ? 1 : -1
     const y = deckYAt(c.muzzle[0])
@@ -113,11 +115,14 @@ export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['
     const cx = level.points.reduce((acc, p) => acc + p[0], 0) / level.points.length
     let x = c.muzzle[0]
     for (let i = 0; i < 20 && !insideConvex(level.points, [x, 0]); i++) x += Math.sign(cx - x) * 0.02
-    let z = c.muzzle[2] - sign * back
-    // keep the stand inside the polygon, stepping inboard until it fits
-    for (let i = 0; i < 20 && !insideConvex(level.points, [x, z]); i++) z -= sign * 0.02
+    // the breech stays on the gun's side of the centreline even where the hull is narrower than the barrel (bow guns)
+    const breechZ = sign * Math.max(Math.abs(c.muzzle[2]) - barrel, 0.08)
+    let z = breechZ - sign * back
+    // keep the stand inside the polygon, stepping inboard until it fits (never past the far rail)
+    for (let i = 0; i < 30 && !insideConvex(level.points, [x, z]) && sign * z > -0.3; i++) z -= sign * 0.02
     const stand: Vec3 = [x, level.y, z]
-    return { stand, yaw: Math.atan2(c.direction[0], c.direction[2]) }
+    const breech: Vec3 = [c.muzzle[0], c.muzzle[1], breechZ]
+    return { stand, yaw: Math.atan2(c.direction[0], c.direction[2]), breech }
   })
 }
 
@@ -136,6 +141,6 @@ export function fitDeck(d: DeckAnchors, scale: number, dx: number): DeckAnchors 
     walk: d.walk.map((w) => ({ points: w.points.map(p2), y: w.y * scale })),
     ramps: d.ramps.map((r) => ({ ...r, a: p2(r.a), b: p2(r.b) })),
     obstacles: d.obstacles.map((o) => ({ center: p2(o.center), radius: o.radius * scale })),
-    stations: d.stations.map((s) => ({ stand: p3(s.stand), yaw: s.yaw })),
+    stations: d.stations.map((s) => ({ stand: p3(s.stand), yaw: s.yaw, ...(s.breech ? { breech: p3(s.breech) } : {}) })),
   }
 }

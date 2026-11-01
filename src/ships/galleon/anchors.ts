@@ -97,7 +97,7 @@ export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
       { center: [-0.62, -0.3], radius: 0.09 },
       { center: [1.4, 0], radius: 0.1 },
     ],
-    stations: gunStations(cannons, walk, deckY),
+    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_CLEARANCE + 0.7 * CANNON_SCALE }),
   }
 }
 
