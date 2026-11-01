@@ -59,6 +59,9 @@ describe.each(FLEET.map((s) => s.id))('%s deck anchors', (id) => {
       const level = deck.walk.find((w) => Math.abs(w.y - s.stand[1]) < 1e-6 && insideConvex(w.points, [s.stand[0], s.stand[2]]))
       expect(level, `${id} station ${i}`).toBeDefined()
       expect(s.breech, `${id} station ${i} breech`).toBeDefined()
+      // stands of the two sides must not coincide on the centreline: the stand is on its gun's side
+      expect(Math.sign(s.stand[2]), `${id} station ${i} side`).toBe(Math.sign(c.muzzle[2]))
+      expect(Math.abs(s.stand[2])).toBeGreaterThan(0.05)
       const b = s.breech!
       // breech on the gun's side, between the muzzle and the centreline, on the bore axis
       expect(Math.sign(b[2])).toBe(Math.sign(c.muzzle[2]))
