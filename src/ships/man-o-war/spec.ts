@@ -220,7 +220,7 @@ export function buildManOWarDeck(): DeckAnchors {
       { center: [-2.1, 0], radius: 0.14 },
     ]
   return {
-    spawn: [-1.4, DECK.castle, -0.32],
+    spawn: [-0.9, DECK.castle, 0],
     walk,
     ramps: [breakRamp(0, 1, BREAK.quarter, 0.12, -0.34), breakRamp(0, 2, BREAK.fore, 0.1, 0.3), breakRamp(0, 2, BREAK.fore, 0.1, -0.3), breakRamp(1, 3, BREAK.poop, 0.1, 0.1)],
     obstacles,
