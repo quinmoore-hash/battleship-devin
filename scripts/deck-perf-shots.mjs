@@ -1,4 +1,4 @@
-// Headed-browser driver for the Third-person seat (GPU-less VM: `xvfb-run -a -s "-screen 0 1440x900x24" node scripts/third-person-shots.mjs`).
+// Headed-browser perf / screenshot driver for the On-deck seat (GPU-less VM: `xvfb-run -a -s "-screen 0 1440x900x24" node scripts/deck-perf-shots.mjs`).
 // Plays menu → placement → battle, toggles V and walks / jumps / mans / fires / Tabs / toggles, screenshotting each step
 // and printing `window.__perf.stats` draws / tris. Env: TP_URL (default http://localhost:4173), TP_OUT (dir), TP_MODE=single|hotseat|second,
 // TP_VIEWPORT=1440x900, TP_TIER=medium, TP_HEADLESS=1.
@@ -6,7 +6,7 @@ import { chromium } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 
 const base = process.env.TP_URL ?? 'http://localhost:4173'
-const out = process.env.TP_OUT ?? 'test-results/third-person'
+const out = process.env.TP_OUT ?? 'test-results/deck-perf'
 const mode = process.env.TP_MODE ?? 'single'
 const [vw, vh] = (process.env.TP_VIEWPORT ?? '1440x900').split('x').map(Number)
 const tier = process.env.TP_TIER ?? 'medium'
@@ -69,7 +69,7 @@ await shot('overview')
 
 await page.keyboard.press('v')
 await frames(4)
-await shot('third-person-spawn')
+await shot('deck-spawn')
 await hold(['w'], 1500)
 await frames(2)
 await shot('walk-forward')
@@ -97,13 +97,13 @@ for (let i = 0; i < 4; i++) {
 }
 await frames(2)
 await shot('rail-jump-attempt')
-// drag to orbit
+// drag to look
 await page.mouse.move(vw / 2, vh / 2)
 await page.mouse.down()
 await page.mouse.move(vw / 2 - 250, vh / 2 + 40, { steps: 6 })
 await page.mouse.up()
 await frames(2)
-await shot('orbit-drag')
+await shot('look-drag')
 // man the nearest usable gun via the HUD (works from anywhere), then first person
 await page.getByTestId('deck-man').click()
 await page.waitForTimeout(700)
@@ -194,7 +194,7 @@ if (mode === 'second') {
   console.log('second game: deck on at start =', await page.getByTestId('deck-toggle').getAttribute('data-on'), 'fade =', await page.getByTestId('deck-fade').count())
   await page.keyboard.press('v')
   await frames(4)
-  await shot('second-game-third-person')
+  await shot('second-game-deck')
   await page.getByTestId('deck-man').click()
   await page.waitForTimeout(700)
   await frames(3)

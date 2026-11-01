@@ -10,8 +10,6 @@
  */
 export * from './contract'
 export { DeckController, mannedCannon, SWING_DELAY_MS } from './DeckController'
-export { Pirate, createGait, PIRATE_HEIGHT, type PirateGait } from './Pirate'
 export { useDeckStore, resetDeckRuntime, type DeckRuntime } from './deckStore'
 export { fallbackDeckAnchors, resolveDeckAnchors, stationsOf, stationUsable, afloatUids, cycleShip, WALK_SPEED, RUN_SPEED, JUMP_APEX, JUMP_TIME, type Station } from './math'
-export { TP_BACK, TP_UP, TP_FOV, BLEND_SECONDS, thirdPersonPose, springArm } from './camera'
 export { DeckAudio, useDeckAudioStore, isAudioDebug } from './audio'

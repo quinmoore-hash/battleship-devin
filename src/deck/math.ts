@@ -72,45 +72,17 @@ export interface DeckProfile {
   /** Plan half-width at the transom and at the stem, as a fraction of the half beam (1 = no taper). */
   sternTaper: number
   bowTaper: number
-  /** Deck furniture you cannot walk through and the camera must not sit in (pumps, capstan, bitts): circles in x/z. */
-  furniture?: { x: number; z: number; r: number }[]
 }
 
 /**
  * Profiles in each class's *model* space, fitted like its anchors (`fitAnchors`: scale about the origin, shift along x) so
  * they match the rendered hull. Numbers come from the hull form constants named in the comments.
  */
-const fitProfile = (p: DeckProfile, scale: number, dx: number): DeckProfile => ({
-  xStern: p.xStern * scale + dx,
-  xBow: p.xBow * scale + dx,
-  aft: p.aft.map((d) => ({ x: d.x * scale + dx, y: d.y * scale })),
-  fore: p.fore ? { x: p.fore.x * scale + dx, y: p.fore.y * scale } : null,
-  sternTaper: p.sternTaper,
-  bowTaper: p.bowTaper,
-  furniture: p.furniture?.map((f) => ({ x: f.x * scale + dx, z: f.z * scale, r: f.r * scale })),
-})
-
-export const DECK_PROFILES: Record<string, DeckProfile> = {
-  // src/ships/frigate/form.ts (FIT 0.74 / −0.16): deckY 0.4, quarterdeck 0.58 aft of −0.85, forecastle 0.54 forward of 1.16
-  frigate: fitProfile({ xStern: -1.42, xBow: 1.46, aft: [{ x: -0.85, y: 0.58 }], fore: { x: 1.16, y: 0.54 }, sternTaper: 0.72, bowTaper: 0.3 }, 0.74, -0.16),
-  // src/ships/man-o-war/spec.ts: main 0.55, castles 0.88 (quarter −0.55, fore 1.35), poop 1.16 aft of −1.85
-  'man-o-war': {
-    xStern: -2.42,
-    xBow: 2.42,
-    aft: [{ x: -0.55, y: 0.88 }, { x: -1.85, y: 1.16 }],
-    fore: { x: 1.35, y: 0.88 },
-    sternTaper: 0.7,
-    bowTaper: 0.4,
-    // parts.tsx: pumps beside the mainmast, capstan and binnacle on the quarterdeck, belfry at the forecastle break
-    furniture: [{ x: -0.32, z: 0.14, r: 0.04 }, { x: -0.32, z: -0.14, r: 0.04 }, { x: -0.95, z: 0, r: 0.1 }, { x: -1.5, z: 0, r: 0.08 }, { x: 1.41, z: 0, r: 0.1 }],
-  },
-  // src/ships/galleon/hull.ts: main 0.6, quarterdeck 1.02 aft of −0.45, poop 1.42 aft of −1.15, forecastle 0.98 forward of 0.95
-  galleon: { xStern: -1.85, xBow: 1.72, aft: [{ x: -0.45, y: 1.02 }, { x: -1.15, y: 1.42 }], fore: { x: 0.95, y: 0.98 }, sternTaper: 0.7, bowTaper: 0.35 },
-  // src/ships/brigantine/hull.ts (FIT 0.84 / −0.18): deck 0.35, cabin top 0.5 aft of −1.08
-  brigantine: fitProfile({ xStern: -1.5, xBow: 1.5, aft: [{ x: -1.08, y: 0.5 }], fore: null, sternTaper: 0.75, bowTaper: 0.3 }, 0.84, -0.18),
-  // src/ships/sloop/hull.ts: one flush deck
-  sloop: { xStern: -1.0, xBow: 1.0, aft: [], fore: null, sternTaper: 0.7, bowTaper: 0.3 },
-}
+/**
+ * Per-class profiles are gone: every shipped class carries authored `ShipAnchors.deck` (session C). A class without one falls
+ * back to `flushProfile` (one tapered deck from the hull plan). Kept as a record so a new class can be sketched here first.
+ */
+export const DECK_PROFILES: Record<string, DeckProfile> = {}
 
 /** Flush rectangle profile for an unknown class. */
 export const flushProfile = (a: ShipAnchors): DeckProfile => ({ xStern: -a.hull.length / 2, xBow: a.hull.length / 2, aft: [], fore: null, sternTaper: 0.8, bowTaper: 0.4 })
@@ -185,10 +157,7 @@ export function fallbackDeckAnchors(a: ShipAnchors, id?: string): DeckAnchors {
     spawn: [spawnX, a.deckY, Math.min(0.25, Math.max(0.08, (planHalfWidth(spawnX, halfBeam, prof) - inset) * 0.5))],
     walk,
     ramps,
-    obstacles: [
-      ...a.masts.map((m) => ({ center: [m.base[0], m.base[2]] as Pt, radius: MAST_RADIUS })),
-      ...(prof.furniture ?? []).map((f) => ({ center: [f.x, f.z] as Pt, radius: f.r })),
-    ],
+    obstacles: a.masts.map((m) => ({ center: [m.base[0], m.base[2]] as Pt, radius: MAST_RADIUS })),
     stations: a.cannons.map((c) => {
       const x = c.muzzle[0] - c.direction[0] * STAND_INSET
       return {

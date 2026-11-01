@@ -48,16 +48,16 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           un-sunk ships are never shown to the other captain. Salvo, Stormy seas and Black Flag all apply to both captains. The winner is named on the
           report; Rematch lets the other captain place first.
         </dd>
-        <dt>Third person</dt>
+        <dt>On deck</dt>
         <dd data-testid="howto-on-deck">
-          Press <kbd>V</kbd> (or <em>Third person</em>) at any moment of the battle — your turn, the enemy's, mid-cinematic — to walk one of your
-          own ships as your pirate, seen from behind; press it again for the overview. Toggling never changes the game. Your crew work the deck around you — a hit throws the nearest hand overboard and a sinking ship empties its deck (Settings → Crew turns them off). <kbd>W</kbd>
+          Press <kbd>V</kbd> (or <em>On deck</em>) at any moment of the battle — your turn, the enemy's, mid-cinematic — to walk one of your
+          own ships at eye height; press it again for the overview. Toggling never changes the game. Your crew work the deck around you — a hit throws the nearest hand overboard and a sinking ship empties its deck (Settings → Crew turns them off). <kbd>W</kbd>
           <kbd>A</kbd>
           <kbd>S</kbd>
           <kbd>D</kbd> walk, drag the mouse to look around, <kbd>Shift</kbd> runs, <kbd>Space</kbd> jumps (never over the rail), <kbd>Tab</kbd>{' '}
           hops to your next afloat ship. You cannot fall off, walk through the bulwarks or the masts; the quarterdeck and forecastle are steps
           up. The guns that bear on the enemy waters glow brass with a ring on the deck and a compass arrow points to the nearest; walk up and
-          press <kbd>E</kbd> to man one — the camera drops into the gunner's eye (first person). The mouse never aims: <b>click a square on
+          press <kbd>E</kbd> to man one — you step to the gunner's eye behind the breech. The mouse never aims: <b>click a square on
           the chart</b> (or a visible enemy square on the water) and the gun swings to bear and fires there. No free aim: the same odds as the
           overview. Salvo counts the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) and Spyglass (<kbd>G</kbd>) work from a gun — pick
           the square on the chart — and a stormy sea still swallows its 30 %. <kbd>E</kbd> again steps away. The enemy's balls splash around

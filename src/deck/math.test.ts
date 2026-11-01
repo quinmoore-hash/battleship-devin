@@ -15,6 +15,7 @@ import {
   deckHeightAt,
   eyeFor,
   fallbackDeckAnchors,
+  type WalkPose,
   isFallbackDeck,
   gunnerPose,
   lookForward,
@@ -50,27 +51,21 @@ describe('deck fallback plan', () => {
     expect(d.stations).toHaveLength(a.cannons.length)
   })
 
-  it('raised decks become their own levels joined by ramps at the breaks (frigate quarterdeck + forecastle, man-o-war castles + poop)', () => {
-    const f = fallbackDeckAnchors(SHIPS.frigate.anchors, 'frigate')
-    // model-space 0.4 / 0.58 / 0.54 × FIT 0.74
-    expect(f.walk.map((l) => +l.y.toFixed(3))).toEqual([0.296, 0.429, 0.4])
-    expect(f.ramps).toHaveLength(2)
-    // walking aft off the main deck across the break (x −0.789) climbs onto the quarterdeck
-    const start = stepOnDeck({ x: -0.7, z: 0.1, y: 0.296, level: 0 }, 0, 0, f)
-    expect(start.level).toBe(0)
-    const aft = stepOnDeck(start, -0.15, 0, f)
-    expect(aft.level).toBe(1)
-    expect(aft.y).toBeGreaterThan(0.296)
-    const m = fallbackDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
-    expect(m.walk.map((l) => l.y)).toEqual([0.55, 0.88, 1.16, 0.88])
-    expect(m.ramps).toHaveLength(3)
-    // and you cannot leave through the rail at any level
-    for (const lvl of m.walk) for (const [, z] of lvl.points) expect(Math.abs(z)).toBeLessThanOrEqual(SHIPS['man-o-war'].anchors.hull.beam / 2 - 0.08 + 1e-9)
+  it('authored decks (session C) are the source of truth: raised levels, ramps and obstacles come from `ShipAnchors.deck`', () => {
+    for (const id of ['frigate', 'man-o-war', 'galleon', 'brigantine', 'sloop'] as const) {
+      const d = resolveDeckAnchors(SHIPS[id].anchors, id)
+      expect(d).toBe(SHIPS[id].anchors.deck)
+      expect(d.walk.length).toBeGreaterThan(0)
+      expect(d.obstacles.length).toBeGreaterThanOrEqual(SHIPS[id].anchors.masts.length)
+    }
+    const m = resolveDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
+    expect(m.walk.length).toBeGreaterThan(1)
+    expect(m.ramps.length).toBeGreaterThan(0)
   })
 
   it('stations under a castle (muzzle below the deck level they would stand on) are not reachable; waist guns are', () => {
     const a = SHIPS['man-o-war'].anchors
-    const d = fallbackDeckAnchors(a, 'man-o-war')
+    const d = resolveDeckAnchors(a, 'man-o-war')
     const st = stationsOf(a, d)
     const waist = st.filter((s) => s.stand[0] >= -0.55 && s.stand[0] <= 1.35 && s.muzzle[1] > a.deckY)
     expect(waist.length).toBeGreaterThan(0)
@@ -330,11 +325,12 @@ describe('walk acceleration and jump', () => {
   })
 
   it('while airborne the horizontal clamp still holds: stepping off the rail mid-jump snaps back inside the plan', () => {
-    const d = fallbackDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    const d = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
     let pose = spawnPose(d)
+    const inside = (p: WalkPose) => d.walk.some((l) => pointInPolygon([p.x, p.z], l.points))
     for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0, 0.05, d)
-    expect(Math.abs(pose.z)).toBeLessThanOrEqual(SHIPS.frigate.anchors.hull.beam / 2 - 0.08 + 1e-9)
+    expect(inside(pose)).toBe(true)
     for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0.1, 0, d)
-    expect(pose.x).toBeLessThanOrEqual(1.46 * 0.74 - 0.16 - 0.08 + 1e-9)
+    expect(inside(pose)).toBe(true)
   })
 })

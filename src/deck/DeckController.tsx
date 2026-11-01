@@ -1,14 +1,15 @@
 /**
- * "Third person" controller. Mounted inside `<OceanScene>` during the battle; while `deck.on` it owns the camera
- * (the rig's `'deck'` view stands down, `<CinematicCamera>` is not mounted): the player's pirate stands on one of their
- * own afloat ships, parented to the ship's wave motion, walks with WASD / arrows (Shift runs, Space hops), the mouse
- * drags to orbit, E at a glowing gun blends the camera into the gunner's eye, and a shot is picked by clicking a
- * square of the enemy chart (or a visible enemy cell in the world). The mouse is never locked and never aims: deck
- * mode is only a seat, every shot goes through `useBattleController().aim` exactly like the overview.
+ * "On deck" first-person controller. Mounted inside `<OceanScene>` during the battle; while `deck.on` it owns the
+ * camera (the rig's `'deck'` view stands down, `<CinematicCamera>` is not mounted): the player stands at eye height on
+ * one of their own afloat ships, parented to the ship's wave motion, walks with WASD / arrows (Shift runs, Space hops),
+ * the mouse drags to look (never locked), E at a glowing gun puts them at the gunner's eye, and a shot is picked by
+ * clicking a square of the enemy chart (or a visible enemy cell in the world). The mouse never aims: deck mode is only
+ * a seat, every shot goes through `useBattleController().aim` exactly like the overview. The director may borrow the
+ * camera (`deckCameraLease`, session B): the controller then keeps walking but skips its camera write.
  *
  * Per frame, in order: ship pose (waves + sink pose, the very formula `<Fleet>`'s `Afloat` uses this frame) → walk /
- * jump pose on the deck polygons → third-person orbit + spring arm or gunner eye → blend → world. The pirate and the
- * gun markers live in a group whose matrix *is* the ship pose, so they can never lag the hull by a frame.
+ * jump pose on the deck polygons → eye (walking) or gunner eye (manning) → world. The gun markers live in a group
+ * whose matrix *is* the ship pose, so they can never lag the hull by a frame.
  */
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
@@ -19,12 +20,10 @@ import { isSunk } from '../engine'
 import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
 import { sampleWaveHeight } from '../scene/waves'
 import { SHIPS, damageOf, shipWorldTransform } from '../ships'
-import type { Livery } from '../ships/types'
 import { ownBoardKey, useGameStore } from '../store/gameStore'
 import { useUiStore } from '../ui/uiStore'
 import { lastHitIndex, placedShipSeed, sinkPose } from '../vfx/sinking'
-import { BLEND_SECONDS, TP_FOV, bestSpawnYaw, blendPose, blendProgress, blockersFor, clampOrbit, thirdPersonPose, type CameraPose, type OrbitLook } from './camera'
-import { DECK_FOV, deckBus, type DeckBusEvent } from './contract'
+import { DECK_FOV, EYE_HEIGHT, deckBus, deckCameraLease, type DeckBusEvent } from './contract'
 import { resetDeckRuntime, useDeckStore } from './deckStore'
 import { GunMarkers } from './GunMarkers'
 import {
@@ -54,7 +53,6 @@ import {
   type Station,
   type WalkPose,
 } from './math'
-import { Pirate, createGait } from './Pirate'
 
 const DEFAULT_NEAR = 0.5
 /** Near plane on deck (the default 0.5 would clip the pirate and the rail). */
@@ -74,10 +72,6 @@ const TOUCH_PER_PIXEL = 0.006
 /** How far the gunner may glance away from the barrel while manning (radians). */
 const GUN_GLANCE_YAW = 0.7
 const GUN_GLANCE_PITCH = 0.35
-/** The pirate is hidden once the camera is this close (spring arm pulled in) or the blend is past half way. */
-const HIDE_ARM = 0.28
-/** Critically-damped follow of the third-person camera (seconds to ~63 %); a boarding snaps. */
-const FOLLOW_TAU = 0.07
 /** First-entry hint. */
 const HINT = 'Walk to a glowing gun and press E'
 const HINT_MS = 3000
@@ -92,9 +86,7 @@ const tmp = {
   m: new THREE.Matrix4(),
   s: new THREE.Vector3(1, 1, 1),
 }
-const tpPose: CameraPose = { position: [0, 0, 0], target: [0, 0, 0], arm: 1, slide: 0 }
-const fpPose: CameraPose = { position: [0, 0, 0], target: [0, 0, 0], arm: 0, slide: 0 }
-const outPose: CameraPose = { position: [0, 0, 0], target: [0, 0, 0], arm: 1, slide: 0 }
+const eye = { position: [0, 0, 0] as Vec3, target: [0, 0, 0] as Vec3 }
 
 type Fade = { phase: 'out' | 'in'; t: number; seconds: number; then?: () => void } | null
 type UsableStation = Station & { usable: boolean }
@@ -116,7 +108,6 @@ export function DeckController() {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const ship = useMemo(() => ownBoard.ships.find((x) => x.uid === deck.shipUid) ?? null, [ownBoard, deck.shipUid])
   const active = deck.on && phase === 'battle' && !handoff && !!ship
-  const livery: Livery = perspective === 'human' ? 'pirate' : 'navy'
 
   const ownOrigin = BOARD_LAYOUT[perspective === 'human' ? 'player' : 'enemy'].origin
   const foeBoard = BOARD_LAYOUT[perspective === 'human' ? 'enemy' : 'player']
@@ -128,18 +119,15 @@ export function DeckController() {
     const deckA = resolveDeckAnchors(anchors, ship.spec.id)
     const transform = shipWorldTransform(ship, ownOrigin)
     const stations: UsableStation[] = stationsOf(anchors, deckA).map((s) => ({ ...s, usable: stationUsable(s, transform.rotationY, transform.position, foeCenter) }))
-    const blockers = blockersFor(deckA, anchors.masts, ship.spec.id)
-    return { anchors, deckA, transform, stations, blockers, hull: anchors.hull, seed: placedShipSeed(ship) }
+    return { anchors, deckA, transform, stations, hull: anchors.hull, seed: placedShipSeed(ship) }
   }, [ship, ownOrigin, foeCenter])
 
   // --- mutable per-frame state -------------------------------------------------------------------------------
   const pose = useRef<WalkPose>({ x: 0, z: 0, y: 0, level: 0 })
   const vel = useRef({ x: 0, z: 0 })
   const air = useRef<AirPose>(GROUNDED)
-  const facing = useRef(0)
-  const orbit = useRef<OrbitLook>({ yaw: 0, pitch: 0 })
+  const look = useRef({ yaw: 0, pitch: 0 })
   const glance = useRef({ yaw: 0, pitch: 0 })
-  const blend = useRef({ t: 0, value: 0, to: 0 })
   const keys = useRef(new Set<string>())
   const shake = useRef(0)
   const shakeT = useRef(0)
@@ -150,12 +138,8 @@ export function DeckController() {
   const hinted = useRef(false)
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean; touch: boolean } | null>(null)
   const tumble = useRef(0)
-  const gait = useRef(createGait())
   const nearIndex = useRef(-1)
   const shipGroup = useRef<THREE.Group>(null)
-  const pirateGroup = useRef<THREE.Group>(null)
-  const fov = useRef(0)
-  const smoothed = useRef<{ x: number; y: number; z: number; snap: boolean }>({ x: 0, y: 0, z: 0, snap: true })
 
   const activeRef = useRef(active)
   activeRef.current = active
@@ -168,7 +152,7 @@ export function DeckController() {
     if (standUid.current === ship.uid) return
     const first = standUid.current === null
     standUid.current = ship.uid
-    // face the enemy waters, standing on their side of the deck (the camera orbits behind you over the centreline)
+    // face the enemy waters, standing on their side of the deck
     const { rotationY, position } = geometry.transform
     const worldYaw = Math.atan2(-(foeCenter[0] - position[0]), -(foeCenter[2] - position[2]))
     const localYaw = worldYaw - rotationY
@@ -178,15 +162,9 @@ export function DeckController() {
     pose.current = p
     vel.current = { x: 0, z: 0 }
     air.current = GROUNDED
-    facing.current = localYaw
-    orbit.current = { yaw: bestSpawnYaw([p.x, p.y, p.z], localYaw, geometry.blockers), pitch: 0 }
-    blend.current = { t: 0, value: 0, to: 0 }
-    smoothed.current.snap = true
-    tpPose.slide = 0
+    look.current = { yaw: localYaw, pitch: 0 }
+    glance.current = { yaw: 0, pitch: 0 }
     tumble.current = 0
-    gait.current.tumble = 0
-    gait.current.speed = 0
-    gait.current.height = 0
     if (first && !hinted.current) {
       hinted.current = true
       useDeckStore.getState().showNudge(HINT, HINT_MS)
@@ -197,8 +175,7 @@ export function DeckController() {
   useEffect(() => {
     if (!active) return
     camera.near = NEAR
-    camera.fov = TP_FOV
-    fov.current = TP_FOV
+    camera.fov = DECK_FOV
     camera.updateProjectionMatrix()
     useDeckStore.getState().setActive(true)
     const canvas = gl.domElement
@@ -212,7 +189,6 @@ export function DeckController() {
       abandoning.current = false
       drag.current = null
       keys.current.clear()
-      blend.current = { t: 0, value: 0, to: 0 }
       air.current = GROUNDED
       vel.current = { x: 0, z: 0 }
       resetDeckRuntime()
@@ -291,7 +267,7 @@ export function DeckController() {
       pose.current = { ...pose.current, x: st.stand[0], z: st.stand[2], y: st.stand[1] }
       vel.current = { x: 0, z: 0 }
       air.current = GROUNDED
-      facing.current = st.yaw
+      look.current = { yaw: st.yaw, pitch: 0 }
       glance.current = { yaw: 0, pitch: 0 }
       g.manStation(st.index)
     }
@@ -385,8 +361,8 @@ export function DeckController() {
         glance.current.yaw = clamp(glance.current.yaw - dx * k, -GUN_GLANCE_YAW, GUN_GLANCE_YAW)
         glance.current.pitch = clamp(glance.current.pitch - dy * k * inv, -GUN_GLANCE_PITCH, GUN_GLANCE_PITCH)
       } else {
-        orbit.current.yaw -= dx * k
-        orbit.current.pitch = clampOrbit(orbit.current.pitch + dy * k * inv)
+        look.current.yaw -= dx * k
+        look.current.pitch = clamp(look.current.pitch - dy * k * inv, -PITCH_LIMIT, PITCH_LIMIT)
       }
       d.x = e.clientX
       d.y = e.clientY
@@ -484,9 +460,9 @@ export function DeckController() {
     let wz = 0
     if (wantsMove) {
       const speed = k.has('shift') ? RUN_SPEED : WALK_SPEED
-      const f = lookForward(orbit.current.yaw, 0)
-      const rx = Math.cos(orbit.current.yaw)
-      const rz = -Math.sin(orbit.current.yaw)
+      const f = lookForward(look.current.yaw, 0)
+      const rx = Math.cos(look.current.yaw)
+      const rz = -Math.sin(look.current.yaw)
       const len = Math.hypot(fwd, strafe) || 1
       wx = ((f[0] * fwd + rx * strafe) / len) * speed
       wz = ((f[2] * fwd + rz * strafe) / len) * speed
@@ -503,9 +479,7 @@ export function DeckController() {
       const before = pose.current.y
       pose.current = stepOnDeck(pose.current, vel.current.x * dt, vel.current.z * dt, geometry.deckA)
       if (air.current.airborne) air.current = stepJump(air.current, dt, before, pose.current.y)
-      else if (speed > 0.02) facing.current += angleDelta(facing.current, Math.atan2(-vel.current.x, -vel.current.z)) * (1 - Math.exp(-dt / 0.08))
     } else if (air.current.airborne) air.current = stepJump(air.current, dt, pose.current.y, pose.current.y)
-    if (air.current.airborne && speed > 0.02) facing.current += angleDelta(facing.current, Math.atan2(-vel.current.x, -vel.current.z)) * (1 - Math.exp(-dt / 0.08))
     if (!air.current.airborne && !wantsMove && speed === 0 && !stillManning) {
       // settle on the deck under the feet (the ramps blend; a ship switch snaps)
       pose.current = stepOnDeck(pose.current, 0, 0, geometry.deckA)
@@ -534,7 +508,7 @@ export function DeckController() {
     }
     runtime.setApproach(approachSt ? approachSt.index : null)
 
-    // 4. look-at nudges (incoming ball, sinking ship) swing the orbit / glance toward a world point
+    // 4. look-at nudges (incoming ball, sinking ship) swing the look / glance toward a world point
     const la = lookAt.current
     if (la) {
       la.t += dt
@@ -548,65 +522,34 @@ export function DeckController() {
         const baseYaw = manning ? gunnerPose(manning).yaw : 0
         glance.current.yaw += (clamp(angleDelta(baseYaw, wantYaw), -GUN_GLANCE_YAW, GUN_GLANCE_YAW) - glance.current.yaw) * f
       } else {
-        orbit.current.yaw += angleDelta(orbit.current.yaw, wantYaw) * f
-        const wantPitch = clampOrbit(-Math.atan2(wyp, Math.hypot(wxp, wzp)) * 0.5)
-        orbit.current.pitch += (wantPitch - orbit.current.pitch) * f
+        look.current.yaw += angleDelta(look.current.yaw, wantYaw) * f
+        const wantPitch = clamp(Math.atan2(wyp, Math.hypot(wxp, wzp)) * 0.5, -PITCH_LIMIT, PITCH_LIMIT)
+        look.current.pitch += (wantPitch - look.current.pitch) * f
       }
       if (la.t >= la.seconds) lookAt.current = null
     }
 
-    // 5. blend third ↔ first person (reduced motion cuts)
-    const b = blend.current
-    b.to = stillManning ? 1 : 0
-    if (b.value !== b.to) {
-      b.t += dt
-      const p = blendProgress(b.t, reducedMotion ? 0 : BLEND_SECONDS)
-      b.value = b.to === 1 ? p : 1 - p
-      if (p >= 1) b.value = b.to
-    } else b.t = 0
-
-    // 6. the two poses in ship space
-    const feet: Vec3 = [pose.current.x, pose.current.y + air.current.height, pose.current.z]
-    const prevSlide = tpPose.slide
-    thirdPersonPose(feet, orbit.current, geometry.blockers, tpPose)
-    // damped follow in ship space (the spring arm and the deck steps never snap the camera; a boarding or a slide to
-    // the other side of a mast does — the damped path would cut through it)
-    const sm = smoothed.current
-    if (sm.snap || tpPose.slide !== prevSlide) {
-      sm.x = tpPose.position[0]
-      sm.y = tpPose.position[1]
-      sm.z = tpPose.position[2]
-      sm.snap = false
-    } else {
-      sm.x = approach(sm.x, tpPose.position[0], dt, FOLLOW_TAU)
-      sm.y = approach(sm.y, tpPose.position[1], dt, FOLLOW_TAU)
-      sm.z = approach(sm.z, tpPose.position[2], dt, FOLLOW_TAU)
-    }
-    tpPose.position[0] = sm.x
-    tpPose.position[1] = sm.y
-    tpPose.position[2] = sm.z
+    // 5. the eye in ship space: the gunner's eye (+ glance) while manning, else EYE_HEIGHT over the feet looking along `look`
     if (manning) {
       const gp = gunnerPose(manning)
       const dir = lookForward(gp.yaw + glance.current.yaw, clamp(gp.pitch + glance.current.pitch, -PITCH_LIMIT, PITCH_LIMIT))
-      fpPose.position[0] = gp.position[0]
-      fpPose.position[1] = gp.position[1]
-      fpPose.position[2] = gp.position[2]
-      fpPose.target[0] = gp.position[0] + dir[0]
-      fpPose.target[1] = gp.position[1] + dir[1]
-      fpPose.target[2] = gp.position[2] + dir[2]
-    } else if (b.value > 0) {
-      // stepping away: blend back from the eye over the feet
-      fpPose.position[0] = feet[0]
-      fpPose.position[1] = feet[1] + 0.15
-      fpPose.position[2] = feet[2]
-      const dir = lookForward(facing.current, 0)
-      fpPose.target[0] = feet[0] + dir[0]
-      fpPose.target[1] = feet[1] + 0.15 + dir[1]
-      fpPose.target[2] = feet[2] + dir[2]
+      eye.position[0] = gp.position[0]
+      eye.position[1] = gp.position[1]
+      eye.position[2] = gp.position[2]
+      eye.target[0] = gp.position[0] + dir[0]
+      eye.target[1] = gp.position[1] + dir[1]
+      eye.target[2] = gp.position[2] + dir[2]
+    } else {
+      const dir = lookForward(look.current.yaw, look.current.pitch)
+      eye.position[0] = pose.current.x
+      eye.position[1] = pose.current.y + air.current.height + EYE_HEIGHT
+      eye.position[2] = pose.current.z
+      eye.target[0] = eye.position[0] + dir[0]
+      eye.target[1] = eye.position[1] + dir[1]
+      eye.target[2] = eye.position[2] + dir[2]
     }
-    const cam = b.value <= 0 ? tpPose : b.value >= 1 ? fpPose : blendPose(tpPose, fpPose, b.value, outPose)
 
-    // 7. shake: the director's impulses (CinematicCamera is not mounted on deck) + deckBus shakes
+    // 6. shake: the director's impulses (CinematicCamera is not mounted on deck) + deckBus shakes
     const ds = director.store.getState()
     if (ds.shake > 0) {
       if (!reducedMotion) shake.current = Math.min(1, shake.current + ds.shake * 0.25)
@@ -617,38 +560,23 @@ export function DeckController() {
     const amp = reducedMotion ? 0 : shake.current * 0.08
     const st = shakeT.current
 
-    // 8. to world: the same ship matrix the hull uses this frame
-    tmp.v.set(cam.position[0] + Math.sin(st * 37.1) * amp, cam.position[1] + Math.sin(st * 51.7 + 1.3) * amp * 0.8, cam.position[2] + Math.sin(st * 43.3 + 2.1) * amp * 0.6).applyMatrix4(tmp.m)
-    tmp.w.set(cam.target[0], cam.target[1], cam.target[2]).applyMatrix4(tmp.m)
-    camera.position.copy(tmp.v)
-    // level horizon (the ship rolls under you); a gentle sway unless reduced motion
-    tmp.u.set(0, 1, 0)
-    camera.up.copy(tmp.u)
-    camera.lookAt(tmp.w)
-    if (!reducedMotion) camera.quaternion.multiply(tmp.q2.setFromEuler(tmp.e.set(Math.sin(t * 0.8 + 1) * 0.004, Math.sin(t * 0.5) * 0.006, 0, 'YXZ')))
-    const wantFov = TP_FOV + (DECK_FOV - TP_FOV) * b.value
-    if (Math.abs(fov.current - wantFov) > 0.01) {
-      fov.current = wantFov
-      camera.fov = wantFov
-      camera.updateProjectionMatrix()
+    // 7. to world: the same ship matrix the hull uses this frame. Skipped while the director has borrowed the camera
+    // for a follow-cam / overboard beat (session B, `deckCameraLease`): the walk state keeps updating underneath.
+    if (deckCameraLease.owner !== 'director') {
+      tmp.v.set(eye.position[0] + Math.sin(st * 37.1) * amp, eye.position[1] + Math.sin(st * 51.7 + 1.3) * amp * 0.8, eye.position[2] + Math.sin(st * 43.3 + 2.1) * amp * 0.6).applyMatrix4(tmp.m)
+      tmp.w.set(eye.target[0], eye.target[1], eye.target[2]).applyMatrix4(tmp.m)
+      camera.position.copy(tmp.v)
+      // level horizon (the ship rolls under you); a gentle sway unless reduced motion; going overboard rolls the view
+      tmp.u.set(0, 1, 0)
+      camera.up.copy(tmp.u)
+      camera.lookAt(tmp.w)
+      if (!reducedMotion) camera.quaternion.multiply(tmp.q2.setFromEuler(tmp.e.set(Math.sin(t * 0.8 + 1) * 0.004, Math.sin(t * 0.5) * 0.006, tumble.current * (0.9 + Math.sin(st * 9) * 0.3), 'YXZ')))
     }
 
-    // 9. the pirate: feet on the deck in ship space, facing the walk direction; hidden in first person / when the arm is pulled in
-    const pg = pirateGroup.current
-    if (pg) {
-      pg.position.set(feet[0], feet[1], feet[2])
-      pg.rotation.set(0, facing.current + Math.PI, tumble.current * (1 + Math.sin(st * 9) * 0.3))
-      pg.visible = b.value < 0.5 && cam.arm >= HIDE_ARM
-      const gt = gait.current
-      gt.speed = speed
-      gt.height = air.current.height
-      gt.tumble = tumble.current
-    }
-
-    // 10. the floating "E — Man the gun" label and the compass arrow (DOM, no React)
+    // 8. the floating "E — Man the gun" label and the compass arrow (DOM, no React)
     const label = runtime.labelEl
     if (label) {
-      if (approachSt && b.value < 0.5) {
+      if (approachSt && !stillManning) {
         tmp.v.set(approachSt.stand[0], approachSt.stand[1] + 0.16, approachSt.stand[2]).applyMatrix4(tmp.m).project(camera)
         if (tmp.v.z < 1 && Math.abs(tmp.v.x) < 1.1 && Math.abs(tmp.v.y) < 1.1) {
           const sx = ((tmp.v.x + 1) / 2) * state.size.width
@@ -684,13 +612,13 @@ export function DeckController() {
       } else compass.style.opacity = '0'
     }
 
-    // 11. standing ship went down and nobody played an abandon-ship beat: our own, once the director is done with the sink
+    // 9. standing ship went down and nobody played an abandon-ship beat: our own, once the director is done with the sink
     if (sunk && !abandoning.current && !fade.current && !ds.busy) {
       const afloat = afloatUids(g[ownBoardKey(g.perspective)].ships)
       deckBus.emit({ type: 'abandon-ship', nextUid: cycleShip(afloat, null) })
     }
 
-    // 12. fades (Tab switch, abandon ship, overboard)
+    // 10. fades (Tab switch, abandon ship, overboard)
     const fd = fade.current
     if (fd) {
       fd.t += dt
@@ -711,9 +639,6 @@ export function DeckController() {
   if (!active || !geometry) return null
   return (
     <group ref={shipGroup} matrixAutoUpdate={false}>
-      <group ref={pirateGroup}>
-        <Pirate livery={livery} gait={gait} />
-      </group>
       <GunMarkers stations={geometry.stations} near={nearIndex} />
     </group>
   )

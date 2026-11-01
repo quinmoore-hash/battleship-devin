@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openShotLog, startSinglePlayer } from './helpers'
 
-// "Third person" needs a WebGL scene (SwiftShader, scene project). Cinematics off keeps the turns short; Low tier keeps SwiftShader alive.
+// "On deck" needs a WebGL scene (SwiftShader, scene project). Cinematics off keeps the turns short; Low tier keeps SwiftShader alive.
 async function toBattle(page: Page, rules: Array<'salvo' | 'storm' | 'black-flag'> = []) {
   await page.addInitScript(() => {
     localStorage.setItem('battleship-devin.settings', JSON.stringify({ cinematics: 'off', sfxVolume: 0, musicVolume: 0, reducedMotion: true }))
@@ -17,13 +17,13 @@ async function toBattle(page: Page, rules: Array<'salvo' | 'storm' | 'black-flag
   await expect(page.getByTestId('status')).toContainText('Your turn', { timeout: 60_000 })
 }
 
-test('third person: V toggles mid-turn without changing the game, a manned gun fires through the chart, Salvo counts the volley', async ({ page }) => {
+test('on deck: V toggles mid-turn without changing the game, a manned gun fires through the chart, Salvo counts the volley', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await toBattle(page, ['salvo'])
   const toggle = page.getByTestId('deck-toggle')
   await expect(toggle).toHaveAttribute('data-on', 'false')
-  await expect(toggle).toHaveText(/Third person/)
+  await expect(toggle).toHaveText(/On deck/)
 
   // toggle on with the key: HUD appears, the game state is untouched
   await page.keyboard.press('v')

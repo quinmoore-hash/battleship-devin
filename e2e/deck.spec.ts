@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { startSinglePlayer } from './helpers'
 
-// "Third person" without 3D: nothing to stand on, so the HUD must not offer it — but the settings and the rules still describe it.
+// "On deck" without 3D: nothing to stand on, so the HUD must not offer it — but the settings and the rules still describe it.
 test('?no3d: no Third-person toggle, V does nothing, settings and How to play still carry the deck block', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/?no3d')

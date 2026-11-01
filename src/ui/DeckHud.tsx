@@ -7,7 +7,7 @@ import { SHIPS } from '../ships'
 import { useGameStore } from '../store/gameStore'
 import { isCoarsePointer, useUiStore } from './uiStore'
 
-/** "Third person" / "Overview" button in the battle header + the V key. Hidden under `?no3d` (no deck to stand on). */
+/** "On deck" / "Overview" button in the battle header + the V key. Hidden under `?no3d` (no deck to stand on). */
 export function DeckToggle() {
   const on = useGameStore((s) => s.deck.on)
   const setDeck = useGameStore((s) => s.setDeck)
@@ -34,11 +34,11 @@ export function DeckToggle() {
       data-testid="deck-toggle"
       data-on={on ? 'true' : 'false'}
       aria-pressed={on}
-      title={on ? 'Back to the overview (V)' : 'Walk your own deck in third person (V)'}
+      title={on ? 'Back to the overview (V)' : 'Walk your own deck (V)'}
       disabled={phase !== 'battle'}
       onClick={() => (playSfx('ui-click'), setDeck(!useGameStore.getState().deck.on))}
     >
-      {on ? 'Overview' : 'Third person'}
+      {on ? 'Overview' : 'On deck'}
       <kbd aria-hidden>V</kbd>
     </button>
   )
@@ -103,7 +103,7 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
       <div className="deck-prompt" data-testid="deck-prompt" role="status" aria-live="polite">
         {prompt}
       </div>
-      <div className="panel parchment deck-hud" data-testid="deck-hud" data-station={deck.station ?? undefined} data-view={manning ? 'first' : 'third'}>
+      <div className="panel parchment deck-hud" data-testid="deck-hud" data-station={deck.station ?? undefined} data-view={manning ? 'gun' : 'walk'}>
         <div className="deck-ship">
           <strong data-testid="deck-ship-name">{def.name}</strong>
           <span className="deck-pips" aria-label={`${ship.hits.length} of ${spec.length} sections hit`} data-testid="deck-pips">
