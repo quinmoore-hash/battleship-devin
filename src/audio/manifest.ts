@@ -23,6 +23,18 @@ export type CanonicalSfx =
   | 'sail-flap'
   | 'thunder'
   | 'gull'
+  // On deck (src/deck/audio) — only played while deck mode is on
+  | 'footstep'
+  | 'footstep-land'
+  | 'rope-strain'
+  | 'water-lap'
+  | 'wind-sails'
+  | 'crew-call'
+  | 'gun-call-run-out'
+  | 'gun-call-fire'
+  | 'crew-groan'
+  | 'crew-brace'
+  | 'crew-panic'
 
 /** Names used by the pre-pirate UI (`src/ui`). They keep working and map onto the new set. */
 export type LegacySfx = 'fire' | 'hit' | 'miss' | 'sunk' | 'victory' | 'defeat' | 'place'
@@ -66,6 +78,17 @@ const CANONICAL_FILES: Record<CanonicalSfx, readonly string[]> = {
   'sail-flap': ['sail-flap'],
   thunder: ['thunder'],
   gull: ['gull-1', 'gull-2'],
+  footstep: ['footstep-1', 'footstep-2', 'footstep-3'],
+  'footstep-land': ['footstep-land'],
+  'rope-strain': ['rope-strain-1', 'rope-strain-2'],
+  'water-lap': ['water-lap-1', 'water-lap-2'],
+  'wind-sails': ['wind-sails'],
+  'crew-call': ['crew-call-1', 'crew-call-2', 'crew-call-3'],
+  'gun-call-run-out': ['gun-call-run-out'],
+  'gun-call-fire': ['gun-call-fire'],
+  'crew-groan': ['crew-groan'],
+  'crew-brace': ['crew-brace'],
+  'crew-panic': ['crew-panic'],
 }
 
 /** Canonical names plus the legacy aliases (pointing at the same files). */
@@ -77,8 +100,23 @@ export const SFX_FILES: Record<Sfx, readonly string[]> = {
 /** The real sound set (no aliases) — what the demo lists. */
 export const SFX_NAMES = Object.keys(CANONICAL_FILES) as CanonicalSfx[]
 
+/** On-deck only (src/deck/audio): not part of the boot preload, `preloadDeckSfx()` loads them when the deck layer mounts. */
+export const DECK_SFX: ReadonlySet<CanonicalSfx> = new Set<CanonicalSfx>([
+  'footstep',
+  'footstep-land',
+  'rope-strain',
+  'water-lap',
+  'wind-sails',
+  'crew-call',
+  'gun-call-run-out',
+  'gun-call-fire',
+  'crew-groan',
+  'crew-brace',
+  'crew-panic',
+])
+
 /** SFX authored as seamless loops (`playSfx` of these returns a handle you must `stop()`). */
-export const LOOPING_SFX: ReadonlySet<CanonicalSfx> = new Set<CanonicalSfx>(['fire-loop', 'bubbles'])
+export const LOOPING_SFX: ReadonlySet<CanonicalSfx> = new Set<CanonicalSfx>(['fire-loop', 'bubbles', 'wind-sails'])
 
 /** Big moments pull the music down for a while so they read clearly. */
 export const SFX_DUCK_MS: Partial<Record<CanonicalSfx, number>> = {
@@ -104,6 +142,17 @@ export const SFX_GAIN: Partial<Record<CanonicalSfx, number>> = {
   'sail-flap': 0.6,
   gull: 0.45,
   bubbles: 0.6,
+  footstep: 0.45,
+  'footstep-land': 0.6,
+  'rope-strain': 0.5,
+  'water-lap': 0.45,
+  'wind-sails': 0.5,
+  'crew-call': 0.5,
+  'gun-call-run-out': 0.6,
+  'gun-call-fire': 0.7,
+  'crew-groan': 0.55,
+  'crew-brace': 0.65,
+  'crew-panic': 0.6,
 }
 
 export type MusicTrack = 'menu' | 'battle'

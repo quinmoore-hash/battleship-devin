@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { bindGameAudio } from './audio'
 import { CinematicCamera, CinematicLayer, Letterbox, director, useDirector } from './cinematics'
-import { DeckController } from './deck'
+import { DeckAudio, DeckController } from './deck'
 import { ExtrasLayer, MenuRules, MenuStats, useGameTimeOfDay, useGameWeather } from './extras'
 import { OceanScene } from './scene'
 import { useGameStore } from './store/gameStore'
@@ -117,6 +117,7 @@ function Game() {
         {inBattle && <CinematicLayer />}
         {inBattle && !onDeck && <CinematicCamera />}
         {phase === 'battle' && <DeckController />}
+        {phase === 'battle' && <DeckAudio />}
       </OceanScene>
       <GameUI menuExtras={{ rules: <MenuRules />, stats: <MenuStats /> }} />
       <ExtrasLayer />

@@ -7,7 +7,7 @@ import {
   wander, waves,
 } from './dsp.mjs'
 
-const finish = (out, { peak = 0.95, drive = 1.1 } = {}) => fadeEdges(trimTail(limit(out, peak, drive)))
+export const finish = (out, { peak = 0.95, drive = 1.1 } = {}) => fadeEdges(trimTail(limit(out, peak, drive)))
 
 // ---------------------------------------------------------------- cannon
 
@@ -259,7 +259,7 @@ export function fireLoop() {
 // ---------------------------------------------------------------- crew (formant voices)
 
 /** Rough formant-synth shout. `contour(t)` gives the fundamental in Hz; `vowels` morph formant sets. */
-function voice(len, contour, vowels, r, { breath = 0.25, rough = 0.12 } = {}) {
+export function voice(len, contour, vowels, r, { breath = 0.25, rough = 0.12 } = {}) {
   const jitter = wander(len, 30, r, 0.01)
   const src = tone(len, (t) => contour(t) * (1 + rough * 0.08 * (jitter[Math.min(jitter.length - 1, Math.round(t * 44100))] - 0.5)), (t) => asrEnv(t, len, 0.03, len * 0.3), waves.pulse(0.3))
   const air = noise(len, (t) => asrEnv(t, len, 0.03, len * 0.3) * breath, r)
@@ -274,7 +274,7 @@ function voice(len, contour, vowels, r, { breath = 0.25, rough = 0.12 } = {}) {
   return out
 }
 
-const VOWEL = {
+export const VOWEL = {
   a: { f: [730, 1090, 2440], g: [1, 0.5, 0.25] },
   o: { f: [570, 840, 2410], g: [1, 0.35, 0.15] },
   e: { f: [530, 1840, 2480], g: [1, 0.4, 0.2] },

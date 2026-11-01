@@ -18,12 +18,16 @@ import { fileURLToPath } from 'node:url'
 import { ambienceSea, ambienceStorm } from './audio/ambience.mjs'
 import { SR, wavBytes } from './audio/dsp.mjs'
 import { musicBattle, musicIntro, musicMenu } from './audio/music.mjs'
+import * as deck from './audio/deck-sfx.mjs'
 import * as sfx from './audio/sfx.mjs'
 
 const OUT_DIR = resolve(fileURLToPath(import.meta.url), '../../public/assets/audio')
 const args = process.argv.slice(2)
 const KEEP_WAV = args.includes('--wav')
 const filters = args.filter((a) => !a.startsWith('--'))
+
+/** Encoding for the short On-deck cues (mono, ≤ 2.5 s). */
+const DECK = { oggQ: 1, mp3Kbps: 48 }
 
 /** name -> [render, { oggQ, mp3Kbps }] */
 const SOUNDS = {
@@ -52,6 +56,18 @@ const SOUNDS = {
   'music-battle': [musicBattle, { oggQ: 1, mp3Kbps: 64 }],
   'ambience-sea': [ambienceSea, { oggQ: 0, mp3Kbps: 56 }],
   'ambience-storm': [ambienceStorm, { oggQ: 0, mp3Kbps: 56 }],
+  // On deck (src/deck/audio): short, encoded small
+  'footstep-1': [() => deck.footstep(761), DECK], 'footstep-2': [() => deck.footstep(762), DECK], 'footstep-3': [() => deck.footstep(763), DECK],
+  'footstep-land': [deck.footstepLand, DECK],
+  'rope-strain-1': [() => deck.ropeStrain(901), DECK], 'rope-strain-2': [() => deck.ropeStrain(902), DECK],
+  'water-lap-1': [() => deck.waterLap(911), DECK], 'water-lap-2': [() => deck.waterLap(912), DECK],
+  'wind-sails': [deck.windSails, { oggQ: 0, mp3Kbps: 48 }],
+  'crew-call-1': [() => deck.crewCall(930), DECK], 'crew-call-2': [() => deck.crewCall(931), DECK], 'crew-call-3': [() => deck.crewCall(932), DECK],
+  'gun-call-run-out': [deck.gunCallRunOut, DECK],
+  'gun-call-fire': [deck.gunCallFire, DECK],
+  'crew-groan': [deck.crewGroan, DECK],
+  'crew-brace': [deck.crewBrace, DECK],
+  'crew-panic': [deck.crewPanic, DECK],
 }
 
 function encode(name, samples, tmp, { oggQ = 3, mp3Kbps = 96 } = {}) {

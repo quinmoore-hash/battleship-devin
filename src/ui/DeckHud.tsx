@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { playSfx } from '../audio'
-import { useDeckStore } from '../deck'
+import { isAudioDebug, useDeckAudioStore, useDeckStore } from '../deck'
 import { coordLabel, FLEET_BY_ID, type PlacedShip } from '../engine'
 import { is3dDisabled } from '../scene/flags'
 import { SHIPS } from '../ships'
@@ -99,6 +99,7 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
         <i />
         <i />
       </div>
+      {isAudioDebug() && <DeckAudioLog />}
       <div className="deck-prompt" data-testid="deck-prompt" role="status" aria-live="polite">
         {prompt}
       </div>
@@ -136,5 +137,27 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
         </div>
       </div>
     </>
+  )
+}
+
+/** `?audio-debug`: the deck audio cues as they fire (the VM's browser has no speakers; tests read this). */
+function DeckAudioLog() {
+  const recent = useDeckAudioStore((s) => s.recent)
+  const count = useDeckAudioStore((s) => s.count)
+  const wind = useDeckAudioStore((s) => s.wind)
+  const underwater = useDeckAudioStore((s) => s.underwater)
+  return (
+    <div className="deck-audio-log" data-testid="deck-audio-log" data-count={count} data-wind={wind.toFixed(2)} data-underwater={underwater ? 'true' : 'false'}>
+      <strong>
+        Deck audio · {count} cues · wind {wind.toFixed(2)}
+        {underwater ? ' · underwater' : ''}
+      </strong>
+      {recent.map((c) => (
+        <span key={c.n} data-cue={c.name}>
+          #{c.n} {c.name}
+          {c.detail ? ` — ${c.detail}` : ''}
+        </span>
+      ))}
+    </div>
   )
 }

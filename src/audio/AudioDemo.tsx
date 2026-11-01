@@ -53,6 +53,17 @@ const DESCRIPTIONS: Record<CanonicalSfx, string> = {
   'sail-flap': 'canvas snapping in the wind',
   thunder: 'storm weather',
   gull: 'passing gull, 2 variants',
+  footstep: 'on deck: boot on planks, 3 variants',
+  'footstep-land': 'on deck: landing a jump',
+  'rope-strain': 'on deck: rigging on a wave peak, 2 variants',
+  'water-lap': 'on deck: water at the hull, 2 variants',
+  'wind-sails': 'on deck: wind in the canvas (loop)',
+  'crew-call': 'on deck: "Steady!", "Heave!", whistle (synth placeholders)',
+  'gun-call-run-out': 'on deck: "Run out the gun!" (synth placeholder)',
+  'gun-call-fire': 'on deck: "Fire!" (synth placeholder)',
+  'crew-groan': 'on deck: groan at a miss',
+  'crew-brace': 'on deck: "Brace!" (synth placeholder)',
+  'crew-panic': 'on deck: cries as she goes down',
 }
 
 // top-down pad: x maps to world x, y maps to world z (enemy fleet at the top, player fleet at the bottom)

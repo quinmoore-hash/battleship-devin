@@ -179,7 +179,8 @@ describe('playSfxAt (spatial)', () => {
   it('setAudioListenerFromCamera reads a three.js-like camera', () => {
     audio.setAudioListenerFromCamera({
       position: { x: 1, y: 2, z: 3 },
-      getWorldDirection: (t) => t.set(0, 0, -1),
+      // three's Camera.getWorldDirection chains .normalize() on the target
+      getWorldDirection: (t) => t.set(0, 0, -4).normalize(),
     })
     expect(audio.getAudioListener()).toEqual({ position: [1, 2, 3], forward: [0, 0, -1] })
   })
