@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openShotLog, startSinglePlayer } from './helpers'
+import { openShotLog, playToGameOver, startSinglePlayer } from './helpers'
 
 // Black Flag rules toggle: fleet picker, Broadside / Spyglass power shots and hidden treasure (BUG-540+).
 test.describe('Black Flag', () => {
@@ -30,8 +30,6 @@ test.describe('Black Flag', () => {
     await expect(page.getByTestId('power-shots')).toBeVisible()
     await expect(page.getByTestId('treasure-count')).toContainText('0/2')
 
-    const grid = page.getByTestId('enemy-grid')
-    const gameover = page.getByTestId('gameover')
     const status = page.getByTestId('status')
     const yourTurn = status.filter({ hasText: /Your turn|fire again|armed|Spyglass/ })
 
@@ -55,12 +53,7 @@ test.describe('Black Flag', () => {
     await expect(page.getByTestId('power-broadside')).toBeDisabled()
     await expect(page.getByTestId('shot-log')).toContainText('Broadside C5–C7')
 
-    for (let i = 0; i < 120; i++) {
-      await expect(yourTurn.or(gameover)).toBeVisible()
-      if (await gameover.isVisible()) break
-      await grid.locator('button[data-state="unknown"]').first().click()
-    }
-    await expect(gameover).toBeVisible()
+    await playToGameOver(page, { maxTurns: 120, turnStatus: /Your turn|fire again|armed|Spyglass/ })
     await expect(page.getByTestId('stat-black-flag')).toContainText('Wolf pack vs')
     await expect(page.getByTestId('stat-lost')).toContainText('/7')
     await expect(page.getByTestId('stat-black-flag')).toContainText('chests')
