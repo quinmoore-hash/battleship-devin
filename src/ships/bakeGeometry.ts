@@ -66,6 +66,9 @@ interface Bucket {
 }
 
 const tmpM = new THREE.Matrix4()
+const tmpInst = new THREE.Matrix4()
+/** InstancedMeshes up to this many instances are unrolled into the merged buckets; bigger ones stay instanced. */
+const INSTANCE_EXPAND_MAX = 512
 
 export interface BakeStats {
   drawCalls: number
@@ -132,11 +135,41 @@ export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material): THR
     return c
   }
 
+  const addToBucket = (o: THREE.Object3D, material: THREE.Material, g: THREE.BufferGeometry, type: string, kind: Bucket['kind']) => {
+    const wreck = !!collapse && kind === 'mesh'
+    if (wreck) g = silhouette(g)
+    const key = wreck ? 'mesh|wreck' : `${kind}|${o.renderOrder}|${materialKey(material)}|${geometrySignature(g)}`
+    let b = buckets.get(key)
+    if (!b) {
+      b = { kind, material: wreck ? collapse! : material, geoms: [], castShadow: false, receiveShadow: false, renderOrder: wreck ? 0 : o.renderOrder, types: new Set() }
+      buckets.set(key, b)
+    }
+    b.geoms.push(g)
+    b.types.add(type)
+    b.castShadow ||= o.castShadow
+    b.receiveShadow ||= o.receiveShadow
+  }
+
   root.traverseVisible((o) => {
     if (o === root) return
     const mesh = o as THREE.Mesh
     const isLineSeg = (o as THREE.LineSegments).isLineSegments
-    if ((o as THREE.InstancedMesh).isInstancedMesh || (o as THREE.Sprite).isSprite || (o as THREE.Points).isPoints || (o as THREE.SkinnedMesh).isSkinnedMesh) {
+    const inst = o as THREE.InstancedMesh
+    if (inst.isInstancedMesh && !inst.instanceColor && !Array.isArray(inst.material) && inst.count <= INSTANCE_EXPAND_MAX) {
+      // rail posts / rope bundles / gun barrels: unroll the instances into the material bucket so a baked ship
+      // costs one draw per material instead of one per InstancedMesh (BUG-706: a galleon had 28 of them)
+      sourceMeshes++
+      tmpM.multiplyMatrices(inv, o.matrixWorld)
+      for (let i = 0; i < inst.count; i++) {
+        inst.getMatrixAt(i, tmpInst)
+        const g = inst.geometry.clone()
+        for (const k of Object.keys(g.morphAttributes)) delete g.morphAttributes[k as keyof typeof g.morphAttributes]
+        g.applyMatrix4(tmpInst).applyMatrix4(tmpM)
+        addToBucket(o, inst.material, g, inst.geometry.type, 'mesh')
+      }
+      return
+    }
+    if (inst.isInstancedMesh || (o as THREE.Sprite).isSprite || (o as THREE.Points).isPoints || (o as THREE.SkinnedMesh).isSkinnedMesh) {
       keepAsIs(o)
       return
     }
@@ -162,19 +195,7 @@ export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material): THR
     let g = mesh.geometry.clone()
     for (const k of Object.keys(g.morphAttributes)) delete g.morphAttributes[k as keyof typeof g.morphAttributes]
     g.applyMatrix4(tmpM)
-    const kind = isLineSeg ? 'lines' : 'mesh'
-    const wreck = !!collapse && kind === 'mesh'
-    if (wreck) g = silhouette(g)
-    const key = wreck ? 'mesh|wreck' : `${kind}|${o.renderOrder}|${materialKey(mesh.material)}|${geometrySignature(g)}`
-    let b = buckets.get(key)
-    if (!b) {
-      b = { kind, material: wreck ? collapse! : mesh.material, geoms: [], castShadow: false, receiveShadow: false, renderOrder: wreck ? 0 : o.renderOrder, types: new Set() }
-      buckets.set(key, b)
-    }
-    b.geoms.push(g)
-    b.types.add(mesh.geometry.type)
-    b.castShadow ||= o.castShadow
-    b.receiveShadow ||= o.receiveShadow
+    addToBucket(o, mesh.material, g, mesh.geometry.type, isLineSeg ? 'lines' : 'mesh')
   })
 
   for (const b of buckets.values()) {

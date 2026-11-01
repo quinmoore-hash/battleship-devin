@@ -196,7 +196,7 @@ function Castles({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; livery: Li
         <Stairs key={`ps${z}`} x={G.poopX + 0.3} z={z} y0={G.quarterDeckY} y1={G.poopDeckY} dir={-1} width={0.16} m={m} />
       ))}
       {/* cabin windows in the quarterdeck bulkhead */}
-      {lod < 1 && [-0.42, 0.42].map((z) => <Window key={`qw${z}`} position={[G.quarterX + G.plank + 0.004, G.mainDeckY + 0.24, z]} facing={1} m={m} width={0.09} height={0.1} />)}
+      {lod < 2 && [-0.42, 0.42].map((z) => <Window key={`qw${z}`} position={[G.quarterX + G.plank + 0.004, G.mainDeckY + 0.24, z]} facing={1} m={m} width={0.09} height={0.1} />)}
       {/* castle railings on top of the toe rail */}
       {sides.map((s) => (
         <group key={`r${s}`}>
@@ -368,8 +368,8 @@ function BowWorks({ lod, m, livery, sails, sink, torn, phase, reducedMotion }: {
             <Beam from={[G.xBow - 0.02, 0.86, s * (halfWidth(G.xBow - 0.02, 0.86) + 0.01)]} to={[G.xBow + 0.3, 0.76, s * 0.1]} radius={0.014} material={m.trim} />
           </group>
         ))}
-      {lod < 1 && <Figurehead m={m} />}
-      {lod >= 1 && (
+      {lod < 2 && <Figurehead m={m} />}
+      {lod >= 2 && (
         <mesh material={m.gilt} position={[G.xBow + 0.42, 0.86, 0]}>
           <sphereGeometry args={[0.07, 8, 6]} />
         </mesh>
@@ -396,7 +396,7 @@ function BowWorks({ lod, m, livery, sails, sink, torn, phase, reducedMotion }: {
         [1, -1].map((s) => (
           <group key={`c${s}`}>
             <Beam from={[1.42, G.forecastleDeckY + 0.08, s * 0.1]} to={[1.42, G.forecastleDeckY + 0.12, s * (halfWidth(1.42, 1.0) + 0.09)]} radius={0.022} material={m.wale} />
-            <Anchor position={[1.42, G.forecastleDeckY + 0.06, s * (halfWidth(1.42, 0.86) + 0.1)]} livery={livery} scale={0.32} rotationY={Math.PI / 2} />
+            <Anchor lod={lod} position={[1.42, G.forecastleDeckY + 0.06, s * (halfWidth(1.42, 0.86) + 0.1)]} livery={livery} scale={0.32} rotationY={Math.PI / 2} />
           </group>
         ))}
     </group>
@@ -432,7 +432,7 @@ function Guns({ lod, m, livery, firing, damage }: { lod: Lod; m: GalleonMaterial
               <mesh material={m.portLid} position={[0, -GUN_PORT_SIZE[1] / 2 - 0.005, 0]} castShadow>
                 <boxGeometry args={[GUN_PORT_SIZE[0] + 0.02, GUN_PORT_SIZE[1] + 0.02, 0.014]} />
               </mesh>
-              {lod < 1 && (
+              {lod < 2 && (
                 <mesh material={m.iron} position={[0, 0, 0]} rotation-z={Math.PI / 2}>
                   <cylinderGeometry args={[0.008, 0.008, GUN_PORT_SIZE[0] + 0.03, 5]} />
                 </mesh>
@@ -726,10 +726,10 @@ function GalleonModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'hi
   return (
     <group name="galleon">
       <HullShell lod={effLod} m={m} />
-      {effLod < 2 && <Castles lod={effLod} m={m} livery={livery} />}
+      <Castles lod={effLod} m={m} livery={livery} />
       <SternWorks lod={effLod} m={m} livery={livery} sink={sink} />
       <BowWorks lod={effLod} m={m} livery={livery} sails={setSails} sink={sink} torn={torn} phase={phase} reducedMotion={reducedMotion} />
-      {effLod < 2 && <Guns lod={effLod} m={m} livery={livery} firing={firing} damage={damage} />}
+      <Guns lod={effLod} m={m} livery={livery} firing={firing} damage={damage} />
       <Rig lod={effLod} m={m} livery={livery} sails={setSails} sink={sink} damage={damage} phase={phase} reducedMotion={reducedMotion} />
       {effLod < 2 && <DeckFittings lod={effLod} m={m} livery={livery} />}
       <DamageLayer damage={damage} lod={effLod} m={m} />

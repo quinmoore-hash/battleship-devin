@@ -15,9 +15,12 @@ export interface LodThresholds {
   dwell: number
 }
 
-// Tuned with the battle overview ~27 units from the player board (BUG-530): the overview stays on lod 2 and
-// cinematic close-ups step down to lod 1/0, so the closer camera does not raise the Medium triangle budget.
-export const LOD_THRESHOLDS: LodThresholds = { mid: 6, far: 12, hysteresis: 0.15, dwell: 1 }
+// Tuned against the real battle cameras (BUG-706): `CAMERA_SHOTS.battle` / `battle-far` sit 16.5 units up and 21.5
+// units behind the near board, so hulls are 23–44 units away at the overview. lod 1 is the visually complete baked
+// ship and must cover that whole range for every hull length (the sloop scales thresholds by 2/3); lod 2 is only the
+// genuinely far silhouette (OrbitControls zoomed all the way out, or the Low tier cap). lod 0 stays reserved for the
+// cinematic close-ups so the High tier does not raise the overview budget.
+export const LOD_THRESHOLDS: LodThresholds = { mid: 6, far: 80, hysteresis: 0.15, dwell: 1 }
 
 /** Target level for a ship of `hullLength` cells at `distance`, ignoring hysteresis. */
 export function lodForDistance(distance: number, hullLength: number, t: LodThresholds = LOD_THRESHOLDS): Lod {

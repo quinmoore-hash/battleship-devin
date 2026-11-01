@@ -139,8 +139,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
         <StaticParts parts={hull} mats={mats} />
         <StaticParts parts={furniture} mats={mats} />
 
-        {lod < 2 &&
-          GUN_X.map((gx) =>
+        {GUN_X.map((gx) =>
             (['port', 'starboard'] as const).map((side) => {
               const x = gunX(gx, side)
               const ref = { cell: gunCell(gx), side }
@@ -149,7 +148,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
               return (
                 <group key={`${x}${side}`}>
                   <Cannon position={[x, deckY(x), sign * cannonZ(x, fire)]} rotationY={side === 'starboard' ? 0 : Math.PI} livery={livery} recoil={fire ? 1 : 0} scale={CANNON_SCALE} lod={lod} />
-                  <PortLid x={x} side={sign} open={fire} mats={mats} />
+                  {lod < 2 && <PortLid x={x} side={sign} open={fire} mats={mats} />}
                 </group>
               )
             }),
@@ -193,7 +192,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
           <>
             <Wheel position={[-1.2, F.qdY, 0]} livery={livery} radius={0.09} />
             {([1, -1] as const).map((side) => (
-              <Anchor key={side} position={[1.2, F.fcY - 0.02, side * (bulwarkHalfWidth(1.2, F.fcY) + 0.12)]} livery={livery} scale={0.7} />
+              <Anchor key={side} lod={lod} position={[1.2, F.fcY - 0.02, side * (bulwarkHalfWidth(1.2, F.fcY) + 0.12)]} livery={livery} scale={0.7} />
             ))}
             {lod === 0 &&
               PROP_SPOTS.map((p, i) =>

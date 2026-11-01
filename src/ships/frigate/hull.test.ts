@@ -133,9 +133,10 @@ describe('frigate geometry', () => {
     expect(sailSet(0.6, 1, 4)).toBeGreaterThan(sailSet(0.6, 2, 4))
   })
 
-  it('rigging exists at lod 0/1 and is dropped at lod 2', () => {
+  it('rigging exists at every lod: ratlines thin out at lod 1, lod 2 keeps only the lower shrouds + stays (BUG-706)', () => {
     expect(mastRigging(0, 0).length).toBeGreaterThan(mastRigging(0, 1).length)
-    expect(mastRigging(1, 2).length).toBe(0)
+    expect(mastRigging(1, 1).length).toBeGreaterThan(mastRigging(1, 2).length)
+    expect(mastRigging(1, 2).length).toBeGreaterThanOrEqual(8 + 3) // 4 lower shrouds a side + 3 stays
     for (const s of mastRigging(1, 0)) {
       expect(Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1], s.b[2] - s.a[2])).toBeGreaterThan(0.005)
     }

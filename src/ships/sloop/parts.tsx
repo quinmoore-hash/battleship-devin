@@ -47,13 +47,13 @@ export interface PartProps {
 }
 
 export function HullShell({ m, livery, lod }: PartProps) {
-  const n = lod >= 2 ? 13 : 25
-  const rings = lod >= 2 ? 6 : 10
+  const n = lod >= 2 ? 13 : lod === 1 ? 15 : 25
+  const rings = lod >= 2 ? 6 : lod === 1 ? 7 : 10
   const below = geo(`below${lod}`, () => loftHull(hullSections('below', n, rings), rings))
   const above = geo(`above${lod}`, () => loftHull(hullSections('above', n, rings), rings))
   const bands = geo(`bands${lod}`, () => {
     const parts: THREE.BufferGeometry[] = []
-    const k = lod >= 2 ? 14 : 30
+    const k = lod >= 2 ? 14 : lod === 1 ? 18 : 30
     for (const side of [1, -1] as const) {
       // lower wale and the rubbing strake just under the deck edge
       parts.push(sweepRect(hullPath((x) => deckY(x) - 0.115, side, -0.995, 0.93, k), 0.034, 0.02, 0.014))
@@ -414,7 +414,7 @@ function Chainplates({ m, lod }: { m: SloopMaterials; lod: number }) {
   return (
     <group>
       <mesh geometry={deadeyes} material={m.wale} />
-      {lod === 0 && <mesh geometry={straps} material={m.kit.iron} />}
+      {lod < 2 && <mesh geometry={straps} material={m.kit.iron} />}
     </group>
   )
 }
@@ -476,7 +476,7 @@ function DeckProps({ m, livery, lod }: PartProps) {
       <RopeCoil position={[0.33, DECK_TOP(0.33), 0.17]} livery={livery} />
       <RopeCoil position={[-0.42, DECK_TOP(-0.42), -0.05]} livery={livery} />
       <mesh geometry={cathead} material={m.cabin} castShadow />
-      <Anchor position={[0.84, deckY(0.84) - 0.05, -0.2]} livery={livery} scale={0.6} />
+      <Anchor lod={lod as 0 | 1 | 2} position={[0.84, deckY(0.84) - 0.05, -0.2]} livery={livery} scale={0.6} />
       {lod === 0 && <mesh geometry={cleats} material={m.cabin} />}
       {lod === 0 && <mesh geometry={pins} material={m.cabin} />}
       {lod === 0 && <mesh geometry={oars} material={m.spar} />}

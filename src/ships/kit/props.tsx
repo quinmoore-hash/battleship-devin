@@ -266,15 +266,16 @@ export interface AnchorProps {
   scale?: number
   /** Rotation about y (the shank hangs down −y; flukes spread along local x). */
   rotationY?: number
+  lod?: Lod
 }
 
 /** Admiralty-pattern anchor with wooden stock, iron ring and curved arms. */
-export function Anchor({ position, livery, scale = 1, rotationY = 0 }: AnchorProps) {
+export function Anchor({ position, livery, scale = 1, rotationY = 0, lod = 0 }: AnchorProps) {
   const m = shipMaterials(livery)
   const arms = useMemo(() => {
     const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.42, -0.48, 0), new THREE.Vector3(-0.25, -0.66, 0), new THREE.Vector3(0, -0.7, 0), new THREE.Vector3(0.25, -0.66, 0), new THREE.Vector3(0.42, -0.48, 0)])
-    return new THREE.TubeGeometry(curve, 16, 0.03, 8, false)
-  }, [])
+    return new THREE.TubeGeometry(curve, lod === 0 ? 16 : 8, 0.03, lod === 0 ? 8 : 4, false)
+  }, [lod])
   useEffect(() => () => arms.dispose(), [arms])
   return (
     <group position={position} scale={scale} rotation-y={rotationY}>
