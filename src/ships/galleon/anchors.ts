@@ -96,7 +96,7 @@ export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
   return {
     spawn: [-0.9, G.quarterDeckY, 0.28],
     walk,
-    ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1), breakRamp(0, 3, G.forecastleX, 0.12)],
+    ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1, 0.15), breakRamp(0, 3, G.forecastleX, 0.12)],
     obstacles,
     stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_CLEARANCE + 0.7 * CANNON_SCALE, obstacles }),
   }

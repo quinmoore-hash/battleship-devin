@@ -94,6 +94,8 @@ describe.each(FLEET.map((s) => s.id))('%s deck anchors', (id) => {
       expect(insideConvex(deck.walk[r.from].points, mid, -0.06)).toBe(true)
       expect(insideConvex(deck.walk[r.to].points, mid, -0.06)).toBe(true)
       expect(deck.walk[r.from].y).not.toBe(deck.walk[r.to].y)
+      // the ramp entrance must be reachable: no obstacle may cover it
+      for (const o of deck.obstacles) expect(dist2(o.center, mid), `${id} ramp ${r.from}->${r.to} vs obstacle at ${o.center}`).toBeGreaterThan(o.radius + 0.08)
     }
   })
 })

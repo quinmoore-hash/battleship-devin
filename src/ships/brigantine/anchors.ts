@@ -66,14 +66,14 @@ export function buildBrigantineDeck(): DeckAnchors {
       { center: [-0.76, 0], radius: 0.11 },
       { center: [-0.9, 0.2], radius: 0.07 },
       { center: [-0.9, -0.2], radius: 0.07 },
-      { center: [-1.0, 0.05], radius: 0.08 },
+      { center: [-1.0, 0.05], radius: 0.065 },
       { center: [-1.3, 0], radius: 0.1 },
       { center: [-1.17, -0.14], radius: 0.07 },
     ]
   return {
     spawn: [-1.2, CABIN_TOP_Y, 0.18],
     walk,
-    ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12)],
+    ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12, 0.2)],
     obstacles,
     stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y, { barrel: CANNON_MUZZLE_LEN + 0.25 * CANNON_SCALE, obstacles }),
   }

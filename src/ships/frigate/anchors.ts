@@ -34,7 +34,7 @@ export function buildFrigateDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
   return {
     spawn: [-0.92, F.qdY, -0.25],
     walk,
-    ramps: [breakRamp(0, 1, F.qdBreakX, 0.12)],
+    ramps: [breakRamp(0, 1, F.qdBreakX, 0.12, -0.18)],
     obstacles,
     stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_OUT + 0.7 * CANNON_SCALE, obstacles }),
   }
