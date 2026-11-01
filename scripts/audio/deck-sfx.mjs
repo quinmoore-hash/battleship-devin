@@ -1,6 +1,6 @@
 /**
  * "On deck" sound effects (src/deck/audio): footsteps on planks, rigging strain, water lapping at the hull, wind in the
- * sails, crew voices (formant-synthesised "voiced placeholders", no recordings) and the spyglass clicks.
+ * sails, crew voices (formant-synthesised "voiced placeholders", no recordings).
  * Every generator is deterministic (seeded) and returns a mono buffer. Kept short: the whole set must stay well under 600 KB.
  */
 import {
