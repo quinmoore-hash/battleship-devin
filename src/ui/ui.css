@@ -1028,6 +1028,30 @@
 .spyglass {
   font-size: 1.1rem;
 }
+/* chart fold toggle (BUG-274): only under 900px, where the charts stack over the 3D waters */
+.chart-fold {
+  display: none;
+  width: 26px;
+  height: 26px;
+  margin-left: 0.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--brass-dark);
+  background: radial-gradient(circle at 35% 30%, var(--brass-light), var(--brass) 60%, var(--brass-dark));
+  color: #2a1a0f;
+  place-items: center;
+  cursor: pointer;
+  font: 1.1rem/1 var(--font-display);
+  letter-spacing: 0;
+  flex: none;
+}
+.chart-panel.is-folded .panel-title {
+  margin-bottom: 0;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.chart-body[hidden] {
+  display: none;
+}
 .target-readout {
   /* fixed width: the readout must never change the panel size (it would re-wrap the charts under the pointer) */
   min-width: 7.5ch;
@@ -1651,6 +1675,9 @@
   .ui-root[data-no3d='false'] .charts .chart-panel {
     width: max-content;
     margin: 0 auto;
+  }
+  .chart-fold {
+    display: grid;
   }
   .side-panel {
     display: none;

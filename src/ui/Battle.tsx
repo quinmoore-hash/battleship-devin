@@ -82,6 +82,9 @@ export function BattleScreen() {
   const [quitting, setQuitting] = useState(false)
   // the shot log left the right column for the "Our waters" chart (BUG-708); it opens as a drawer under the top bar
   const [logOpen, setLogOpen] = useState(false)
+  // under 900px the charts stack over the 3D waters (BUG-274): either chart folds to its title so the boards beneath can be seen and tapped
+  const [folded, setFolded] = useState({ enemy: false, player: false })
+  const toggleFold = (side: 'enemy' | 'player') => (playSfx('ui-click'), setFolded((f) => ({ ...f, [side]: !f[side] })))
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
@@ -281,23 +284,28 @@ export function BattleScreen() {
         </aside>
 
         <section className="charts">
-          <div className="panel parchment chart-panel chart-enemy" aria-label="Enemy waters">
+          <div className={`panel parchment chart-panel chart-enemy${folded.enemy ? ' is-folded' : ''}`} aria-label="Enemy waters">
             <h2 className="panel-title small-title" data-testid="enemy-waters-title">
               {hotSeat ? `${foeName}'s waters` : 'Enemy waters'} <span className="spyglass" aria-hidden>◎</span>
               <span className="target-readout">{target && yourTurn ? `Target ${coordLabel(target)}` : '—'}</span>
+              <button type="button" className="chart-fold" data-testid="chart-fold-enemy" aria-expanded={!folded.enemy} aria-controls="chart-enemy-body" aria-label={folded.enemy ? 'Show the enemy waters chart' : 'Hide the enemy waters chart'} onClick={() => toggleFold('enemy')}>
+                {folded.enemy ? '+' : '−'}
+              </button>
             </h2>
-            <Grid testId="enemy-grid" label="Enemy waters — fire" cell={enemyCell} onCell={onEnemyCell} onHover={(c) => setHover(c ? { side: 'enemy', coord: c } : null)} disabled={!yourTurn} lockResolved />
-            {blackFlag && (
-              <PowerShots
-                power={powerShots[perspective]}
-                armed={armed}
-                orientation={broadsideDir}
-                treasure={treasureFoundByMe}
-                disabled={!yourTurn}
-                onArm={(a) => (playSfx('ui-click'), setSpyNote(null), setArmed(a))}
-                onRotate={rotateBroadside}
-              />
-            )}
+            <div id="chart-enemy-body" className="chart-body" hidden={folded.enemy}>
+              <Grid testId="enemy-grid" label="Enemy waters — fire" cell={enemyCell} onCell={onEnemyCell} onHover={(c) => setHover(c ? { side: 'enemy', coord: c } : null)} disabled={!yourTurn} lockResolved />
+              {blackFlag && (
+                <PowerShots
+                  power={powerShots[perspective]}
+                  armed={armed}
+                  orientation={broadsideDir}
+                  treasure={treasureFoundByMe}
+                  disabled={!yourTurn}
+                  onArm={(a) => (playSfx('ui-click'), setSpyNote(null), setArmed(a))}
+                  onRotate={rotateBroadside}
+                />
+              )}
+            </div>
             {pending && yourTurn && (
               <div className="fire-confirm ink-in" data-testid="fire-confirm">
                 <span>Fire at {coordLabel(pending)}?</span>
@@ -313,11 +321,16 @@ export function BattleScreen() {
           <p className={`panel parchment score-strip lead-${lead}`} data-testid="score-strip" data-lead={lead} role="status" aria-live="polite">
             {scoreText}
           </p>
-          <div className="panel parchment chart-panel chart-player" aria-label={hotSeat ? `${me}'s waters` : 'Our waters'}>
+          <div className={`panel parchment chart-panel chart-player${folded.player ? ' is-folded' : ''}`} aria-label={hotSeat ? `${me}'s waters` : 'Our waters'}>
             <h2 className="panel-title small-title" data-testid="your-waters-title">
               {hotSeat ? `${me}'s waters` : 'Our waters'} <span className="helm" aria-hidden>⎈</span>
+              <button type="button" className="chart-fold" data-testid="chart-fold-player" aria-expanded={!folded.player} aria-controls="chart-player-body" aria-label={folded.player ? 'Show our waters chart' : 'Hide our waters chart'} onClick={() => toggleFold('player')}>
+                {folded.player ? '+' : '−'}
+              </button>
             </h2>
-            <Grid testId="player-grid" label={hotSeat ? `${me}'s waters` : 'Our waters'} cell={playerCell} disabled />
+            <div id="chart-player-body" className="chart-body" hidden={folded.player}>
+              <Grid testId="player-grid" label={hotSeat ? `${me}'s waters` : 'Our waters'} cell={playerCell} disabled />
+            </div>
           </div>
         </section>
       </div>

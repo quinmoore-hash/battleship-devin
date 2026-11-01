@@ -117,6 +117,8 @@ try {
       },
     }
   }, SPIKE)
+  await press(page, 'mode-single')
+  await press(page, 'rules-next')
   await press(page, 'difficulty-easy')
   await page.getByTestId('placement').waitFor({ timeout: 60_000 })
   await press(page, 'auto-place')
