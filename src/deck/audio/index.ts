@@ -1,0 +1,6 @@
+export { DeckAudio } from './DeckAudio'
+export { useDeckAudioStore, isAudioDebug, type DeckAudioCue } from './deckAudioStore'
+export { createAmbience, windGainFor, WIND_GAIN, DUCK_GAIN } from './ambience'
+export { createFootsteps, STEP_DISTANCE } from './footsteps'
+export { createVoiceLimiter, VOICE_GAP_MS, type VoiceCue } from './voice'
+export { setUnderwater, isUnderwater } from './muffle'

@@ -15,6 +15,7 @@ import { fleetScore, ownChartCell, ownChartModel, scoreLead, scoreStripText } fr
 import { ShotLog } from './ShotLog'
 import { battleReport, formatDuration } from './stats'
 import { isCoarsePointer, useUiStore } from './uiStore'
+import { useDeckStore } from '../deck'
 
 const outcomeWord = (r: ShotResult) => (r.outcome === 'sunk' ? `sunk the ${r.shipId ? FLEET_BY_ID[r.shipId].name : 'ship'}!` : r.outcome === 'hit' ? 'a hit!' : 'a miss.')
 
@@ -110,7 +111,10 @@ export function BattleScreen() {
       const power = useGameStore.getState().powerShots[perspective]
       const armedNow = useUiStore.getState().armed
       if (k === 'b' && power.broadside) setArmed(armedNow === 'broadside' ? 'shot' : 'broadside')
-      if (k === 'g' && power.spyglass) setArmed(armedNow === 'spyglass' ? 'shot' : 'spyglass')
+      if (k === 'g') {
+        if (power.spyglass) setArmed(armedNow === 'spyglass' ? 'shot' : 'spyglass')
+        else if (useGameStore.getState().deck.on) useDeckStore.getState().showNudge('Spyglass already used this game')
+      }
       if (k === 'r') rotateBroadside()
     }
     const onSkipEvent = () => skip()

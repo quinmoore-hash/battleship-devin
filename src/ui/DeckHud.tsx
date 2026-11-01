@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { playSfx } from '../audio'
-import { useDeckStore } from '../deck'
+import { SpyglassOverlay, isAudioDebug, useDeckAudioStore, useDeckStore, useSpyglassStore } from '../deck'
 import { coordLabel, FLEET_BY_ID, type PlacedShip } from '../engine'
 import { is3dDisabled } from '../scene/flags'
 import { SHIPS } from '../ships'
@@ -58,6 +58,11 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
   const fade = useDeckStore((s) => s.fade)
   const nudge = useDeckStore((s) => s.nudge)
   const manStation = useGameStore((s) => s.manStation)
+  const blackFlag = useGameStore((s) => s.modes.blackFlag)
+  const spyUnused = useGameStore((s) => s.powerShots[s.perspective].spyglass)
+  const setArmed = useUiStore((s) => s.setArmed)
+  const setSpyNote = useUiStore((s) => s.setSpyNote)
+  const glassUp = useSpyglassStore((s) => s.up)
   const touch = isCoarsePointer()
   if (!deck.on || !ship) return null
 
@@ -67,7 +72,9 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
   const gun = manning ? def.anchors.cannons[deck.station!] : null
   const prompt = nudge
     ? nudge
-    : manning
+    : glassUp
+      ? 'Spyglass raised — pan to a square and click to look · Esc lowers'
+      : manning
       ? yourTurn
         ? armed === 'spyglass'
           ? 'Spyglass raised — click a square to look'
@@ -99,6 +106,8 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
         <i />
         <i />
       </div>
+      <SpyglassOverlay />
+      {isAudioDebug() && <DeckAudioLog />}
       <div className="deck-prompt" data-testid="deck-prompt" role="status" aria-live="polite">
         {prompt}
       </div>
@@ -125,6 +134,20 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
               {near?.usable ? 'Man the gun' : 'Man nearest gun'} <kbd aria-hidden>E</kbd>
             </button>
           )}
+          {blackFlag && (
+            <button
+              type="button"
+              className={`btn ${glassUp ? 'btn-brass' : 'btn-ghost'}`}
+              data-testid="deck-spyglass"
+              data-spent={spyUnused ? undefined : 'true'}
+              title={spyUnused ? 'G' : 'Already used this game'}
+              disabled={!spyUnused}
+              aria-pressed={glassUp}
+              onClick={() => (playSfx('ui-click'), setSpyNote(null), setArmed(armed === 'spyglass' ? 'shot' : 'spyglass'))}
+            >
+              {spyUnused ? (glassUp ? 'Lower the glass' : 'Spyglass') : 'Spyglass spent'} {spyUnused && <kbd aria-hidden>G</kbd>}
+            </button>
+          )}
           {manning && (
             <button type="button" className="btn btn-ghost" data-testid="deck-step-away" onClick={() => (playSfx('ui-click'), manStation(null))}>
               Step away
@@ -136,5 +159,27 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
         </div>
       </div>
     </>
+  )
+}
+
+/** `?audio-debug`: the deck audio cues as they fire (the VM's browser has no speakers; tests read this). */
+function DeckAudioLog() {
+  const recent = useDeckAudioStore((s) => s.recent)
+  const count = useDeckAudioStore((s) => s.count)
+  const wind = useDeckAudioStore((s) => s.wind)
+  const underwater = useDeckAudioStore((s) => s.underwater)
+  return (
+    <div className="deck-audio-log" data-testid="deck-audio-log" data-count={count} data-wind={wind.toFixed(2)} data-underwater={underwater ? 'true' : 'false'}>
+      <strong>
+        Deck audio · {count} cues · wind {wind.toFixed(2)}
+        {underwater ? ' · underwater' : ''}
+      </strong>
+      {recent.map((c) => (
+        <span key={c.n} data-cue={c.name}>
+          #{c.n} {c.name}
+          {c.detail ? ` — ${c.detail}` : ''}
+        </span>
+      ))}
+    </div>
   )
 }

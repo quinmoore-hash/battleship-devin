@@ -95,10 +95,7 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
     const { busy, beat } = get()
     if (game.phase !== 'battle' || game.handoff || game.turn !== shooter || (busy && beat.phase !== 'intro')) return
     const foeBoard = game[targetBoardKey(shooter)]
-    if (game.deck.on && game.deck.station === null) {
-      useDeckStore.getState().showNudge('Man a gun to fire')
-      return playSfx('miss')
-    }
+    // the Spyglass needs no gun: on deck it is raised at the rail (src/deck/Spyglass*), so it is resolved before the gun check
     if (ui.armed === 'spyglass') {
       if (hasBeenShot(foeBoard, coord)) return playSfx('miss')
       const seen = game.spyAt(coord, shooter)
@@ -107,6 +104,10 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
       ui.setSpyNote(`Spyglass ${coordLabel(coord)} — ${seen === 'ship' ? 'a ship!' : 'open water.'}`)
       ui.setArmed('shot')
       return
+    }
+    if (game.deck.on && game.deck.station === null) {
+      useDeckStore.getState().showNudge('Man a gun to fire')
+      return playSfx('miss')
     }
     ui.setSpyNote(null)
     let shoot: () => void

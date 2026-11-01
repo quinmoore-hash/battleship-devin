@@ -11,6 +11,7 @@ const GENERATOR = fileURLToPath(new URL('../../scripts/generate-audio.mjs', impo
 const REQUIRED: CanonicalSfx[] = [
   'cannon-fire', 'cannon-whistle', 'splash-miss', 'impact-wood', 'fire-loop', 'hull-creak', 'mast-snap', 'sinking-groan', 'bubbles',
   'crew-shout-hit', 'crew-cheer', 'bell-victory', 'drum-defeat', 'ui-click', 'ui-hover', 'place-ship', 'rotate-ship', 'sail-flap', 'thunder', 'gull',
+  'footstep', 'footstep-land', 'rope-strain', 'water-lap', 'wind-sails', 'crew-call', 'gun-call-run-out', 'gun-call-fire', 'crew-groan', 'crew-brace', 'crew-panic', 'land-ho', 'spyglass-raise', 'spyglass-lower',
 ]
 
 describe('audio manifest', () => {
@@ -43,7 +44,7 @@ describe('audio manifest', () => {
   })
 
   it('loops are the sustained sounds', () => {
-    expect([...LOOPING_SFX].sort()).toEqual(['bubbles', 'fire-loop'])
+    expect([...LOOPING_SFX].sort()).toEqual(['bubbles', 'fire-loop', 'wind-sails'])
   })
 
   it('music variants, sting and ambience beds exist; LOOP_FILES still points at playable loops', () => {
