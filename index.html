@@ -74,8 +74,9 @@
         from { transform: translateX(-10%); }
         to { transform: translateX(160%); }
       }
+      /* reduced motion: the bar stops sweeping; the 0.3 s opacity hand-off stays so the React card is never
+         preceded by a bare gradient frame */
       @media (prefers-reduced-motion: reduce) {
-        #boot-splash { transition: none; }
         .boot-bar span { animation: none; width: 55%; }
       }
     </style>
