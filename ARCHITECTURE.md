@@ -17,6 +17,8 @@ src/
   vfx/         particles & effects: cannon fire (muzzle flash, smoke, cannonball, splash), damage
                (splinters, fire, smoke, hull holes), sinking (list/flood/bubbles/debris/flotsam), markers.
   cinematics/  director: scripted camera + VFX + audio sequences per shot / sink / win-lose. Skippable.
+  deck/        "On deck" first-person seat: DeckController (walk / look / collide / cannon stations / click-a-square
+               firing), transient deck runtime for the HUD, pure deck math, and the A/B/C shared `contract.ts`.
   ui/          HTML/React overlay: menu, settings, how-to-play, placement HUD, battle HUD, game over.
   audio/       Howler SFX + music + ambience, volume/mute, persisted settings.
 e2e/           Playwright tests, driven through data-testid attributes (see below).
@@ -88,10 +90,11 @@ same way `fireAt` does, `powerShots` / `treasure` / `spied` are already per `Pla
 ### scene (`src/scene`)
 `<OceanScene quality? timeOfDay? view? interactive? cameraOverride? dressing? weather?>{children}</OceanScene>` full-screen Canvas with
 WebGL fallback (`?no3d` forces the fallback). `<BoardGrid origin size cellSize highlight? onCellPointerMove? onCellClick? color?>`,
-`<CameraRig view interactive? override?>` with `CameraView = 'menu' | 'placement' | 'battle' | 'battle-far' | 'gameover' | 'handoff'`
+`<CameraRig view interactive? override?>` with `CameraView = 'menu' | 'placement' | 'battle' | 'battle-far' | 'gameover' | 'handoff' | 'deck'`
 (`battle-far` = the battle shot mirrored to the Navy side for the second hot-seat captain — `SceneContents` picks it from the store's
 `perspective`; `handoff` = open sea and sky only while the curtain is up; `override` = a cinematic owns the
-camera: the rig stops writing position/target/fov and disables orbit, then damps back when it flips off), `computeAtmosphere`,
+camera: the rig stops writing position/target/fov and disables orbit, then damps back when it flips off; `deck` = the On-deck
+seat, same stand-down with `<DeckController>` writing the camera), `computeAtmosphere`,
 `sampleWaveHeight/Normal`, layout helpers above, `<SceneDemo>` (`?scene-demo`). Perf knobs (set by `OceanScene` from
 `usePerf()`): `<Lighting shadowSize?>` (0 = no shadow pass), `<Water waves?>`, `<Effects enabled?>` (lazy chunk).
 
@@ -194,6 +197,32 @@ fire→impact beat distance; a skip before impact cancels it and plays the impac
 Enemy shots fire from an unseen gun line past the far edge of the Navy waters (showing the real ship would leak its
 position). `?cinematics-demo` exercises every sequence.
 
+### deck (`src/deck`) — "On deck"
+```tsx
+<DeckController />                      // inside <OceanScene> during the battle; owns the camera while `deck.on`
+useDeckStore((s) => s.near | s.locked | s.keyboardLook | s.aim | s.fade | s.nudge | s.active)   // HUD runtime, not game state
+deckBus.on(fn) / deckBus.emit({ type: 'shake' | 'look-at' | 'abandon-ship', … }) / deckBus.hasListeners()
+resolveDeckAnchors(anchors) → DeckAnchors   // `anchors.deck` (session C) or the fallback rectangle (hull × beam − 0.06, masts as obstacles)
+stationsOf(anchors, deck) / stationUsable(station, rotationY, shipPos, enemyCenter) / afloatUids / cycleShip
+```
+The store owns the seat: `deck: DeckState { on, shipUid, station }`, `deckOnBy: Record<Player, boolean>` and the contract's
+`setDeck(on)` / `boardShip(uid)` / `manStation(i)` (`src/deck/contract.ts`; `Settings` gains `deckSensitivity` / `deckInvertY`).
+Invariants: `setDeck(true)` stands on the remembered ship if afloat, else the first afloat ship of `ownBoardKey(perspective)`;
+the deck resets whenever the phase leaves `battle`; hot-seat keeps one flag per captain and `endHandoff` restores it on their own
+fleet; a standing ship that sinks is switched at once when no `deckBus` listener exists (tests, `?no3d`), otherwise the mounted
+controller plays `abandon-ship` (1.2 s fade, then `boardShip(next)` / `setDeck(false)`) — session B emits it from its sink
+sequence, the controller emits its own once the director is idle. V / `deck-toggle` works in every battle state (not under
+`?no3d`, not while the curtain is up). Camera: `CameraView 'deck'` makes the rig stand down; `<CinematicCamera>` is not mounted
+while on deck (the director's VFX / audio still play; its `shake` impulses are consumed by the controller); the camera is
+composed per frame from the ship's `<Fleet>` pose (wave height + sink pose) × the walk pose × yaw/pitch, `DECK_NEAR` / `DECK_FOV`
+while on deck. Firing is one path for every square: `useBattleController().aim(coord)` (chart, 3D board, deck crosshair /
+Enter) — armed Black Flag power from `useUiStore().armed`, a manned gun required on deck (else "Man a gun to fire"), the manned
+gun swings (`director.firing`) 220 ms before `fire()`. Only guns whose world-space `direction` points at the enemy board can be
+manned ("No target that side"); below-deck guns are not stations. Perf: the standing ship is the one lod-0 ship on High only —
+Medium rides the baked lod-1 copy and drops the other own ships to lod 2 while on deck (a live lod-0 man-o'-war alone is ~420
+draws). Keyboard-only: pointer lock refused → arrow keys look, WASD walk, Enter fires at the crosshair; touch: drag to look, tap
+a gun (or the HUD button) to man it, tap the chart to fire.
+
 ### audio (`src/audio`)
 `initAudio()`, `playSfx(name, opts?)` → `SfxHandle` (`stop()` for the `fire-loop` / `bubbles` loops), `playSfxAt(name, worldPos)`
 (camera-relative pan + distance gain; feed the camera with `setAudioListener(pos, forward)` / `setAudioListenerFromCamera(camera)`),
@@ -235,7 +264,8 @@ for the victory flyover (`data-flyover="true"` while it plays).
 (`weather` / `timeOfDay` from `useGameWeather()` / `useGameTimeOfDay()`: the Sky & sea pick in `settings.timeOfDay` /
 `settings.weather`, with the Stormy-seas rule forcing `'stormy'` via `selectSkyWeather`; `ui-root` mirrors them as `data-tod` /
 `data-weather`)
-with `<GameWorld>` and, in battle / game over, `<CinematicLayer>` + `<CinematicCamera>`; `<GameUI>`, `<ExtrasLayer>`,
+with `<GameWorld>` and, in battle / game over, `<CinematicLayer>` + `<CinematicCamera>` (the latter not while `deck.on`) and, in
+battle, `<DeckController>`; `<GameUI>`, `<ExtrasLayer>`,
 `<Letterbox hint={false}>` (click / Space / Esc skip; the HUD shows its own skip button), `QualityToast`, `?perf` overlay.
 `useEffect` binds `bindCinematics()` (registers the shared director with the turn flow and skips it when the phase leaves
 battle / game over) and `bindGameAudio({ director: directorPlaysAudio })` (music, ambience, placement cues; shot / sink /
@@ -257,6 +287,9 @@ Black Flag: `mode-black-flag`, `fleet-picker`, `fleet-preset-{classic|armada|wol
 `power-shots[data-armed]`, `power-broadside[data-used]`, `power-spyglass[data-used]`, `power-rotate`, `treasure-count`,
 `stat-black-flag`, `howto-black-flag`; chart cells carry `cell-spied(-ship|-water)` / `cell-treasure` classes,
 `setting-{sfx|music|mute|reduced-motion|colorblind}`, `setting-{cinematics|quality}-{option}`, `settings-close`,
+On deck: `deck-toggle[data-on]` (key V), `battle[data-deck]`, `deck-hud[data-station]`, `deck-ship-name`, `deck-pips`, `deck-station`,
+`deck-salvo`, `deck-prompt`, `deck-crosshair[data-manning][data-aim]`, `deck-man`, `deck-step-away`, `deck-next-ship`, `deck-fade`,
+`setting-deck-sensitivity`, `setting-deck-invert-y`, `howto-on-deck`,
 `ui-root[data-colorblind][data-no3d][data-tod][data-weather]`, Sky & sea picker `skysea-picker`, `skysea-time`, `skysea-weather`
 (menu corner and Settings). If you redesign the UI, keep these (or update `e2e/` in the same PR).
 Playwright runs with `?no3d` for flow tests and with SwiftShader for the 3D smoke test; cinematics must honour

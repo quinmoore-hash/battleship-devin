@@ -5,8 +5,12 @@ import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { BOARD_LAYOUT, boardCenter } from './layout'
 
-/** `battle-far` = the battle shot mirrored to the far (Navy) side for the second hot-seat captain; `handoff` = sky and open sea only, no board in frame. */
-export type CameraView = 'menu' | 'placement' | 'battle' | 'battle-far' | 'gameover' | 'handoff'
+/**
+ * `battle-far` = the battle shot mirrored to the far (Navy) side for the second hot-seat captain; `handoff` = sky and open
+ * sea only, no board in frame; `deck` = the On-deck first-person seat: the rig stands down (like `override`) and
+ * `<DeckController>` (`src/deck`) writes the camera; when the view changes back the rig damps toward the overview.
+ */
+export type CameraView = 'menu' | 'placement' | 'battle' | 'battle-far' | 'gameover' | 'handoff' | 'deck'
 
 const playerCenter = boardCenter(BOARD_LAYOUT.player)
 const enemyCenter = boardCenter(BOARD_LAYOUT.enemy)
@@ -51,6 +55,12 @@ export const CAMERA_SHOTS: Record<CameraView, { position: THREE.Vector3; target:
     position: new THREE.Vector3(-4, 4.5, midZ),
     target: new THREE.Vector3(120, 14, midZ + 20),
     fov: 46,
+  },
+  // placeholder only (the deck controller owns the camera); shares the battle shot so a first mount on deck frames the battle
+  deck: {
+    position: new THREE.Vector3(0, 16.5, playerCenter[2] + 21.5),
+    target: new THREE.Vector3(0, 0.3, midZ - 5),
+    fov: 42,
   },
 }
 
@@ -139,7 +149,7 @@ export function CameraRig({ view, interactive = isBattleView(view), override = f
   }, [view, get])
 
   useFrame((state, delta) => {
-    if (override) {
+    if (override || view === 'deck') {
       settled.current = false
       return
     }

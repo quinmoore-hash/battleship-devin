@@ -10,7 +10,7 @@ const mem = () => {
 describe('settings persistence', () => {
   it('round-trips every player-chosen setting (incl. reducedMotion + quality, BUG-314) and ignores garbage', () => {
     const s = mem()
-    saveSettings({ sfxVolume: 0.35, musicVolume: 0.45, reducedMotion: true, cinematics: 'fast', quality: 'low', colorblind: true, timeOfDay: 'dusk', weather: 'squall' }, s)
+    saveSettings({ sfxVolume: 0.35, musicVolume: 0.45, reducedMotion: true, cinematics: 'fast', quality: 'low', colorblind: true, timeOfDay: 'dusk', weather: 'squall', deckSensitivity: 1.5, deckInvertY: true }, s)
     const back = loadSettings(s)
     expect(back).toMatchObject({ sfxVolume: 0.35, musicVolume: 0.45, cinematics: 'fast', colorblind: true, reducedMotion: true, quality: 'low', timeOfDay: 'dusk', weather: 'squall' })
     s.setItem(SETTINGS_STORAGE_KEY, '{"cinematics":"wild","sfxVolume":7}')

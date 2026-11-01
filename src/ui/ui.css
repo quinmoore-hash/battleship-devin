@@ -2172,3 +2172,154 @@
   }
 }
 
+
+/* ---------- On deck (src/deck) ---------- */
+.deck-toggle kbd,
+.deck-actions kbd {
+  margin-left: 0.4em;
+  padding: 0 0.35em;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.7em;
+  opacity: 0.8;
+}
+.deck-toggle.is-on {
+  background: rgba(185, 134, 42, 0.85);
+  color: #1d120a;
+}
+.deck-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: #000;
+  pointer-events: none;
+  transition: none;
+}
+.deck-crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  translate: -50% -50%;
+  pointer-events: none;
+  opacity: 0.75;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+}
+.deck-crosshair i {
+  position: absolute;
+  background: var(--parchment, #f1e3c0);
+}
+.deck-crosshair i:first-child {
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  translate: -50% 0;
+}
+.deck-crosshair i:last-child {
+  top: 50%;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  translate: 0 -50%;
+}
+.deck-crosshair[data-manning='true'] {
+  opacity: 1;
+  width: 34px;
+  height: 34px;
+}
+.deck-crosshair[data-manning='true'] i {
+  background: var(--brass, #d9a441);
+}
+.deck-prompt {
+  position: fixed;
+  left: 50%;
+  top: calc(50% + 32px);
+  translate: -50% 0;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--parchment, #f1e3c0);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.9),
+    0 0 8px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+.deck-hud {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  translate: -50% 0;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  z-index: 11;
+}
+.deck-ship {
+  display: grid;
+  gap: 2px;
+}
+.deck-ship strong {
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+}
+.deck-pips {
+  display: inline-flex;
+  gap: 3px;
+}
+.deck-pips i {
+  width: 12px;
+  height: 8px;
+  border-radius: 2px;
+  background: #5f8f52;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+.deck-pips i.is-hit {
+  background: var(--crimson, #931c2b);
+}
+.deck-lines {
+  display: grid;
+  gap: 2px;
+  font-family: var(--font-display);
+  color: var(--ink-soft);
+}
+.deck-lines [data-testid='deck-salvo'] {
+  color: var(--crimson);
+  font-weight: 700;
+}
+.deck-actions {
+  display: flex;
+  gap: 6px;
+}
+.deck-actions .btn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+/* on deck the parchment steps back so the sea stays in view; the charts remain fully usable */
+.battle[data-deck='true'] .side-left,
+.battle[data-deck='true'] .side-right {
+  filter: opacity(0.82);
+}
+@media (max-width: 900px) {
+  .deck-hud {
+    grid-template-columns: auto auto;
+    bottom: 8px;
+    font-size: 0.78rem;
+  }
+  .deck-hud .deck-actions {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+  .deck-prompt {
+    font-size: 0.85rem;
+    white-space: normal;
+    text-align: center;
+    max-width: 90vw;
+  }
+}

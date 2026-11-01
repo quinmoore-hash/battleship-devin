@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { isTimePreset, type TimePreset, type Weather } from '../scene/sun'
+import { DEFAULT_DECK, deckBus, type DeckActions, type DeckSettings, type DeckState } from '../deck/contract'
 import { createOpponent, seededRng, type AiOpponent } from '../ai'
 import {
   broadsideCells,
@@ -71,7 +72,7 @@ export type CinematicsLevel = 'full' | 'fast' | 'off'
 /** Render quality override; `auto` = the tier detected by `src/perf`. */
 export type QualitySetting = 'auto' | 'low' | 'medium' | 'high'
 
-export interface Settings {
+export interface Settings extends DeckSettings {
   sfxVolume: number
   musicVolume: number
   reducedMotion: boolean
@@ -152,7 +153,7 @@ export interface SalvoState {
   size: number
 }
 
-export interface GameState {
+export interface GameState extends DeckActions {
   phase: Phase
   difficulty: Difficulty
   modes: GameModes
@@ -191,6 +192,10 @@ export interface GameState {
   /** Black Flag: extra shots the side on turn still has from treasure (classic: fired one by one; salvo: the size of the bonus volley). */
   bonusShots: number
   settings: Settings
+  /** "On deck" first-person seat (see `src/deck/contract.ts`). Purely a camera: never changes rules, odds or turn flow. */
+  deck: DeckState
+  /** Hot-seat: whether each captain had the deck view on when the curtain went up, restored on their next turn. */
+  deckOnBy: Record<Player, boolean>
   /** Non-serialisable; recreated on every new game. */
   opponent?: AiOpponent
   /** Non-serialisable; decides which shots the storm swallows. */
@@ -250,11 +255,11 @@ export interface GameState {
 
 let eventId = 0
 
-const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false, timeOfDay: 'golden', weather: 'calm' }
+const DEFAULT_SETTINGS: Settings = { sfxVolume: 0.8, musicVolume: 0.5, reducedMotion: false, cinematics: 'full', quality: 'auto', colorblind: false, timeOfDay: 'golden', weather: 'calm', deckSensitivity: 1, deckInvertY: false }
 
 /** Settings the player chose that survive a reload (one key, `battleship-devin.settings`). `reducedMotion` defaults to the OS preference. */
 export const SETTINGS_STORAGE_KEY = 'battleship-devin.settings'
-const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind', 'reducedMotion', 'quality', 'timeOfDay', 'weather']
+const PERSISTED: (keyof Settings)[] = ['cinematics', 'sfxVolume', 'musicVolume', 'colorblind', 'reducedMotion', 'quality', 'timeOfDay', 'weather', 'deckSensitivity', 'deckInvertY']
 
 /** OS preference — only the default; the player's explicit toggle (persisted) wins afterwards (BUG-314). */
 export const prefersReducedMotion = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -280,6 +285,8 @@ export function loadSettings(
     if (p.quality === 'auto' || p.quality === 'low' || p.quality === 'medium' || p.quality === 'high') out.quality = p.quality
     if (isTimePreset(p.timeOfDay)) out.timeOfDay = p.timeOfDay
     if (isSkyWeather(p.weather)) out.weather = p.weather
+    if (typeof p.deckSensitivity === 'number' && p.deckSensitivity >= 0.2 && p.deckSensitivity <= 3) out.deckSensitivity = p.deckSensitivity
+    if (typeof p.deckInvertY === 'boolean') out.deckInvertY = p.deckInvertY
   } catch {
     /* corrupt or unavailable storage: defaults */
   }
@@ -335,6 +342,22 @@ export const treasureFound = (events: readonly GameEvent[], by: Player): number 
 export const fleetPresetName = (id: FleetPresetId): string => FLEET_PRESETS.find((p) => p.id === id)?.name ?? id
 
 let groupId = 0
+
+const noDeckBy = (): Record<Player, boolean> => ({ human: false, enemy: false })
+
+/** `uid` if it names an afloat ship of `board`, else the first afloat ship (board order), else null. */
+export function afloatShipUid(board: Board, uid: string | null = null): string | null {
+  const keep = uid ? board.ships.find((s) => s.uid === uid) : undefined
+  if (keep && !isSunk(keep)) return keep.uid
+  return board.ships.find((s) => !isSunk(s))?.uid ?? null
+}
+
+/** The deck state for `on`, standing on `uid` (or the first afloat ship of `perspective`'s fleet). Off when no ship is left. */
+function deckFor(s: Pick<GameState, 'perspective' | 'playerBoard' | 'enemyBoard' | 'deck'>, on: boolean, uid: string | null = s.deck.shipUid): DeckState {
+  if (!on) return { on: false, shipUid: s.deck.shipUid, station: null }
+  const stand = afloatShipUid(s[ownBoardKey(s.perspective)], uid)
+  return stand ? { on: true, shipUid: stand, station: null } : { ...DEFAULT_DECK }
+}
 
 interface Resolved {
   board: Board
@@ -395,6 +418,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   spied: emptyPerPlayer<SpyMark>(),
   bonusShots: 0,
   settings: initialSettings,
+  deck: DEFAULT_DECK,
+  deckOnBy: noDeckBy(),
 
   startGame: (difficulty, modes, seed) =>
     set((s) => {
@@ -430,6 +455,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         events: [],
         lastVolley: [],
         salvo: emptySalvo(),
+        deck: DEFAULT_DECK,
+        deckOnBy: noDeckBy(),
       }
     }),
 
@@ -454,7 +481,31 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   beginHandoff: (to) => set((s) => (isHotSeat(s.players) && (s.phase === 'placement' || s.phase === 'battle') ? { handoff: to } : {})),
 
-  endHandoff: () => set((s) => (s.handoff ? { handoff: null, perspective: s.phase === 'placement' ? s.placing : s.turn } : {})),
+  endHandoff: () =>
+    set((s) => {
+      if (!s.handoff) return {}
+      const perspective = s.phase === 'placement' ? s.placing : s.turn
+      // the next captain gets the deck view back only if they had it on when the curtain went up (their own ship, never the other's)
+      const deck = s.phase === 'battle' ? deckFor({ ...s, perspective, deck: DEFAULT_DECK }, s.deckOnBy[perspective]) : s.deck
+      return { handoff: null, perspective, deck }
+    }),
+
+  setDeck: (on) =>
+    set((s) => {
+      if (s.phase !== 'battle') return {}
+      const deck = deckFor(s, on)
+      return { deck, deckOnBy: { ...s.deckOnBy, [s.perspective]: deck.on } }
+    }),
+
+  boardShip: (uid) =>
+    set((s) => {
+      if (s.phase !== 'battle') return {}
+      const ship = s[ownBoardKey(s.perspective)].ships.find((x) => x.uid === uid)
+      if (!ship || isSunk(ship)) return {}
+      return { deck: { on: true, shipUid: uid, station: null }, deckOnBy: { ...s.deckOnBy, [s.perspective]: true } }
+    }),
+
+  manStation: (index) => set((s) => (s.deck.on && s.deck.station !== index ? { deck: { ...s.deck, station: index } } : {})),
 
   setFleetPreset: (preset) =>
     set((s) => {
@@ -694,5 +745,27 @@ export const useGameStore = create<GameState>((set, get) => ({
       treasure: emptyPerPlayer<Coord>(),
       spied: emptyPerPlayer<SpyMark>(),
       bonusShots: 0,
+      deck: DEFAULT_DECK,
+      deckOnBy: noDeckBy(),
     })),
 }))
+
+// Deck invariants that follow from other changes: the seat is only ever a camera, so it is dropped the moment the
+// battle ends (menu / placement / game over), and a standing ship that sinks hands the player to the next afloat
+// ship — at once when nothing is listening on `deckBus` (tests, `?no3d`), otherwise the mounted DeckController plays
+// the `abandon-ship` beat (its own fallback, or session B's sequence) and calls `boardShip` itself.
+useGameStore.subscribe((s, prev) => {
+  if (s.phase !== 'battle') {
+    if (s.deck !== DEFAULT_DECK && (s.deck.on || s.deck.shipUid !== null || s.deck.station !== null)) useGameStore.setState({ deck: DEFAULT_DECK, deckOnBy: noDeckBy() })
+    else if (s.phase !== prev.phase && (s.deckOnBy.human || s.deckOnBy.enemy)) useGameStore.setState({ deckOnBy: noDeckBy() })
+    return
+  }
+  if (!s.deck.on || !s.deck.shipUid || s.handoff) return
+  const board = s[ownBoardKey(s.perspective)]
+  if (board === prev[ownBoardKey(prev.perspective)] && s.deck === prev.deck) return
+  const standing = board.ships.find((x) => x.uid === s.deck.shipUid)
+  if (standing && !isSunk(standing)) return
+  if (deckBus.hasListeners()) return
+  const deck = deckFor(s, true, null)
+  useGameStore.setState({ deck, deckOnBy: { ...s.deckOnBy, [s.perspective]: deck.on } })
+})

@@ -89,4 +89,11 @@ export const deckBus = {
   emit(e: DeckBusEvent): void {
     for (const fn of listeners) fn(e)
   },
+  /**
+   * Session A addition: true while a consumer (the mounted DeckController) is subscribed. The store uses it to decide
+   * whether a sunk standing ship is handed over by an `abandon-ship` beat (listener present) or switched at once (none).
+   */
+  hasListeners(): boolean {
+    return listeners.size > 0
+  },
 }
