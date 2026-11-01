@@ -18,12 +18,13 @@ export const SLOOP_DECK_OBSTACLES: DeckAnchors['obstacles'] = [
 /** One open deck from the transom to the bow; the helmsman stands at the tiller aft of the stern barrels. */
 export function buildSloopDeck(cannons: ShipAnchors['cannons'], masts: ShipAnchors['masts']): DeckAnchors {
   const walk = [deckPolygon({ x0: -0.92, x1: 0.88, y: SLOOP_DIMS.deckHeight, halfWidth: (x) => deckEdgeHalfWidth(x) - 0.035, inset: 0.06, steps: 8 })]
+  const obstacles = [...mastObstacles(masts, 0.08), ...SLOOP_DECK_OBSTACLES]
   return {
     spawn: [-0.55, SLOOP_DIMS.deckHeight, 0.1],
     walk,
     ramps: [],
-    obstacles: [...mastObstacles(masts, 0.08), ...SLOOP_DECK_OBSTACLES],
-    stations: gunStations(cannons, walk, () => SLOOP_DIMS.deckHeight, { back: 0.06, barrel: CANNON_MUZZLE_OFFSET + 0.25 * 0.45 }),
+    obstacles,
+    stations: gunStations(cannons, walk, () => SLOOP_DIMS.deckHeight, { back: 0.06, barrel: CANNON_MUZZLE_OFFSET + 0.25 * 0.45, obstacles }),
   }
 }
 

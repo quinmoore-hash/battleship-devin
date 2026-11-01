@@ -73,6 +73,12 @@ describe.each(FLEET.map((s) => s.id))('%s deck anchors', (id) => {
     })
   })
 
+  it('every station stand is reachable: clear of all obstacles by more than the player radius', () => {
+    for (const [i, s] of deck.stations.entries()) {
+      for (const o of deck.obstacles) expect(dist2(o.center, [s.stand[0], s.stand[2]]), `${id} station ${i} vs obstacle at ${o.center}`).toBeGreaterThan(o.radius + 0.05)
+    }
+  })
+
   it('obstacles lie inside the hull; masts are obstacles', () => {
     for (const o of deck.obstacles) {
       expect(Math.abs(o.center[1]) + o.radius).toBeLessThan(a.hull.beam / 2 + 0.05)

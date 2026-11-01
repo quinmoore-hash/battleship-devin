@@ -58,23 +58,24 @@ export function buildBrigantineDeck(): DeckAnchors {
     deckPolygon({ x0: CABIN_FRONT_X + 0.02, x1: STEM_X - 0.3, y: DECK_Y, halfWidth: hw, steps: 8 }),
     deckPolygon({ x0: TRANSOM_X + 0.06, x1: CABIN_FRONT_X - 0.02, y: CABIN_TOP_Y, halfWidth: (x) => hw(x) - 0.03, inset: 0.06, steps: 3 }),
   ]
-  return {
-    spawn: [-1.2, CABIN_TOP_Y, 0.18],
-    walk,
-    ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12)],
-    obstacles: [
+  const obstacles: DeckAnchors['obstacles'] = [
       ...mastObstacles(MODEL_MASTS, 0.09),
       { center: [FOREMAST_X + 0.1, 0], radius: 0.05 },
       { center: [MAINMAST_X + 0.1, 0], radius: 0.05 },
       { center: [0.45, 0], radius: 0.14 },
       { center: [-0.76, 0], radius: 0.11 },
-      { center: [-0.9, 0.2], radius: 0.09 },
-      { center: [-0.9, -0.2], radius: 0.09 },
+      { center: [-0.9, 0.2], radius: 0.07 },
+      { center: [-0.9, -0.2], radius: 0.07 },
       { center: [-1.0, 0.05], radius: 0.08 },
       { center: [-1.3, 0], radius: 0.1 },
       { center: [-1.17, -0.14], radius: 0.07 },
-    ],
-    stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y, { barrel: CANNON_MUZZLE_LEN + 0.25 * CANNON_SCALE }),
+    ]
+  return {
+    spawn: [-1.2, CABIN_TOP_Y, 0.18],
+    walk,
+    ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12)],
+    obstacles,
+    stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y, { barrel: CANNON_MUZZLE_LEN + 0.25 * CANNON_SCALE, obstacles }),
   }
 }
 

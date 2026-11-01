@@ -98,14 +98,19 @@ export interface StationSpec {
   back?: number
   /** Barrel length from muzzle to breech (kit `Cannon`: 0.45 × its scale). */
   barrel?: number
+  /** Deck obstacles: a stand is pushed along the rail / outboard until it clears every one by `STAND_CLEARANCE`. */
+  obstacles?: DeckAnchors['obstacles']
 }
+
+/** Minimum gap between a gunner stand and any obstacle edge (player radius 0.03 + margin), so the stand is always reachable. */
+export const STAND_CLEARANCE = 0.06
 
 /**
  * Gunner stations, one per `cannons[i]`: stand inboard of the muzzle on the nearest walkable level, facing the
  * gun's firing direction. `deckYAt(x)` says which level the gun is served from (lower gun decks are served from
  * the weather deck above them, so their stand is further from the muzzle vertically).
  */
-export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['walk'], deckYAt: (x: number) => number, { back = 0.08, barrel = 0.2 }: StationSpec = {}): DeckAnchors['stations'] {
+export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['walk'], deckYAt: (x: number) => number, { back = 0.08, barrel = 0.2, obstacles = [] }: StationSpec = {}): DeckAnchors['stations'] {
   return cannons.map((c) => {
     const sign = c.side === 'starboard' ? 1 : -1
     const y = deckYAt(c.muzzle[0])
@@ -117,9 +122,23 @@ export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['
     for (let i = 0; i < 20 && !insideConvex(level.points, [x, 0]); i++) x += Math.sign(cx - x) * 0.02
     // the breech stays on the gun's side of the centreline even where the hull is narrower than the barrel (bow guns)
     const breechZ = sign * Math.max(Math.abs(c.muzzle[2]) - barrel, 0.08)
-    let z = breechZ - sign * back
+    // never closer to the centreline than ~55 % of the muzzle's offset: that is where masts, hatches and the capstan live
+    let z = sign * Math.max(Math.abs(breechZ) - back, 0.55 * Math.abs(c.muzzle[2]))
     // keep the stand inside the polygon, stepping inboard until it fits (never past the far rail)
     for (let i = 0; i < 30 && !insideConvex(level.points, [x, z]) && sign * z > -0.3; i++) z -= sign * 0.02
+    // clear deck furniture: slide along the rail away from the obstacle, else step back toward the breech
+    const blocked = (px: number, pz: number) => obstacles.find((o) => Math.hypot(o.center[0] - px, o.center[1] - pz) <= o.radius + STAND_CLEARANCE)
+    for (let i = 0; i < 40; i++) {
+      const o = blocked(x, z)
+      if (!o) break
+      // outboard first (the stand is only ever too far inboard), then along the rail away from the obstacle
+      const nz = z + sign * 0.03
+      const away = Math.sign(x - o.center[0]) || (x > cx ? 1 : -1)
+      const nx = x + away * 0.05
+      if (Math.abs(nz) <= Math.abs(breechZ) + 0.04 && insideConvex(level.points, [x, nz])) z = nz
+      else if (insideConvex(level.points, [nx, z])) x = nx
+      else break
+    }
     const stand: Vec3 = [x, level.y, z]
     const breech: Vec3 = [c.muzzle[0], c.muzzle[1], breechZ]
     return { stand, yaw: Math.atan2(c.direction[0], c.direction[2]), breech }

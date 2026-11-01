@@ -85,19 +85,20 @@ export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
     deckPolygon({ x0: G.xStern + 0.1, x1: G.poopX - 0.02, y: G.poopDeckY, halfWidth: hw, steps: 3 }),
     deckPolygon({ x0: G.forecastleX + 0.02, x1: G.xBow - 0.2, y: G.forecastleDeckY, halfWidth: hw, steps: 3 }),
   ]
-  return {
-    spawn: [-0.9, G.quarterDeckY, 0.28],
-    walk,
-    ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1), breakRamp(0, 3, G.forecastleX, 0.12)],
-    obstacles: [
+  const obstacles: DeckAnchors['obstacles'] = [
       ...mastObstacles(masts, 0.1),
       { center: [0.3, 0], radius: 0.3 },
       { center: [-0.7, 0], radius: 0.14 },
       { center: [-0.62, 0.3], radius: 0.09 },
       { center: [-0.62, -0.3], radius: 0.09 },
       { center: [1.4, 0], radius: 0.1 },
-    ],
-    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_CLEARANCE + 0.7 * CANNON_SCALE }),
+    ]
+  return {
+    spawn: [-0.9, G.quarterDeckY, 0.28],
+    walk,
+    ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1), breakRamp(0, 3, G.forecastleX, 0.12)],
+    obstacles,
+    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_CLEARANCE + 0.7 * CANNON_SCALE, obstacles }),
   }
 }
 

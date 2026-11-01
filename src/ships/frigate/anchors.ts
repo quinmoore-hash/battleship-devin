@@ -30,12 +30,13 @@ export function buildFrigateDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
     deckPolygon({ x0: F.qdBreakX + 0.02, x1: F.fcBreakX - 0.02, y: F.deckY, halfWidth: hw, steps: 8 }),
     deckPolygon({ x0: F.xStern + 0.06, x1: F.qdBreakX - 0.02, y: F.qdY, halfWidth: hw, steps: 4 }),
   ]
+  const obstacles: DeckAnchors['obstacles'] = [...mastObstacles(masts, 0.09), { center: [-1.2, 0], radius: 0.08 }]
   return {
     spawn: [-0.92, F.qdY, -0.25],
     walk,
     ramps: [breakRamp(0, 1, F.qdBreakX, 0.12)],
-    obstacles: [...mastObstacles(masts, 0.09), { center: [-1.2, 0], radius: 0.08 }],
-    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_OUT + 0.7 * CANNON_SCALE }),
+    obstacles,
+    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_OUT + 0.7 * CANNON_SCALE, obstacles }),
   }
 }
 
