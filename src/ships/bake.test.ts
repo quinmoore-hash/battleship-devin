@@ -48,7 +48,7 @@ describe('bakeObject', () => {
     // shares the source material instance (uniform updates on the live copy show on the bake)
     expect(baked.children.some((c) => (c as THREE.Mesh).material === wood)).toBe(true)
   })
-  it('skips invisible subtrees and unrolls instanced meshes into the material bucket (BUG-702)', () => {
+  it('skips invisible subtrees and unrolls instanced meshes into the material bucket (BUG-706)', () => {
     const root = new THREE.Group()
     const mat = new THREE.MeshStandardMaterial()
     const hidden = box(mat)

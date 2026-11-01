@@ -15,7 +15,7 @@ export interface LodThresholds {
   dwell: number
 }
 
-// Tuned against the real battle cameras (BUG-702): `CAMERA_SHOTS.battle` / `battle-far` sit 16.5 units up and 21.5
+// Tuned against the real battle cameras (BUG-706): `CAMERA_SHOTS.battle` / `battle-far` sit 16.5 units up and 21.5
 // units behind the near board, so hulls are 23–44 units away at the overview. lod 1 is the visually complete baked
 // ship and must cover that whole range for every hull length (the sloop scales thresholds by 2/3); lod 2 is only the
 // genuinely far silhouette (OrbitControls zoomed all the way out, or the Low tier cap). lod 0 stays reserved for the

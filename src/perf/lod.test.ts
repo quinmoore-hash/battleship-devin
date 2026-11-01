@@ -38,7 +38,7 @@ describe('lodForDistance', () => {
     expect(lodForDistance(80, 5)).toBe(1)
   })
 
-  it('BUG-702: every ship on both boards is lod <= 1 at the default battle cameras, in every supported viewport', () => {
+  it('BUG-706: every ship on both boards is lod <= 1 at the default battle cameras, in every supported viewport', () => {
     for (const view of ['battle', 'battle-far'] as const) {
       const distances = overviewDistances(view)
       // battleFraming only moves the target / fov with the viewport: the camera position (and so the hull distance)

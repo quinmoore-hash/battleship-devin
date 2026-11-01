@@ -157,7 +157,7 @@ export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material): THR
     const inst = o as THREE.InstancedMesh
     if (inst.isInstancedMesh && !inst.instanceColor && !Array.isArray(inst.material) && inst.count <= INSTANCE_EXPAND_MAX) {
       // rail posts / rope bundles / gun barrels: unroll the instances into the material bucket so a baked ship
-      // costs one draw per material instead of one per InstancedMesh (BUG-702: a galleon had 28 of them)
+      // costs one draw per material instead of one per InstancedMesh (BUG-706: a galleon had 28 of them)
       sourceMeshes++
       tmpM.multiplyMatrices(inv, o.matrixWorld)
       for (let i = 0; i < inst.count; i++) {

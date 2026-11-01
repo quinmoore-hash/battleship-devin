@@ -139,7 +139,7 @@ const innerSkin = (x: number, y: number) => hullHalfWidth(x, y) - 0.045
 // ---------------------------------------------------------------------------------------------------------
 // hull
 
-/** Hull skin at 26/18/12 stations x 12/8/6 rings for lod 0/1/2: the lod-independent loft was 16 k of the 21 k lod-2 triangles (BUG-702). */
+/** Hull skin at 26/18/12 stations x 12/8/6 rings for lod 0/1/2: the lod-independent loft was 16 k of the 21 k lod-2 triangles (BUG-706). */
 const hullSkin = cached((key: string) => {
   const lod = Number(key) as Lod
   const rings = lod === 0 ? 12 : lod === 1 ? 8 : 6

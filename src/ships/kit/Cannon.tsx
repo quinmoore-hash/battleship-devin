@@ -48,7 +48,7 @@ function cannonGeometry(lod: Lod) {
   const key = `cannon${lod}`
   let g = GEOM.get(key) as THREE.BufferGeometry & { oak?: THREE.BufferGeometry; brass?: THREE.BufferGeometry | null }
   if (g) return { iron: g, oak: g.oak!, brass: g.brass ?? null }
-  // baked lods (BUG-702): a gun is a few pixels long from the battle camera, so the barrel drops to 7 / 6 facets and
+  // baked lods (BUG-706): a gun is a few pixels long from the battle camera, so the barrel drops to 7 / 6 facets and
   // every other profile point: ~150 tris instead of ~550 per gun, with the carriage / rings / lids all still present
   if (lod === 2) {
     // far silhouette: a tapered 5-facet barrel on a single carriage block (~40 tris) so gun rows still read as guns

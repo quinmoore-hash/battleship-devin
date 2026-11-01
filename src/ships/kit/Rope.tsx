@@ -86,7 +86,7 @@ const _up = new THREE.Vector3(0, 1, 0)
 export function Ratlines({ from, to, livery, rungs = 10, shrouds = 3, spread = 0.35, mirror = true, lod = 0 }: RatlinesProps) {
   const m = shipMaterials(livery)
   const sides = mirror ? [1, -1] : [1]
-  const rungCount = lod === 0 ? rungs : lod === 1 ? Math.ceil(rungs / 2) : 0 // lod 1 keeps every other rung at the thickened radius (BUG-702)
+  const rungCount = lod === 0 ? rungs : lod === 1 ? Math.ceil(rungs / 2) : 0 // lod 1 keeps every other rung at the thickened radius (BUG-706)
   const lines = useMemo(() => {
     const out: { a: Vec3; b: Vec3 }[] = []
     for (const side of sides) {
