@@ -11,7 +11,7 @@ import { Fleet, SHIPS, shipWorldTransform } from './index'
 import type { Livery } from './types'
 
 /**
- * `?deck-demo&ship=man-o-war&look=fwd|rail|aft|port&lod=0&dressed=0|1&wrecks=6&tod=0.6&weather=squall&livery=navy&perf&quality=medium`
+ * `?deck-demo&ship=man-o-war&look=fwd|rail|aft|port&lod=0&dressed=0|1&bay=0|1&wrecks=6&tod=0.6&weather=squall&livery=navy&perf&quality=medium`
  *
  * Eye-height review of one class in the real battle scene: the chosen ship sits on the player board's first row
  * and is rendered live at `lod` (default 0, the "On deck" detail level); the rest of a classic fleet is baked on
@@ -90,6 +90,7 @@ export function DeckDemo() {
   const tod = q.get('tod') !== null ? Number(q.get('tod')) : undefined
   const weather = (q.get('weather') as Weather | null) ?? undefined
   const dressed = q.get('dressed') !== '0'
+  const bay = q.get('bay') !== '0'
   const eyeParam = q.get('eye')?.split(',').map(Number)
   const eye = eyeParam && eyeParam.length === 3 && eyeParam.every(Number.isFinite) ? (eyeParam as Vec3) : undefined
 
@@ -99,7 +100,7 @@ export function DeckDemo() {
   const foe = useMemo(() => wreckFleet(wrecks), [wrecks])
 
   return (
-    <OceanScene view="battle" interactive={false} cameraOverride timeOfDay={tod} weather={weather}>
+    <OceanScene view="battle" interactive={false} cameraOverride timeOfDay={tod} weather={weather} dressing={bay}>
       <Fleet ships={[own]} livery={livery} lod={lod} dressedUid={dressed ? own.uid : null} />
       <Fleet ships={rest} livery={livery} lod={1} />
       {foe.length > 0 && <Fleet ships={foe} livery={livery === 'pirate' ? 'navy' : 'pirate'} revealed={false} boardOrigin={BOARD_LAYOUT.enemy.origin} lod={1} />}
