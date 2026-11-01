@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { bindGameAudio } from './audio'
 import { CinematicCamera, CinematicLayer, Letterbox, director, useDirector } from './cinematics'
+import { DeckController } from './deck'
 import { ExtrasLayer, MenuRules, MenuStats, useGameTimeOfDay, useGameWeather } from './extras'
 import { OceanScene } from './scene'
 import { useGameStore } from './store/gameStore'
@@ -74,6 +75,8 @@ function Game() {
   const phase = useGameStore((s) => s.phase)
   const cinematic = useDirector((s) => s.busy)
   const inBattle = phase === 'battle' || phase === 'gameover'
+  // On deck: the player keeps the camera through every sequence (the director's VFX / audio still play in the world)
+  const onDeck = useGameStore((s) => s.deck.on && s.phase === 'battle' && !s.handoff)
   // hot-seat: the director films from the active captain's side (always `human` in single player)
   const perspective = useGameStore((s) => s.perspective)
   useEffect(() => director.setPerspective(perspective), [perspective])
@@ -90,10 +93,11 @@ function Game() {
       <PerfBootstrap />
       <FpsWatchdog />
       <A11yBootstrap />
-      <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic}>
+      <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic && !onDeck}>
         <GameWorld />
         {inBattle && <CinematicLayer />}
-        {inBattle && <CinematicCamera />}
+        {inBattle && !onDeck && <CinematicCamera />}
+        {phase === 'battle' && <DeckController />}
       </OceanScene>
       <GameUI menuExtras={{ rules: <MenuRules />, stats: <MenuStats /> }} />
       <ExtrasLayer />

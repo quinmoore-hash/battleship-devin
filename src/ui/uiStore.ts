@@ -7,6 +7,9 @@ export const UI_PREFS_STORAGE_KEY = 'battleship-devin.ui'
 
 export type BoardSide = 'player' | 'enemy'
 
+/** What a click on the enemy waters does (Black Flag power shots arm here; `shot` is the plain cannon). */
+export type Armed = 'shot' | 'broadside' | 'spyglass'
+
 /** Persisted player preferences that don't belong to the game rules store. */
 export interface UiPrefs {
   /** First-play hints the player has dismissed. */
@@ -29,6 +32,11 @@ export interface UiInteraction {
   pendingTarget: Coord | null
   worldReady: boolean
   battleStartedAt: number | null
+  /** Black Flag: the power shot armed for the next click (chart, 3D board or the deck crosshair all read it). */
+  armed: Armed
+  broadsideDir: Orientation
+  /** The last Spyglass finding, shown in the status line until the next action. */
+  spyNote: string | null
 }
 
 export interface UiState extends UiPrefs, UiInteraction {
@@ -42,6 +50,9 @@ export interface UiState extends UiPrefs, UiInteraction {
   markBattleStart: () => void
   setPrefs: (patch: Partial<UiPrefs>) => void
   dismissHint: (id: string) => void
+  setArmed: (armed: Armed) => void
+  rotateBroadside: () => void
+  setSpyNote: (note: string | null) => void
 }
 
 const DEFAULT_PREFS: UiPrefs = { hintsSeen: [] }
@@ -57,6 +68,9 @@ export const useUiStore = create<UiState>()(
       pendingTarget: null,
       worldReady: false,
       battleStartedAt: null,
+      armed: 'shot',
+      broadsideDir: 'horizontal',
+      spyNote: null,
 
       setHover: (hover) => set({ hover }),
       setCarrying: (id, orientation) => set((s) => ({ carrying: id, orientation: orientation ?? s.orientation, dragging: false })),
@@ -68,6 +82,9 @@ export const useUiStore = create<UiState>()(
       markBattleStart: () => set({ battleStartedAt: Date.now() }),
       setPrefs: (patch) => set(patch),
       dismissHint: (id) => set((s) => (s.hintsSeen.includes(id) ? {} : { hintsSeen: [...s.hintsSeen, id] })),
+      setArmed: (armed) => set({ armed }),
+      rotateBroadside: () => set((s) => ({ broadsideDir: s.broadsideDir === 'horizontal' ? 'vertical' : 'horizontal' })),
+      setSpyNote: (spyNote) => set({ spyNote }),
     }),
     {
       name: UI_PREFS_STORAGE_KEY,
@@ -87,7 +104,7 @@ export const useUiStore = create<UiState>()(
 
 /** Reset the transient interaction state (new game / phase change). Prefs are kept. */
 export function resetInteraction() {
-  useUiStore.setState({ hover: null, carrying: null, dragging: false, pendingTarget: null, orientation: 'horizontal' })
+  useUiStore.setState({ hover: null, carrying: null, dragging: false, pendingTarget: null, orientation: 'horizontal', armed: 'shot', broadsideDir: 'horizontal', spyNote: null })
 }
 
 // Any phase change (new game, quit, game over) — or the deck passing to the other hot-seat captain — drops

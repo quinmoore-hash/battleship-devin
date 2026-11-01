@@ -45,6 +45,20 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           un-sunk ships are never shown to the other captain. Salvo, Stormy seas and Black Flag all apply to both captains. The winner is named on the
           report; Rematch lets the other captain place first.
         </dd>
+        <dt>On deck</dt>
+        <dd data-testid="howto-on-deck">
+          Press <kbd>V</kbd> (or <em>On deck</em>) at any moment of the battle — your turn, the enemy's, mid-cinematic — to stand on one of your own
+          ships; press it again for the overview. Toggling never changes the game. <kbd>W</kbd>
+          <kbd>A</kbd>
+          <kbd>S</kbd>
+          <kbd>D</kbd> walk, mouse looks (click the sea to grab the mouse, <kbd>Esc</kbd> lets it go), <kbd>Shift</kbd> runs, <kbd>Tab</kbd> hops to your
+          next afloat ship. You cannot fall off or walk through the masts. Walk up to a cannon on the side facing the enemy waters and press{' '}
+          <kbd>E</kbd> to man it (guns on the far side say <em>No target that side</em>), then <b>click a square</b> — on the chart or out on the
+          water through the crosshair — and the gun swings to bear and fires there. No free aim: the same odds as the overview. Salvo counts
+          the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) and Spyglass (<kbd>G</kbd>) work from a gun, and a stormy sea still swallows
+          its 30 %. The enemy's balls splash around you or strike your hull; when your ship goes down you wake on the next one (<kbd>Tab</kbd>{' '}
+          to choose). Each captain in Two captains gets their own deck. Not available without 3D.
+        </dd>
         <dt>Sky &amp; sea (looks only)</dt>
         <dd data-testid="howto-sky-sea">
           Pick the time of day (Dawn, Noon, Golden hour, Dusk, Moonlit night) and the weather (Calm, Overcast, Squall)

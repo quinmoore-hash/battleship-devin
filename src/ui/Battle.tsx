@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { playSfx } from '../audio'
 import { useDirector } from '../cinematics'
-import { broadsideCells, coordKey, coordLabel, enemyView, FLEET_BY_ID, hasBeenShot, sameCoord, viewGrid, type Coord, type Orientation, type Player, type ShotResult } from '../engine'
+import { broadsideCells, coordKey, coordLabel, enemyView, FLEET_BY_ID, sameCoord, viewGrid, type Coord, type Player, type ShotResult } from '../engine'
 import { isHotSeat, other, treasureFound, useGameStore } from '../store/gameStore'
 import { SKIP_CINEMATIC_EVENT } from '../perf/a11y/A11yBootstrap'
 import { useBattleController } from './battleController'
 import { FleetStatus } from './FleetStatus'
-import { PowerShots, type Armed } from './PowerShots'
+import { PowerShots } from './PowerShots'
+import { DeckHud, DeckToggle } from './DeckHud'
 import { Grid, type GridCellInfo } from './Grid'
 import { Modal } from './Modal'
 import { CompassRose, Hint } from './Ornaments'
@@ -36,10 +37,14 @@ export function BattleScreen() {
   const fleets = useGameStore((s) => s.fleets)
   const powerShots = useGameStore((s) => s.powerShots)
   const spied = useGameStore((s) => s.spied)
-  const spyAt = useGameStore((s) => s.spyAt)
-  const [armed, setArmed] = useState<Armed>('shot')
-  const [broadsideDir, setBroadsideDir] = useState<Orientation>('horizontal')
-  const [spyNote, setSpyNote] = useState<string | null>(null)
+  const armed = useUiStore((s) => s.armed)
+  const setArmed = useUiStore((s) => s.setArmed)
+  const broadsideDir = useUiStore((s) => s.broadsideDir)
+  const rotateBroadside = useUiStore((s) => s.rotateBroadside)
+  const spyNote = useUiStore((s) => s.spyNote)
+  const setSpyNote = useUiStore((s) => s.setSpyNote)
+  const deckOn = useGameStore((s) => s.deck.on)
+  const deckShipUid = useGameStore((s) => s.deck.shipUid)
   const reset = useGameStore((s) => s.reset)
   const startGame = useGameStore((s) => s.startGame)
   // hot-seat ("Two captains"): the HUD shows the active captain's side; the curtain (`handoff`) hides both charts
@@ -57,6 +62,7 @@ export function BattleScreen() {
   const start = useBattleController((s) => s.start)
   const stop = useBattleController((s) => s.stop)
   const fire = useBattleController((s) => s.fire)
+  const aim = useBattleController((s) => s.aim)
   const skip = useBattleController((s) => s.skip)
   const busy = useBattleController((s) => s.busy)
   const beat = useBattleController((s) => s.beat)
@@ -99,9 +105,10 @@ export function BattleScreen() {
       if (!blackFlag || e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement | null)?.closest('input, textarea')) return
       const k = e.key.toLowerCase()
       const power = useGameStore.getState().powerShots[perspective]
-      if (k === 'b' && power.broadside) setArmed((a) => (a === 'broadside' ? 'shot' : 'broadside'))
-      if (k === 'g' && power.spyglass) setArmed((a) => (a === 'spyglass' ? 'shot' : 'spyglass'))
-      if (k === 'r') setBroadsideDir((o) => (o === 'horizontal' ? 'vertical' : 'horizontal'))
+      const armedNow = useUiStore.getState().armed
+      if (k === 'b' && power.broadside) setArmed(armedNow === 'broadside' ? 'shot' : 'broadside')
+      if (k === 'g' && power.spyglass) setArmed(armedNow === 'spyglass' ? 'shot' : 'spyglass')
+      if (k === 'r') rotateBroadside()
     }
     const onSkipEvent = () => skip()
     window.addEventListener('keydown', onKey)
@@ -110,7 +117,7 @@ export function BattleScreen() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener(SKIP_CINEMATIC_EVENT, onSkipEvent)
     }
-  }, [busy, skip, setPendingTarget, blackFlag, perspective])
+  }, [busy, skip, setPendingTarget, setArmed, rotateBroadside, blackFlag, perspective])
 
   const yourTurn = turn === perspective && (hotSeat || turn === 'human') && !busy && !handoff
   // while the director plays, the side panels step back so the cannonball / sinking is not hidden behind parchment
@@ -218,33 +225,17 @@ export function BattleScreen() {
     }
   }
 
+  // one path for every square clicked (chart, 3D board, deck crosshair): see `useBattleController().aim`
   const onEnemyCell = (c: Coord) => {
     if (!yourTurn) return
-    if (armed === 'spyglass') {
-      if (hasBeenShot(foeBoard, c)) return playSfx('miss')
-      const seen = spyAt(c, perspective)
-      if (!seen) return playSfx('miss')
-      playSfx('ui-click')
-      setSpyNote(`Spyglass ${coordLabel(c)} — ${seen === 'ship' ? 'a ship!' : 'open water.'}`)
-      setArmed('shot')
-      return
-    }
-    setSpyNote(null)
-    if (armed === 'broadside') {
-      if (!broadsideCells(c, broadsideDir, foeBoard.size).some((b) => !hasBeenShot(foeBoard, b))) return playSfx('miss')
-      setArmed('shot')
-      void fire(c, { kind: 'broadside', orientation: broadsideDir })
-      return
-    }
-    if (hasBeenShot(foeBoard, c)) return playSfx('miss')
-    void fire(c)
+    aim(c)
   }
 
   // the curtain is up: nothing of either chart stays in the DOM (the HUD root stays mounted so the turn flow survives)
   if (handoff) return <div className="battle hud" data-testid="battle" data-handoff={handoff} data-cinematic="false" aria-hidden />
 
   return (
-    <div className="battle hud" data-testid="battle" data-cinematic={cinematic ? 'true' : 'false'} data-perspective={perspective}>
+    <div className="battle hud" data-testid="battle" data-cinematic={cinematic ? 'true' : 'false'} data-perspective={perspective} data-deck={deckOn ? 'true' : 'false'}>
       <header className="battle-top">
         <div className={`panel parchment status-panel ${yourTurn ? 'is-yours' : 'is-theirs'}`}>
           <CompassRose size={64} heading={yourTurn || sideInPlay === 'human' ? 0 : beat.phase === 'enemy-aiming' ? 170 : 180} />
@@ -271,6 +262,7 @@ export function BattleScreen() {
           </div>
         </div>
         <div className="battle-buttons">
+          <DeckToggle />
           <button type="button" className="btn btn-ghost" data-testid="restart" onClick={() => (playSfx('ui-click'), startGame(difficulty))}>
             Restart
           </button>
@@ -301,7 +293,7 @@ export function BattleScreen() {
                 treasure={treasureFoundByMe}
                 disabled={!yourTurn}
                 onArm={(a) => (playSfx('ui-click'), setSpyNote(null), setArmed(a))}
-                onRotate={() => setBroadsideDir((o) => (o === 'horizontal' ? 'vertical' : 'horizontal'))}
+                onRotate={rotateBroadside}
               />
             )}
             {pending && yourTurn && (
@@ -329,6 +321,8 @@ export function BattleScreen() {
           <ShotLog events={events} names={hotSeat ? { human: players.human.name, enemy: players.enemy.name } : undefined} />
         </aside>
       </div>
+
+      <DeckHud ship={ownBoard.ships.find((x) => x.uid === deckShipUid) ?? null} yourTurn={yourTurn} />
 
       <Hint id="battle" seen={hintsSeen.includes('battle')} onDismiss={dismissHint}>
         {touch ? 'Tap the enemy waters to aim your spyglass, tap again to fire.' : 'Hover the enemy waters to aim your spyglass, click to fire.'}{' '}

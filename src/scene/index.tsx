@@ -154,7 +154,9 @@ function SceneContents({
   // hot-seat: the curtain shows open sea only; the second captain's battle is filmed from the far side
   const handoff = useGameStore((s) => s.handoff)
   const perspective = useGameStore((s) => s.perspective)
-  const phaseView: CameraView = handoff ? 'handoff' : phase === 'battle' && perspective === 'enemy' ? 'battle-far' : (PHASE_VIEW[phase] ?? 'menu')
+  // On deck (src/deck): the first-person seat replaces the battle overview while the curtain is down
+  const deckOn = useGameStore((s) => s.deck.on)
+  const phaseView: CameraView = handoff ? 'handoff' : phase === 'battle' && deckOn ? 'deck' : phase === 'battle' && perspective === 'enemy' ? 'battle-far' : (PHASE_VIEW[phase] ?? 'menu')
   const activeView = view ?? phaseView
   const atmosphere = useMemo(() => computeAtmosphere(timeOfDay, weather), [timeOfDay, weather])
   useEffect(() => setLanternGlow(atmosphere.lanternGlow), [atmosphere])

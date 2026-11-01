@@ -241,8 +241,10 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const hover = useUiStore((s) => s.hover)
   const pending = useUiStore((s) => s.pendingTarget)
   const setHover = useUiStore((s) => s.setHover)
-  const requestFire = useBattleController((s) => s.requestFire)
+  const aim = useBattleController((s) => s.aim)
   const busy = useBattleController((s) => s.busy)
+  // On deck: the standing ship is the one live lod-0 ship (tier permitting); the rest of the own fleet stays baked
+  const deck = useGameStore((s) => s.deck)
   const firing = useDirector((s) => s.firing)
   const sinkProgress = useDirector((s) => s.sinkProgress)
   const active = useDirector((s) => s.active)
@@ -275,8 +277,17 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const foeBoard = perspective === 'human' ? enemyBoard : playerBoard
   // distance LOD, capped by the perf tier (medium shows at most one lod-0 ship per board unless the camera is close)
   const lod = perf.lod === 2 ? 2 : 'auto'
-  const canAim = !over && turn === perspective && (hotSeat || turn === 'human') && !busy
+  const canAim = !over && turn === perspective && (hotSeat || turn === 'human') && !busy && (!deck.on || deck.station !== null)
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
+  const onDeck = deck.on && !over
+  const standing = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid === deck.shipUid) : []), [onDeck, own.ships, deck.shipUid])
+  const ownRest = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid !== deck.shipUid) : own.ships), [onDeck, own.ships, deck.shipUid])
+  // Medium budget (≤ 350 draws): a live lod-0 man-o'-war alone is ~420 draws, so only High stands on a live ship; Medium
+  // rides the baked lod-1 copy. The neighbours never go live either (High would pick lod 0 for anything within 6 u).
+  // From the deck the neighbours are 2–8 u away: `auto` would bake them at lod 1 and push Medium past ~250k triangles,
+  // so they drop to the lod-2 silhouette there (High keeps lod 1).
+  const restLod = onDeck ? (perf.lod === 0 ? 1 : 2) : lod
+  const standingLod = perf.lod
   const targetShot = target ? hasBeenShot(foeBoard, target) : false
 
   useEffect(() => () => void (document.body.style.cursor = ''), [])
@@ -295,10 +306,13 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
           document.body.style.cursor = c && canAim ? 'crosshair' : ''
         }}
         onCellClick={(c: Coord) => {
-          if (canAim && !hasBeenShot(foeBoard, c)) requestFire(c, lastPointerType)
+          // on deck the controller owns canvas clicks (pointer lock / crosshair); only a touch tap on the 3D board goes through here
+          if (deck.on && lastPointerType !== 'touch') return
+          if (canAim && !hasBeenShot(foeBoard, c)) aim(c, lastPointerType ?? '')
         }}
       />
-      <Fleet ships={own.ships} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={lod} firing={firing} sinkProgress={own.sink} />
+      <Fleet ships={ownRest} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={restLod} firing={firing} sinkProgress={own.sink} />
+      {standing.length > 0 && <Fleet ships={standing} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={standingLod} firing={firing} sinkProgress={own.sink} />}
       <Fleet ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} quality={quality} lod={lod} firing={firing} sinkProgress={foe.sink} />
       <ShotMarkers shots={own.shotsOnIt} boardOrigin={own.origin} fires={false} />
       <ShotMarkers shots={foe.shotsOnIt} boardOrigin={foe.origin} fires={!over} />

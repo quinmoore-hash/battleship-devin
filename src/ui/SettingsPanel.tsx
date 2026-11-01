@@ -58,6 +58,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <span>Mute all</span>
           </label>
         </fieldset>
+        <fieldset className="settings-deck">
+          <legend>On deck</legend>
+          <label className="row">
+            <span>Look sensitivity</span>
+            <input type="range" min={0.2} max={3} step={0.1} value={settings.deckSensitivity} data-testid="setting-deck-sensitivity" aria-valuetext={`${settings.deckSensitivity.toFixed(1)}×`} onChange={(e) => updateSettings({ deckSensitivity: e.target.valueAsNumber })} />
+          </label>
+          <label className="row row-check">
+            <input type="checkbox" checked={settings.deckInvertY} data-testid="setting-deck-invert-y" onChange={(e) => updateSettings({ deckInvertY: e.target.checked })} />
+            <span>Invert Y (mouse look)</span>
+          </label>
+          <p className="muted small">Press V in battle to stand on your own deck. Same shots, same odds — just a different seat.</p>
+        </fieldset>
         <fieldset>
           <legend>Accessibility</legend>
           <label className="row row-check">
