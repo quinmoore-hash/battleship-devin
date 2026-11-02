@@ -1766,14 +1766,24 @@
     padding-right: 0;
     padding-top: 46px;
   }
+  /* the action row shares the top edge with the corner nav (2 × 42 px + gaps at right 12 px): keep it left of
+     x = 263 px on a 375 px phone — no key hints, no "Log" word, tighter buttons (BUG-760) */
   .battle-buttons {
     position: absolute;
     top: 12px;
     left: 12px;
+    right: 112px;
+    gap: 6px;
+    overflow: hidden;
   }
   .battle-buttons .btn {
-    padding: 0.4rem 0.7rem;
-    font-size: 0.9rem;
+    padding: 0.4rem 0.4rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  .battle-buttons .deck-toggle kbd,
+  .battle-buttons .log-text {
+    display: none;
   }
   .status-panel {
     grid-template-columns: auto 1fr;

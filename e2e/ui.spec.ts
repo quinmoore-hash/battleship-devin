@@ -89,6 +89,12 @@ test('touch targeting on the HTML chart stays one-tap; the 3D confirm button app
   await expect(page.getByTestId('enemy-grid-3-3')).not.toHaveAttribute('data-state', 'unknown')
   const width = await page.evaluate(() => document.documentElement.scrollWidth)
   expect(width).toBeLessThanOrEqual(375)
+  // BUG-760: the action row must stay clear of the corner nav so Quit is tappable
+  const quit = await page.getByTestId('quit').boundingBox()
+  const help = await page.getByTestId('nav-how-to-play').boundingBox()
+  expect(quit!.x + quit!.width).toBeLessThan(help!.x)
+  await page.getByTestId('quit').tap()
+  await expect(page.getByTestId('quit-confirm')).toBeVisible()
   await ctx.close()
 })
 
