@@ -1,7 +1,7 @@
 // Headed-browser screenshot driver for the manned-gun first-person view (GPU-less VM: `xvfb-run -a -s "-screen 0 1440x900x24" node scripts/deck-gun-views.mjs`).
 // Plays menu → placement → battle, presses V, then boards every ship of the fleet in turn and mans a set of on-deck stations per
 // class via the perf hook (`window.__perf.store()`), screenshotting each. Env: TP_URL (default http://localhost:4173), TP_OUT (dir),
-// TP_VIEWPORT=1440x900, TP_TIER=medium, TP_HEADLESS=1, TP_STATIONS=sloop:0,1;frigate:4,5 (defaults below), TP_SHIPS=frigate,galleon (default: the whole fleet).
+// TP_VIEWPORT=1440x900, TP_TIER=medium, TP_HEADLESS=1 (point TP_OUT outside test-results/: `npm run e2e` clears that dir), TP_STATIONS=sloop:0,1;frigate:4,5 (defaults below), TP_SHIPS=frigate,galleon (default: the whole fleet).
 import { chromium } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 
