@@ -3,12 +3,20 @@ import { SHIPS } from '../ships'
 import { BOARD_LAYOUT, boardCenter } from '../scene/layout'
 import type { DeckAnchors } from './contract'
 import {
+  GROUNDED,
+  PLAYER_RADIUS,
+  JUMP_APEX,
+  JUMP_TIME,
   afloatUids,
+  approach,
+  startJump,
+  stepJump,
   clampToPolygon,
   cycleShip,
   deckHeightAt,
   eyeFor,
   fallbackDeckAnchors,
+  type WalkPose,
   isFallbackDeck,
   gunnerPose,
   lookForward,
@@ -28,20 +36,52 @@ import {
 
 const rect = rectPolygon(4, 1, 0)
 
-describe('deck fallback rectangle', () => {
-  it('shrinks the hull by 0.06 and puts masts in as obstacles at deckY', () => {
-    const a = SHIPS['man-o-war'].anchors
-    const d = fallbackDeckAnchors(a)
+describe('deck fallback plan', () => {
+  it('follows the hull plan inset by 0.08, tapers toward the ends and puts masts in as obstacles', () => {
+    const a = SHIPS.sloop.anchors
+    const d = fallbackDeckAnchors(a, 'sloop')
     expect(d.walk).toHaveLength(1)
     expect(d.walk[0].y).toBe(a.deckY)
-    const xs = d.walk[0].points.map((p) => p[0])
     const zs = d.walk[0].points.map((p) => p[1])
-    expect(Math.max(...xs)).toBeCloseTo(a.hull.length / 2 - 0.06)
-    expect(Math.max(...zs)).toBeCloseTo(a.hull.beam / 2 - 0.06)
+    expect(Math.max(...zs)).toBeCloseTo(a.hull.beam / 2 - 0.08)
+    // the ends are narrower than the waist
+    const endZ = Math.max(...d.walk[0].points.filter((p) => p[0] > 0.9).map((p) => Math.abs(p[1])))
+    expect(endZ).toBeLessThan(a.hull.beam / 2 - 0.08)
     expect(d.obstacles).toHaveLength(a.masts.length)
-    expect(d.obstacles[0].radius).toBe(0.05)
+    expect(d.obstacles[0].center).toEqual([a.masts[0].base[0], a.masts[0].base[2]])
     expect(d.stations).toHaveLength(a.cannons.length)
-    expect(pointInPolygon([d.spawn[0], d.spawn[2]], d.walk[0].points)).toBe(true)
+  })
+
+  it('authored decks (session C) are the source of truth: raised levels, ramps and obstacles come from `ShipAnchors.deck`', () => {
+    for (const id of ['frigate', 'man-o-war', 'galleon', 'brigantine', 'sloop'] as const) {
+      const d = resolveDeckAnchors(SHIPS[id].anchors, id)
+      expect(d).toBe(SHIPS[id].anchors.deck)
+      expect(d.walk.length).toBeGreaterThan(0)
+      expect(d.obstacles.length).toBeGreaterThanOrEqual(SHIPS[id].anchors.masts.length)
+    }
+    const m = resolveDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
+    expect(m.walk.length).toBeGreaterThan(1)
+    expect(m.ramps.length).toBeGreaterThan(0)
+  })
+
+  it('stations under a castle (muzzle below the deck level they would stand on) are not reachable; waist guns are', () => {
+    const a = SHIPS['man-o-war'].anchors
+    const d = resolveDeckAnchors(a, 'man-o-war')
+    const st = stationsOf(a, d)
+    const waist = st.filter((s) => s.stand[0] >= -0.55 && s.stand[0] <= 1.35 && s.muzzle[1] > a.deckY)
+    expect(waist.length).toBeGreaterThan(0)
+    for (const s of waist) expect(s.onDeck).toBe(true)
+    const underCastle = st.filter((s) => (s.stand[0] < -0.56 || s.stand[0] > 1.36) && s.muzzle[1] < 0.88)
+    expect(underCastle.length).toBeGreaterThan(0)
+    for (const s of underCastle) expect(s.onDeck).toBe(false)
+  })
+
+  it('an unknown class gets a flush tapered plan from its hull', () => {
+    const a = SHIPS.sloop.anchors
+    const d = fallbackDeckAnchors(a)
+    expect(d.walk).toHaveLength(1)
+    expect(d.ramps).toHaveLength(0)
+    expect(Math.max(...d.walk[0].points.map((p) => p[0]))).toBeCloseTo(a.hull.length / 2 - 0.08)
   })
 
   it('every class resolves to a walkable deck (authored or fallback) whose spawn is inside it', () => {
@@ -225,5 +265,121 @@ describe('look math', () => {
     expect(sinkProgressFor(false, undefined)).toBe(0)
     expect(sinkProgressFor(true, 0.4)).toBe(0.4)
     expect(sinkProgressFor(true, undefined)).toBe(1)
+  })
+})
+
+describe('walk acceleration and jump', () => {
+  it('approach is frame-rate independent: two 8 ms steps land where one 16 ms step does (to 1e-9)', () => {
+    const one = approach(0, 1, 0.016)
+    const two = approach(approach(0, 1, 0.008), 1, 0.008)
+    expect(two).toBeCloseTo(one, 9)
+    expect(approach(0, 1, 10)).toBeCloseTo(1, 4)
+  })
+
+  it('jump reaches JUMP_APEX at half time and lands at JUMP_TIME on a flat deck; no double jump', () => {
+    let air = startJump(GROUNDED)
+    expect(air.airborne).toBe(true)
+    expect(startJump(air)).toBe(air)
+    let t = 0
+    let apex = 0
+    const dt = 1 / 240
+    let landedAt = -1
+    while (t < 2 && landedAt < 0) {
+      air = stepJump(air, dt, 0.4, 0.4)
+      t += dt
+      apex = Math.max(apex, air.height)
+      if (!air.airborne) landedAt = t
+    }
+    expect(apex).toBeCloseTo(JUMP_APEX, 2)
+    expect(landedAt).toBeCloseTo(JUMP_TIME, 1)
+    expect(air).toBe(GROUNDED)
+  })
+
+  it('the same arc at 60 Hz and 120 Hz lands within a frame of each other', () => {
+    const land = (dt: number) => {
+      let air = startJump(GROUNDED)
+      let t = 0
+      while (air.airborne && t < 2) {
+        air = stepJump(air, dt, 0, 0)
+        t += dt
+      }
+      return t
+    }
+    expect(Math.abs(land(1 / 60) - land(1 / 120))).toBeLessThan(1 / 60 + 1e-9)
+  })
+
+  it('jumping across a break lands on the higher deck (height measured against the deck now under the feet)', () => {
+    let air = startJump(GROUNDED)
+    // first frames over the main deck (0.4), then the feet cross onto the quarterdeck (0.58)
+    air = stepJump(air, 0.1, 0.4, 0.4)
+    expect(air.height).toBeGreaterThan(0.05)
+    air = stepJump(air, 0.05, 0.4, 0.58)
+    // absolute foot height is kept: the height over the new deck is 0.18 lower
+    expect(air.height).toBeLessThan(0.08)
+    let t = 0
+    while (air.airborne && t < 2) {
+      air = stepJump(air, 1 / 60, 0.58, 0.58)
+      t += 1 / 60
+    }
+    expect(air).toBe(GROUNDED)
+    expect(t).toBeLessThan(JUMP_TIME)
+  })
+
+  it("a slow walk (1 cm steps) climbs the Man-o'-War quarterdeck ramp — the gap between the authored polygons never stalls it", () => {
+    const d = resolveDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
+    const ramp = d.ramps[0]
+    const mid: [number, number] = [(ramp.a[0] + ramp.b[0]) / 2, (ramp.a[1] + ramp.b[1]) / 2]
+    const fromLevel = d.walk[ramp.from].y < d.walk[ramp.to].y ? ramp.from : ramp.to
+    const toLevel = fromLevel === ramp.from ? ramp.to : ramp.from
+    const dir = d.walk[toLevel].points.reduce((acc, q) => acc + q[0], 0) / d.walk[toLevel].points.length > mid[0] ? 1 : -1
+    let pose: WalkPose = { x: mid[0] - dir * 0.15, z: mid[1], y: d.walk[fromLevel].y, level: fromLevel }
+    pose = stepOnDeck(pose, 0, 0, d)
+    for (let i = 0; i < 60 && pose.level !== toLevel; i++) pose = stepOnDeck(pose, dir * 0.01, 0, d)
+    expect(pose.level).toBe(toLevel)
+    // the ramp blends the height; a few more steps and the feet are on the upper planks
+    for (let i = 0; i < 15; i++) pose = stepOnDeck(pose, dir * 0.01, 0, d)
+    expect(pose.y).toBeCloseTo(d.walk[toLevel].y, 2)
+  })
+
+  it('pinned at the Galleon bow tip (obstacle + rail), walking aft is never trapped (testing agent)', () => {
+    const d = resolveDeckAnchors(SHIPS.galleon.anchors, 'galleon')
+    const level = d.walk.findIndex((l) => l.points.some((q) => q[0] > 1.5))
+    expect(level).toBeGreaterThanOrEqual(0)
+    let pose: WalkPose = { x: 1.52, z: 0.02, y: d.walk[level].y, level }
+    for (let i = 0; i < 40; i++) pose = stepOnDeck(pose, -0.02, 0, d)
+    expect(pose.x).toBeLessThan(1.25)
+  })
+
+  it('sliding around a mast never dips inside the player-radius clearance unless the rail already pins you (testing agent)', () => {
+    for (const cls of ['man-o-war', 'galleon', 'frigate'] as const) {
+      const d = resolveDeckAnchors(SHIPS[cls].anchors, cls)
+      for (const o of d.obstacles) {
+        const clearance = o.radius + PLAYER_RADIUS
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2
+          const level = d.walk.findIndex((l) => pointInPolygon([o.center[0] + Math.cos(a) * (clearance + 0.01), o.center[1] + Math.sin(a) * (clearance + 0.01)], l.points))
+          if (level < 0) continue
+          let pose: WalkPose = { x: o.center[0] + Math.cos(a) * (clearance + 0.01), z: o.center[1] + Math.sin(a) * (clearance + 0.01), y: d.walk[level].y, level }
+          for (let i = 0; i < 25; i++) {
+            // head at the mast with a sideways drift, the way a player skirts it
+            pose = stepOnDeck(pose, -Math.cos(a) * 0.012 + Math.sin(a) * 0.006, -Math.sin(a) * 0.012 - Math.cos(a) * 0.006, d)
+            if (pose.level !== level) break
+            // where the ring reaches past the rail the deck is narrower than the clearance: the player may squeeze by
+            if (!pointInPolygon(pushOutOfObstacles([pose.x, pose.z], [o]), d.walk[level].points)) break
+            expect(Math.hypot(pose.x - o.center[0], pose.z - o.center[1]), `${cls} ${JSON.stringify(o)} k=${k} i=${i} ${JSON.stringify(pose)}`).toBeGreaterThanOrEqual(clearance - 0.002)
+          }
+        }
+      }
+    }
+  })
+
+  it('while airborne the horizontal clamp still holds: stepping off the rail mid-jump snaps back inside the plan', () => {
+    const d = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    let pose = spawnPose(d)
+    const inside = (p: WalkPose) => d.walk.some((l) => pointInPolygon([p.x, p.z], l.points))
+    for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0, 0.05, d)
+    expect(inside(pose)).toBe(true)
+    for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0.1, 0, d)
+    expect(inside(pose)).toBe(true)
   })
 })

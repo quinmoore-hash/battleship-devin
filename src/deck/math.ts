@@ -8,17 +8,29 @@ import { worldToCell, type Vec3 } from '../scene/layout'
 import type { ShipAnchors, Side } from '../ships/types'
 import { EYE_HEIGHT, type DeckAnchors } from './contract'
 
-/** Walking / running speed, ship units per second (a sailor is EYE_HEIGHT ≈ 0.17 u tall). */
-export const WALK_SPEED = 0.25
-export const RUN_SPEED = 0.5
-/** The player's collision radius against obstacles. */
-export const PLAYER_RADIUS = 0.03
+/**
+ * Walking / running speed, ship units per second (a sailor is EYE_HEIGHT ≈ 0.17 u tall). 0.6 u/s crosses a frigate's
+ * waist (≈ 2 u between the deck breaks) in ~3.3 s and its beam in 1.6 s; Shift runs 1.7× that.
+ */
+export const WALK_SPEED = 0.6
+export const RUN_SPEED = 1.0
+/** Seconds for the velocity to reach ~63 % of the wanted speed (and to coast to a stop): short, so turns stay crisp. */
+export const ACCEL_TIME = 0.1
+/** Jump: apex height above the deck and total air time on a flat deck (gravity / take-off speed follow from both). */
+export const JUMP_APEX = 0.12
+export const JUMP_TIME = 0.5
+export const JUMP_GRAVITY = (8 * JUMP_APEX) / (JUMP_TIME * JUMP_TIME)
+export const JUMP_SPEED = (4 * JUMP_APEX) / JUMP_TIME
+/** The player's collision radius against obstacles (the pirate figure is ~0.06 u wide). */
+export const PLAYER_RADIUS = 0.035
 /** How close (u) to a station's stand the player must be to man the gun. */
-export const STATION_REACH = 0.12
+export const STATION_REACH = 0.22
+/** Within this distance of a usable gun the floating "E — Man the gun" label shows. */
+export const STATION_APPROACH = 0.6
 /** Fallback stand: this far inboard of the muzzle. */
 export const STAND_INSET = 0.12
-/** Fallback rectangle: hull length × beam shrunk by this margin. */
-export const FALLBACK_INSET = 0.06
+/** Fallback deck: hull plan shrunk by this margin so the figure's shoulders stay inboard of the bulwark. */
+export const FALLBACK_INSET = 0.08
 export const MAST_RADIUS = 0.05
 /** Half-width of the band around a ramp segment over which the deck height blends between the two levels. */
 export const RAMP_BLEND = 0.12
@@ -46,23 +58,113 @@ export function rectPolygon(length: number, beam: number, inset = 0): Pt[] {
 }
 
 /**
- * Walkable deck for a class that has not authored `ShipAnchors.deck` yet (`DECK_ANCHORS_FALLBACK`): the hull rectangle
- * at `deckY`, masts as round obstacles, one station per cannon 0.12 u inboard of its muzzle, spawn on the quarterdeck.
+ * Per-class deck profile for the fallback (`DECK_ANCHORS_FALLBACK`): where the raised decks start and how high they
+ * sit, and how much the plan tapers toward the ends. Read from each class's hull form constants; replaced wholesale
+ * by session C's authored `ShipAnchors.deck`.
  */
-export function fallbackDeckAnchors(a: ShipAnchors): DeckAnchors {
-  const { length, beam } = a.hull
-  const hx = length / 2 - FALLBACK_INSET
+export interface DeckProfile {
+  /** Transom / stem x of the walkable plan (the hull length anchor includes the bowsprit on some classes). */
+  xStern: number
+  xBow: number
+  /** Raised decks aft (quarterdeck / poop) and forward (forecastle): `x` is the break, `y` the deck height. Aft list stern-most last. */
+  aft: { x: number; y: number }[]
+  fore: { x: number; y: number } | null
+  /** Plan half-width at the transom and at the stem, as a fraction of the half beam (1 = no taper). */
+  sternTaper: number
+  bowTaper: number
+}
+
+/**
+ * Profiles in each class's *model* space, fitted like its anchors (`fitAnchors`: scale about the origin, shift along x) so
+ * they match the rendered hull. Numbers come from the hull form constants named in the comments.
+ */
+/**
+ * Per-class profiles are gone: every shipped class carries authored `ShipAnchors.deck` (session C). A class without one falls
+ * back to `flushProfile` (one tapered deck from the hull plan). Kept as a record so a new class can be sketched here first.
+ */
+export const DECK_PROFILES: Record<string, DeckProfile> = {}
+
+/** Flush rectangle profile for an unknown class. */
+export const flushProfile = (a: ShipAnchors): DeckProfile => ({ xStern: -a.hull.length / 2, xBow: a.hull.length / 2, aft: [], fore: null, sternTaper: 0.8, bowTaper: 0.4 })
+
+/** Half-width of the walkable plan at `x`: full beam midships, tapering linearly over the last 30 % toward each end. */
+export function planHalfWidth(x: number, halfBeam: number, prof: DeckProfile): number {
+  const len = prof.xBow - prof.xStern
+  const t = (x - prof.xStern) / len
+  const taperLen = 0.3
+  let f = 1
+  if (t > 1 - taperLen) f = 1 + (prof.bowTaper - 1) * ((t - (1 - taperLen)) / taperLen)
+  else if (t < taperLen) f = 1 + (prof.sternTaper - 1) * ((taperLen - t) / taperLen)
+  return Math.max(0.02, halfBeam * clamp(f, 0, 1))
+}
+
+/** Convex CCW polygon of the plan between `x0` and `x1` (two stations per end so the taper reads). */
+function planPolygon(x0: number, x1: number, halfBeam: number, inset: number, prof: DeckProfile): Pt[] {
+  const xs = [x0, x0 + (x1 - x0) * 0.5, x1]
+  const w = (x: number) => Math.max(0.01, planHalfWidth(x, halfBeam, prof) - inset)
+  const low: Pt[] = xs.map((x) => [x, -w(x)] as Pt)
+  const high: Pt[] = xs.map((x) => [x, w(x)] as Pt).reverse()
+  return [...low, ...high]
+}
+
+/**
+ * Walkable deck for a class that has not authored `ShipAnchors.deck` yet (`DECK_ANCHORS_FALLBACK`): the hull plan
+ * (tapered toward bow and stern, inset so you cannot lean through the bulwark) split into the main deck and the raised
+ * decks of `DECK_PROFILES[id]`, joined by ramps at every break; masts as round obstacles; one station per cannon
+ * `STAND_INSET` inboard of its muzzle on the deck level under it (guns enclosed under a castle are not reachable);
+ * spawn in the waist, off the centreline.
+ */
+export function fallbackDeckAnchors(a: ShipAnchors, id?: string): DeckAnchors {
+  const prof = (id && DECK_PROFILES[id]) || flushProfile(a)
+  const halfBeam = a.hull.beam / 2
+  const inset = FALLBACK_INSET
+  const aft = [...prof.aft].sort((p, q) => q.x - p.x) // nearest the waist first
+  const mainStart = aft.length ? aft[0].x : prof.xStern + inset
+  const mainEnd = prof.fore ? prof.fore.x : prof.xBow - inset
+  const walk: DeckAnchors['walk'] = [{ points: planPolygon(mainStart, mainEnd, halfBeam, inset, prof), y: a.deckY }]
+  const ramps: DeckAnchors['ramps'] = []
+  const breakSeg = (x: number): [Pt, Pt] => {
+    const w = planHalfWidth(x, halfBeam, prof) - inset + 0.01
+    return [
+      [x, -w],
+      [x, w],
+    ]
+  }
+  let prev = 0
+  for (let i = 0; i < aft.length; i++) {
+    const x0 = i + 1 < aft.length ? aft[i + 1].x : prof.xStern + inset
+    walk.push({ points: planPolygon(x0, aft[i].x, halfBeam, inset, prof), y: aft[i].y })
+    const [p, q] = breakSeg(aft[i].x)
+    ramps.push({ from: prev, to: walk.length - 1, a: p, b: q })
+    prev = walk.length - 1
+  }
+  if (prof.fore) {
+    walk.push({ points: planPolygon(prof.fore.x, prof.xBow - inset, halfBeam, inset, prof), y: prof.fore.y })
+    const [p, q] = breakSeg(prof.fore.x)
+    ramps.push({ from: 0, to: walk.length - 1, a: p, b: q })
+  }
+  const levelY = (x: number): number => {
+    let y = a.deckY
+    for (const d of aft) if (x < d.x) y = d.y
+    if (prof.fore && x >= prof.fore.x) y = prof.fore.y
+    return y
+  }
+  // spawn in the waist between the aft break and the first mast forward of it (the camera orbits behind you without
+  // hitting the mast), off the centreline; the controller mirrors z onto the enemy's side
+  const mastAhead = a.masts.map((m) => m.base[0]).filter((x) => x > mainStart + 0.2 && x < mainEnd).sort((p, q) => p - q)[0]
+  const spawnX = clamp(mastAhead !== undefined ? mainStart + (mastAhead - mainStart) * 0.35 : mainStart + (mainEnd - mainStart) * 0.3, mainStart + 0.08, mainEnd - 0.08)
   return {
-    // the waist, aft of the main mast and off the centreline so the mast is not in your face: open main deck on every
-    // class (the stern often carries a cabin / poop the fallback rectangle knows nothing about)
-    spawn: [clamp(-0.45, -hx + 0.05, hx - 0.05), a.deckY, Math.min(0.25, beam * 0.2)],
-    walk: [{ points: rectPolygon(length, beam, FALLBACK_INSET), y: a.deckY }],
-    ramps: [],
+    spawn: [spawnX, a.deckY, Math.min(0.25, Math.max(0.08, (planHalfWidth(spawnX, halfBeam, prof) - inset) * 0.5))],
+    walk,
+    ramps,
     obstacles: a.masts.map((m) => ({ center: [m.base[0], m.base[2]] as Pt, radius: MAST_RADIUS })),
-    stations: a.cannons.map((c) => ({
-      stand: [c.muzzle[0] - c.direction[0] * STAND_INSET, a.deckY, c.muzzle[2] - c.direction[2] * STAND_INSET] as Vec3,
-      yaw: yawToward(c.direction[0], c.direction[2]),
-    })),
+    stations: a.cannons.map((c) => {
+      const x = c.muzzle[0] - c.direction[0] * STAND_INSET
+      return {
+        stand: [x, levelY(x), c.muzzle[2] - c.direction[2] * STAND_INSET] as Vec3,
+        yaw: yawToward(c.direction[0], c.direction[2]),
+      }
+    }),
   }
 }
 
@@ -72,9 +174,9 @@ export const FALLBACK_EYE = 0.3
 const fallbackDecks = new WeakSet<DeckAnchors>()
 
 /** The authored deck when session C has shipped it, else the fallback (see `isFallbackDeck`). */
-export function resolveDeckAnchors(a: ShipAnchors & { deck?: DeckAnchors }): DeckAnchors {
+export function resolveDeckAnchors(a: ShipAnchors & { deck?: DeckAnchors }, id?: string): DeckAnchors {
   if (a.deck && a.deck.walk.length > 0) return a.deck
-  const d = fallbackDeckAnchors(a)
+  const d = fallbackDeckAnchors(a, id)
   fallbackDecks.add(d)
   return d
 }
@@ -171,6 +273,28 @@ export function pushOutOfObstacles(p: Pt, obstacles: DeckAnchors['obstacles'], r
       z = o.center[1] + dz * r
     }
   }
+  // two clearance rings that overlap (a mast beside a hatch) leave no room between them: pushing out of one lands
+  // inside the other, so settle on the nearer point where the two rings meet instead of oscillating half inside both
+  for (let i = 0; i < obstacles.length; i++) {
+    for (let j = i + 1; j < obstacles.length; j++) {
+      const a = obstacles[i]
+      const b = obstacles[j]
+      const ra = a.radius + radius
+      const rb = b.radius + radius
+      if (Math.hypot(x - a.center[0], z - a.center[1]) >= ra - 1e-6 && Math.hypot(x - b.center[0], z - b.center[1]) >= rb - 1e-6) continue
+      const ex = b.center[0] - a.center[0]
+      const ez = b.center[1] - a.center[1]
+      const d = Math.hypot(ex, ez)
+      if (d < 1e-6 || d >= ra + rb) continue
+      const along = (d * d + ra * ra - rb * rb) / (2 * d)
+      const h = Math.sqrt(Math.max(0, ra * ra - along * along))
+      const mx = a.center[0] + (ex / d) * along
+      const mz = a.center[1] + (ez / d) * along
+      const side = (x - mx) * -ez + (z - mz) * ex >= 0 ? 1 : -1
+      x = mx + (-ez / d) * h * side
+      z = mz + (ex / d) * h * side
+    }
+  }
   return [x, z]
 }
 
@@ -212,6 +336,16 @@ export function deckHeightAt(p: Pt, level: number, deck: DeckAnchors): number {
  * Move the player from `from` by (`dx`, `dz`) on the walkable deck: stays inside the current polygon unless the step
  * crosses a ramp into the neighbouring one, never enters an obstacle, and reports the deck height under the feet.
  */
+/** A step that ends this close to a ramp line counts as taking the ramp (the authored levels leave a gap at a break). */
+export const RAMP_REACH = 0.06
+function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
+  const vx = b[0] - a[0]
+  const vz = b[1] - a[1]
+  const len2 = vx * vx + vz * vz || 1
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / len2))
+  return Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t))
+}
+
 export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnchors): WalkPose {
   const levelOk = deck.walk[from.level] ? from.level : 0
   const start: Pt = [from.x, from.z]
@@ -225,17 +359,69 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
     for (const r of deck.ramps) {
       const other = r.from === level ? r.to : r.to === level ? r.from : -1
       if (other < 0 || !deck.walk[other]) continue
-      if (segmentsCross(start, p, r.a, r.b) && pointInPolygon(p, deck.walk[other].points)) {
+      // crossing the ramp line is enough: the authored polygons leave a small gap at a break, so a slow step may land
+      // between them — snap onto the other level rather than stalling at the edge (a run jumped the gap, a walk did not)
+      if (segmentsCross(start, p, r.a, r.b) || distanceToSegment(p, r.a, r.b) < RAMP_REACH) {
         level = other
         moved = true
+        if (!pointInPolygon(p, deck.walk[other].points)) p = clampToPolygon(p, deck.walk[other].points)
         break
       }
     }
     if (!moved) p = clampToPolygon(p, here.points)
   }
-  p = pushOutOfObstacles(p, deck.obstacles)
-  p = clampToPolygon(p, deck.walk[level].points)
-  return { x: p[0], z: p[1], y: deckHeightAt(p, level, deck), level }
+  const walk = deck.walk[level].points
+  // the rail clamp can drag a pushed-out point a hair back into a clearance ring: a few passes settle it on both
+  const settle = (obstacles: DeckAnchors['obstacles']): Pt => {
+    let q = p
+    for (let pass = 0; pass < 3; pass++) q = clampToPolygon(pushOutOfObstacles(q, obstacles), walk)
+    return q
+  }
+  let q = settle(deck.obstacles)
+  // pinned: the rail clamp drops the player back inside an obstacle they already stood in and the step goes nowhere
+  // (a narrow bow tip, a landing) — then that obstacle does not push this frame so they can walk out of it; a mere
+  // graze that still slides along the ring keeps pushing as usual
+  const inside = (o: DeckAnchors['obstacles'][number], at: Pt) => Math.hypot(at[0] - o.center[0], at[1] - o.center[1]) < o.radius + PLAYER_RADIUS - 1e-6
+  const progress = (q[0] - start[0]) * dx + (q[1] - start[1]) * dz
+  const pinned =
+    progress <= 1e-9 && Math.hypot(dx, dz) > 1e-6
+      ? deck.obstacles.filter((o) => inside(o, start) && inside(o, q) && !pointInPolygon(pushOutOfObstacles(start, [o]), walk))
+      : []
+  if (pinned.length) q = settle(deck.obstacles.filter((o) => !pinned.includes(o)))
+  return { x: q[0], z: q[1], y: deckHeightAt(q, level, deck), level }
+}
+
+
+/** Exponential approach of `v` toward `target` with time constant `tau` (frame-rate independent). */
+export const approach = (v: number, target: number, dt: number, tau = ACCEL_TIME): number => v + (target - v) * (1 - Math.exp(-dt / tau))
+
+export interface AirPose {
+  /** Feet height above the deck surface (0 = on the deck). */
+  height: number
+  /** Vertical speed, u/s (positive up). */
+  vy: number
+  airborne: boolean
+}
+
+export const GROUNDED: AirPose = { height: 0, vy: 0, airborne: false }
+
+/** Take off, unless already in the air (no double jump). */
+export function startJump(air: AirPose): AirPose {
+  return air.airborne ? air : { height: 0, vy: JUMP_SPEED, airborne: true }
+}
+
+/**
+ * One frame of the hop. `deckBefore` / `deckAfter` are the deck heights under the feet at the start and end of the
+ * frame (walking across a ramp while airborne lands on the new level): the absolute foot height follows gravity and
+ * the hop ends the moment it meets the deck. `dt` is clamped by the caller.
+ */
+export function stepJump(air: AirPose, dt: number, deckBefore: number, deckAfter: number): AirPose {
+  if (!air.airborne) return air
+  const vy = air.vy - JUMP_GRAVITY * dt
+  const absolute = deckBefore + air.height + ((air.vy + vy) / 2) * dt
+  const height = absolute - deckAfter
+  if (height <= 0 && vy <= 0) return GROUNDED
+  return { height: Math.max(0, height), vy, airborne: true }
 }
 
 /** Where boarding puts the player: the spawn, snapped onto the deck. */
@@ -291,6 +477,8 @@ export interface Station {
   /** Where the gunner stands (ship space) and the yaw they face. */
   stand: Vec3
   yaw: number
+  /** Inboard end of the barrel (authored `breech` when present, else 0.1 u behind the muzzle): where the glow marker sits. */
+  breech: Vec3
   /** False for guns below the main deck (a lower gun deck): visible in the hull, not reachable from the deck. */
   onDeck: boolean
 }
@@ -308,7 +496,8 @@ export function stationsOf(a: ShipAnchors, deck: DeckAnchors): Station[] {
       direction: c.direction,
       stand,
       yaw: authored ? authored.yaw : yawToward(c.direction[0], c.direction[2]),
-      onDeck: c.muzzle[1] >= a.deckY - 0.05,
+      breech: authored?.breech ?? [c.muzzle[0] - c.direction[0] * 0.1, c.muzzle[1], c.muzzle[2] - c.direction[2] * 0.1],
+      onDeck: c.muzzle[1] >= stand[1] - 0.05,
     }
   })
 }

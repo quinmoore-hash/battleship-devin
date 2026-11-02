@@ -11,6 +11,19 @@ async function auditPage(page: import('@playwright/test').Page, name: string) {
   expect(serious.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`), `${name}: serious/critical axe violations`).toEqual([])
 }
 
+
+/** Every text the `aria-live="assertive"` regions announced from now on (the region itself only shows the latest line). */
+async function recordAnnouncements(page: import('@playwright/test').Page): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    const w = window as Window & { __announced?: string[] }
+    w.__announced = []
+    for (const el of document.querySelectorAll('[aria-live="assertive"]')) {
+      new MutationObserver(() => w.__announced?.push(el.textContent ?? '')).observe(el, { childList: true, characterData: true, subtree: true })
+    }
+  })
+  return () => page.evaluate(() => (window as Window & { __announced?: string[] }).__announced ?? [])
+}
+
 test.describe('accessibility', () => {
   test('menu, settings, placement and battle have no serious axe violations', async ({ page }) => {
     // modal fade-in blends foreground colours mid-animation, which axe would read as low contrast
@@ -48,9 +61,12 @@ test.describe('accessibility', () => {
     await expect(page.getByTestId('enemy-grid-9-1')).toBeFocused()
     await page.keyboard.press('Home')
     await expect(page.getByTestId('enemy-grid-0-1')).toBeFocused()
+    // the assertive region holds one line and the enemy's reply overwrites it ~100 ms later under reduced motion, so read
+    // what it announced rather than what it shows now (BUG-750)
+    const announced = await recordAnnouncements(page)
     await page.keyboard.press('Enter')
     await expect(page.getByTestId('enemy-grid-0-1')).toHaveAttribute('data-state', /miss|hit|sunk/)
-    await expect(page.locator('[aria-live="assertive"]').filter({ hasText: /You fired at A2/ })).toHaveCount(1)
+    await expect.poll(announced).toContainEqual(expect.stringMatching(/You fired at A2/))
     const grid = page.getByTestId('enemy-grid')
     // the fired cell is now disabled: the roving tab stop and keyboard focus must move to a live cell
     await expect(page.getByTestId('status')).toContainText('Your turn')
@@ -64,7 +80,7 @@ test.describe('accessibility', () => {
     await page.keyboard.press('Tab')
     await expect(stops).toBeFocused()
     await page.keyboard.press('Enter')
-    await expect(page.locator('[aria-live="assertive"]').filter({ hasText: /You fired at/ })).toHaveCount(1)
+    await expect.poll(announced).toContainEqual(expect.stringMatching(/You fired at B2/))
     await expect(page.getByTestId('status')).toContainText('Your turn')
     await expect(grid.locator('button[tabindex="0"]:not([disabled])')).toHaveCount(1)
     await expect(grid).toHaveAttribute('role', 'grid')

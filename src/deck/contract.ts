@@ -80,6 +80,11 @@ export type DeckBusEvent =
   | { type: 'look-at'; point: Vec3; seconds: number }
   /** The ship the player stands on has sunk: play the abandon-ship beat then `boardShip(nextUid)` (null = no ship left, game over handles it). */
   | { type: 'abandon-ship'; nextUid: string | null }
+  /**
+   * Session B addition: the director borrows the camera for a follow-cam (a shot while on deck) and hands it back when the
+   * sequence returns to the deck. `deckCameraLease.owner` mirrors the last event; the camera owner stands down while it is `'director'`.
+   */
+  | { type: 'camera'; owner: 'director' | 'deck' }
 
 type Listener = (e: DeckBusEvent) => void
 const listeners = new Set<Listener>()
@@ -101,3 +106,6 @@ export const deckBus = {
     return listeners.size > 0
   },
 }
+
+/** Who drives the camera on deck right now (see the `camera` bus event). Written by the director, read by the camera owner. */
+export const deckCameraLease: { owner: 'deck' | 'director' } = { owner: 'deck' }

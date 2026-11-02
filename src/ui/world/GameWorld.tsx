@@ -309,8 +309,8 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
           document.body.style.cursor = c && canAim ? 'crosshair' : ''
         }}
         onCellClick={(c: Coord) => {
-          // on deck the controller owns canvas clicks (pointer lock / crosshair); only a touch tap on the 3D board goes through here
-          if (deck.on && lastPointerType !== 'touch') return
+          // on deck a square is only a target from a manned gun (`canAim` requires `deck.station`); walking, the click is the controller's (drag-orbit / man a gun)
+          if (deck.on && deck.station === null) return
           if (canAim && !hasBeenShot(foeBoard, c)) aim(c, lastPointerType ?? '')
         }}
       />

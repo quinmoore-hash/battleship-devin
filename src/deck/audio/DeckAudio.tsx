@@ -172,14 +172,14 @@ export function DeckAudio() {
     const cz = camera.position.z
     if (lastCam.current && !manning) {
       const dist = Math.hypot(cx - lastCam.current.x, cz - lastCam.current.z)
-      const running = dist / dt > (WALK_SPEED + RUN_SPEED) / 2
+      const running = useDeckStore.getState().running || dist / dt > (WALK_SPEED + RUN_SPEED) / 2
       for (const s of steps.current.advance(dist, dt, running)) {
         log('footstep', running ? 'run' : 'walk')
         playSfx('footstep', { gain: s.gain, noDuck: true })
       }
     } else if (manning) steps.current.reset()
     lastCam.current = { x: cx, z: cz }
-    // landing thud, if the third-person controller exposes an airborne flag on the deck runtime
+    // landing thud, if the deck controller exposes an airborne flag on the deck runtime
     const air = Boolean((useDeckStore.getState() as { airborne?: boolean; jumping?: boolean }).airborne ?? (useDeckStore.getState() as { jumping?: boolean }).jumping)
     if (airborne.current && !air) {
       log('footstep-land', 'landed')
