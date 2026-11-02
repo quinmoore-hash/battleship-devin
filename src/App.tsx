@@ -97,7 +97,7 @@ function Game() {
   const phase = useGameStore((s) => s.phase)
   const cinematic = useDirector((s) => s.busy)
   const inBattle = phase === 'battle' || phase === 'gameover'
-  // On deck: the player keeps the camera through every sequence (the director's VFX / audio still play in the world)
+  // On deck the rig stands down for the DeckController; the CinematicCamera borrows the camera from it for follow-cams (deckCameraLease)
   const onDeck = useGameStore((s) => s.deck.on && s.phase === 'battle' && !s.handoff)
   // hot-seat: the director films from the active captain's side (always `human` in single player)
   const perspective = useGameStore((s) => s.perspective)
@@ -120,7 +120,7 @@ function Game() {
       <OceanScene weather={weather} timeOfDay={timeOfDay} cameraOverride={cinematic && !onDeck}>
         <GameWorld />
         {inBattle && <CinematicLayer />}
-        {inBattle && !onDeck && <CinematicCamera />}
+        {inBattle && <CinematicCamera />}
         {phase === 'battle' && <DeckController />}
         {phase === 'battle' && <DeckAudio />}
       </OceanScene>

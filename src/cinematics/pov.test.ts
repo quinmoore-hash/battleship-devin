@@ -24,7 +24,10 @@ const sinkOther: CinematicEvent = { type: 'sink', owner: 'human', shipId: 'sloop
 
 const record = () => {
   const events: DeckBusEvent[] = []
-  const off = deckBus.on((e) => events.push(e))
+  // the camera lease events (follow-cam) are covered in overboard.test.ts
+  const off = deckBus.on((e) => {
+    if (e.type !== 'camera') events.push(e)
+  })
   return { events, off }
 }
 const run = (d: ReturnType<typeof make>, seconds: number) => {
@@ -60,7 +63,7 @@ describe('on-deck POV branch', () => {
     }
   })
 
-  it('outgoing shot from a manned gun: that cannon fires, shake 0.3 on fire, look-at the impact, no camera shake', () => {
+  it('outgoing shot from a manned gun: that cannon fires, shake 0.3 on fire, no look-at (camera borrowed), no camera shake', () => {
     const { events, off } = record()
     unsub = off
     const d = make({ ...onDeck, station: 2 })
@@ -74,8 +77,9 @@ describe('on-deck POV branch', () => {
     run(d, 1.6)
     expect(d.active?.beat).toBe('impact')
     expect(d.store.getState().shake).toBe(0)
-    expect(events[1]).toEqual({ type: 'look-at', point: d.active!.plan!.impact, seconds: POV.lookSeconds })
-    expect(events[2]).toMatchObject({ type: 'shake', intensity: POV.farShake })
+    // the director borrowed the camera for this shot (follow-cam shows the impact): no look-at nudge, only the far shake
+    expect(events.find((e) => e.type === 'look-at')).toBeUndefined()
+    expect(events[1]).toMatchObject({ type: 'shake', intensity: POV.farShake })
   })
 
   it('station null (walking) fires one usable gun of the standing ship; an explicit battery (Broadside) wins', () => {
@@ -92,7 +96,7 @@ describe('on-deck POV branch', () => {
     expect(stationBattery(null)).toBeNull()
   })
 
-  it('incoming hit on the standing ship: shake 1.0 for 0.6 s + look-at; on another own ship a smaller shake; miss a nudge', () => {
+  it('incoming hit on the standing ship: shake 1.0 for 0.6 s, no look-at (camera borrowed); on another own ship a smaller shake; miss a nudge', () => {
     const { events, off } = record()
     unsub = off
     const d = make()
@@ -100,7 +104,7 @@ describe('on-deck POV branch', () => {
     expect(d.active?.pov).toMatchObject({ outgoing: false, ownSide: true, standingHit: true })
     run(d, 2.6)
     expect(events.find((e) => e.type === 'shake')).toEqual({ type: 'shake', intensity: POV.hitShake, seconds: POV.hitShakeSeconds })
-    expect(events.find((e) => e.type === 'look-at')).toMatchObject({ point: d.active!.plan!.impact })
+    expect(events.find((e) => e.type === 'look-at')).toBeUndefined()
     d.skip()
     events.length = 0
     void d.play(incomingOther, 'full')

@@ -12,7 +12,7 @@
  * whose matrix *is* the ship pose, so they can never lag the hull by a frame.
  */
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { director } from '../cinematics'
 import { deckGunIndex } from '../cinematics/pov'
@@ -61,7 +61,10 @@ const NEAR = 0.02
 /** Seconds of the Tab fade-out, the abandon-ship fade-out and the overboard fade-out. */
 const SWITCH_FADE = 0.3
 const ABANDON_FADE = 1.2
-const OVERBOARD_FADE = 0.9
+/** Thrown overboard: the director's tumble / swim beat plays for `seconds`, then this fade and the climb aboard the next ship. */
+const OVERBOARD_FADE = 0.35
+/** The fade is black this long before the beat ends, so the camera never hands back on a frame that is not black yet (BUG-723). */
+const OVERBOARD_LEAD = 0.2
 const FADE_IN = 0.45
 /** Screen radius (px) within which a click / tap on a gun mans it. */
 const TAP_RADIUS = 44
@@ -89,7 +92,10 @@ const tmp = {
 }
 const eye = { position: [0, 0, 0] as Vec3, target: [0, 0, 0] as Vec3 }
 
-type Fade = { phase: 'out' | 'in'; t: number; seconds: number; then?: () => void } | null
+/** `hold`: black, waiting for the director to hand the camera back (thrown overboard) — the fade-in starts on the `camera` event. */
+type Fade = { phase: 'out' | 'in' | 'hold'; t: number; seconds: number; then?: () => void } | null
+/** Longest the screen stays black waiting for the camera hand-back before fading in anyway (a skipped / cancelled beat). */
+const HOLD_MAX = 2.5
 type UsableStation = Station & { usable: boolean }
 
 const isTypingTarget = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]')
@@ -148,11 +154,9 @@ export function DeckController() {
   geomRef.current = geometry
 
   // --- boarding: spawn (or re-spawn on a new ship) -----------------------------------------------------------
-  useEffect(() => {
-    if (!active || !geometry || !ship) return
-    if (standUid.current === ship.uid) return
-    const first = standUid.current === null
-    standUid.current = ship.uid
+  const spawn = useCallback(() => {
+    const geometry = geomRef.current
+    if (!geometry) return
     // face the enemy waters, standing on their side of the deck
     const { rotationY, position } = geometry.transform
     const worldYaw = Math.atan2(-(foeCenter[0] - position[0]), -(foeCenter[2] - position[2]))
@@ -166,11 +170,18 @@ export function DeckController() {
     look.current = { yaw: localYaw, pitch: 0 }
     glance.current = { yaw: 0, pitch: 0 }
     tumble.current = 0
+  }, [foeCenter])
+  useEffect(() => {
+    if (!active || !geometry || !ship) return
+    if (standUid.current === ship.uid) return
+    const first = standUid.current === null
+    standUid.current = ship.uid
+    spawn()
     if (first && !hinted.current) {
       hinted.current = true
       useDeckStore.getState().showNudge(HINT, HINT_MS)
     }
-  }, [active, geometry, ship, foeCenter])
+  }, [active, geometry, ship, spawn])
 
   // --- camera lens + runtime flags while active ----------------------------------------------------------------
   useEffect(() => {
@@ -200,10 +211,11 @@ export function DeckController() {
 
   // --- deckBus (session B emits; our own fallbacks also go through here) ------------------------------------
   useEffect(() => {
-    const startFade = (seconds: number, then: () => void) => {
-      fade.current = { phase: 'out', t: 0, seconds, then }
+    /** `delay` > 0 holds the fade-out back that long (t starts negative) while the director's beat still plays. */
+    const startFade = (seconds: number, then: () => void, delay = 0) => {
+      fade.current = { phase: 'out', t: -delay, seconds, then }
     }
-    const leaveShip = (next: string | null | undefined, seconds: number) => {
+    const leaveShip = (next: string | null | undefined, seconds: number, delay = 0) => {
       if (abandoning.current) return
       abandoning.current = true
       startFade(seconds, () => {
@@ -212,10 +224,10 @@ export function DeckController() {
         const target = next && afloat.includes(next) ? next : cycleShip(afloat, null)
         if (target && g.deck.shipUid !== target) g.boardShip(target)
         else if (!target) g.setDeck(false)
-        else standUid.current = null // same ship: still respawn
+        else spawn() // same ship (the last one afloat): climb back aboard at the spawn anchor
         abandoning.current = false
         tumble.current = 0
-      })
+      }, delay)
     }
     const handler = (e: DeckBusEvent | { type: string; nextUid?: string | null }) => {
       if (!activeRef.current) return
@@ -239,14 +251,25 @@ export function DeckController() {
             tumble.current = 1
           }
           useGameStore.getState().manStation(null)
-          leaveShip(e.nextUid, OVERBOARD_FADE)
+          // the fade is black OVERBOARD_LEAD before the beat ends; the director hands the camera back once it reads black
+          const ob = e as Extract<DeckBusEvent, { type: 'thrown-overboard' }>
+          leaveShip(ob.nextUid, OVERBOARD_FADE, Math.max(0, (ob.seconds ?? 0) - OVERBOARD_FADE - OVERBOARD_LEAD))
           return
+        case 'camera': {
+          // the director handed the camera back early (skip, V mid-beat): a pending overboard fade starts right away
+          const fd = fade.current
+          if ((e as Extract<DeckBusEvent, { type: 'camera' }>).owner !== 'deck' || !fd) return
+          if (fd.phase === 'out' && fd.t < 0) fd.t = 0
+          // black and already aboard: the camera is ours again, lift the fade
+          if (fd.phase === 'hold') fade.current = { phase: 'in', t: 0, seconds: FADE_IN }
+          return
+        }
         default:
           return
       }
     }
     return deckBus.on(handler as (e: DeckBusEvent) => void)
-  }, [])
+  }, [spawn])
 
   // --- input -----------------------------------------------------------------------------------------------
   useEffect(() => {
@@ -565,6 +588,11 @@ export function DeckController() {
     // 7. to world: the same ship matrix the hull uses this frame. Skipped while the director has borrowed the camera
     // for a follow-cam / overboard beat (session B, `deckCameraLease`): the walk state keeps updating underneath.
     if (deckCameraLease.owner !== 'director') {
+      if (camera.fov !== DECK_FOV) {
+        // a borrowed sequence that ended before its return beat finished (skip, slow frame) can leave its lens behind
+        camera.fov = DECK_FOV
+        camera.updateProjectionMatrix()
+      }
       tmp.v.set(eye.position[0] + Math.sin(st * 37.1) * amp, eye.position[1] + Math.sin(st * 51.7 + 1.3) * amp * 0.8, eye.position[2] + Math.sin(st * 43.3 + 2.1) * amp * 0.6).applyMatrix4(tmp.m)
       tmp.w.set(eye.target[0], eye.target[1], eye.target[2]).applyMatrix4(tmp.m)
       camera.position.copy(tmp.v)
@@ -620,17 +648,22 @@ export function DeckController() {
       deckBus.emit({ type: 'abandon-ship', nextUid: cycleShip(afloat, null) })
     }
 
-    // 10. fades (Tab switch, abandon ship, overboard)
+    // 10. fades (Tab switch, abandon ship, overboard) — wall-clock like the director's beats, so a slow frame cannot
+    // leave the overboard fade behind the camera hand-back; they run while the director has the camera too
     const fd = fade.current
     if (fd) {
-      fd.t += dt
+      fd.t += delta
       if (fd.phase === 'out') {
-        runtime.setFade(Math.min(1, fd.t / fd.seconds))
+        runtime.setFade(Math.max(0, Math.min(1, fd.t / fd.seconds)))
         if (fd.t >= fd.seconds) {
           const then = fd.then
-          fade.current = { phase: 'in', t: 0, seconds: FADE_IN }
+          // while the director still has the camera (overboard beat) stay black until it hands it back (BUG-726)
+          fade.current = deckCameraLease.owner === 'director' ? { phase: 'hold', t: 0, seconds: HOLD_MAX } : { phase: 'in', t: 0, seconds: FADE_IN }
           then?.()
         }
+      } else if (fd.phase === 'hold') {
+        runtime.setFade(1)
+        if (fd.t >= fd.seconds || deckCameraLease.owner !== 'director') fade.current = { phase: 'in', t: 0, seconds: FADE_IN }
       } else {
         runtime.setFade(Math.max(0, 1 - fd.t / fd.seconds))
         if (fd.t >= fd.seconds) fade.current = null
