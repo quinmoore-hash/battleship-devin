@@ -20,6 +20,7 @@ import {
   isFallbackDeck,
   gunnerPose,
   GUN_PITCH,
+  GUN_EYE_BACK,
   GUN_EYE_MIN_OVER_RAIL,
   lookForward,
   nearestStation,
@@ -213,11 +214,12 @@ describe('stations', () => {
     expect(f[2]).toBeLessThan(-0.99)
   })
 
-  it('gunnerPose on the authored deck sights from behind the breech, above the rail', () => {
-    const s = stationsOf(manOWar, resolveDeckAnchors(manOWar)).find((x) => x.onDeck && x.side === 'port')!
+  it('gunnerPose on the authored deck sights from over the stand, above the rail', () => {
+    // the midships port gun: a waist rail, so the eye stays over the stand (outboard of the breech) and still has the muzzle in frame
+    const s = stationsOf(manOWar, resolveDeckAnchors(manOWar)).find((x) => x.onDeck && x.side === 'port' && Math.abs(x.muzzle[0]) < 0.01)!
     const pose = gunnerPose(s)
-    expect(pose.position[2]).toBeGreaterThan(s.breech[2]) // port breech is at −z; the eye is a hair inboard of it
-    expect(pose.position[2] - s.breech[2]).toBeLessThan(0.1)
+    expect(pose.position[2]).toBeLessThan(s.breech[2])
+    expect(pose.position[2]).toBeCloseTo(s.stand[2])
     expect(pose.position[1]).toBeGreaterThan(s.rail!)
     expect(lookForward(pose.yaw, 0)[2]).toBeLessThan(-0.99)
   })
@@ -255,9 +257,10 @@ describe('manned gun eye looks out of the boat (BUG-770)', () => {
       const along = (v: readonly number[]) => v[0] * fx + v[2] * fz
       // above whatever the gunner must see over
       expect(p.position[1], `station ${s.index} eye over rail`).toBeGreaterThanOrEqual(rail + GUN_EYE_MIN_OVER_RAIL - 1e-9)
-      // inboard of the planking, at the breech end of the gun (never past the centreline side of the breech)
+      // inboard of the planking, between the gunner's stand and just behind the breech (never past the centreline side of it)
       expect(along(p.position)).toBeLessThan(along(s.muzzle) - 0.1)
-      expect(along(p.position)).toBeLessThanOrEqual(along(s.breech) + 1e-9)
+      expect(along(p.position)).toBeLessThanOrEqual(Math.max(along(s.stand), along(s.breech)) + 1e-9)
+      expect(along(p.position)).toBeGreaterThanOrEqual(Math.min(along(s.stand), along(s.breech)) - GUN_EYE_BACK - 1e-9)
       // the forward ray is still above the rail where it crosses the bulwark (the muzzle plane): it clears the hull
       const look = lookForward(p.yaw, p.pitch)
       const flat = Math.hypot(look[0], look[2])
