@@ -273,6 +273,28 @@ export function pushOutOfObstacles(p: Pt, obstacles: DeckAnchors['obstacles'], r
       z = o.center[1] + dz * r
     }
   }
+  // two clearance rings that overlap (a mast beside a hatch) leave no room between them: pushing out of one lands
+  // inside the other, so settle on the nearer point where the two rings meet instead of oscillating half inside both
+  for (let i = 0; i < obstacles.length; i++) {
+    for (let j = i + 1; j < obstacles.length; j++) {
+      const a = obstacles[i]
+      const b = obstacles[j]
+      const ra = a.radius + radius
+      const rb = b.radius + radius
+      if (Math.hypot(x - a.center[0], z - a.center[1]) >= ra - 1e-6 && Math.hypot(x - b.center[0], z - b.center[1]) >= rb - 1e-6) continue
+      const ex = b.center[0] - a.center[0]
+      const ez = b.center[1] - a.center[1]
+      const d = Math.hypot(ex, ez)
+      if (d < 1e-6 || d >= ra + rb) continue
+      const along = (d * d + ra * ra - rb * rb) / (2 * d)
+      const h = Math.sqrt(Math.max(0, ra * ra - along * along))
+      const mx = a.center[0] + (ex / d) * along
+      const mz = a.center[1] + (ez / d) * along
+      const side = (x - mx) * -ez + (z - mz) * ex >= 0 ? 1 : -1
+      x = mx + (-ez / d) * h * side
+      z = mz + (ex / d) * h * side
+    }
+  }
   return [x, z]
 }
 
@@ -348,12 +370,20 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
     }
     if (!moved) p = clampToPolygon(p, here.points)
   }
-  // an obstacle the player already stands inside (pinned between it and the rail at a narrow bow tip, or a landing)
-  // does not push this frame, so they can always walk out of it; everything else pushes as usual
-  const solid = deck.obstacles.filter((o) => Math.hypot(start[0] - o.center[0], start[1] - o.center[1]) >= o.radius + PLAYER_RADIUS - 1e-6)
-  p = pushOutOfObstacles(p, solid)
-  p = clampToPolygon(p, deck.walk[level].points)
-  return { x: p[0], z: p[1], y: deckHeightAt(p, level, deck), level }
+  const walk = deck.walk[level].points
+  // the rail clamp can drag a pushed-out point a hair back into a clearance ring: a few passes settle it on both
+  const settle = (obstacles: DeckAnchors['obstacles']): Pt => {
+    let q = p
+    for (let pass = 0; pass < 3; pass++) q = clampToPolygon(pushOutOfObstacles(q, obstacles), walk)
+    return q
+  }
+  let q = settle(deck.obstacles)
+  // pinned: the rail clamp dropped the player back inside an obstacle they already stood in (a narrow bow tip, a landing),
+  // so that obstacle does not push this frame and they can walk out of it; everything else pushes as usual
+  const inside = (o: DeckAnchors['obstacles'][number], at: Pt) => Math.hypot(at[0] - o.center[0], at[1] - o.center[1]) < o.radius + PLAYER_RADIUS - 1e-6
+  const pinned = deck.obstacles.filter((o) => inside(o, start) && inside(o, q))
+  if (pinned.length) q = settle(deck.obstacles.filter((o) => !pinned.includes(o)))
+  return { x: q[0], z: q[1], y: deckHeightAt(q, level, deck), level }
 }
 
 

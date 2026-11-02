@@ -4,6 +4,7 @@ import { BOARD_LAYOUT, boardCenter } from '../scene/layout'
 import type { DeckAnchors } from './contract'
 import {
   GROUNDED,
+  PLAYER_RADIUS,
   JUMP_APEX,
   JUMP_TIME,
   afloatUids,
@@ -347,6 +348,27 @@ describe('walk acceleration and jump', () => {
     let pose: WalkPose = { x: 1.52, z: 0.02, y: d.walk[level].y, level }
     for (let i = 0; i < 40; i++) pose = stepOnDeck(pose, -0.02, 0, d)
     expect(pose.x).toBeLessThan(1.25)
+  })
+
+  it('sliding around a mast never dips inside the player-radius clearance unless the rail already pins you (testing agent)', () => {
+    for (const cls of ['man-o-war', 'galleon', 'frigate'] as const) {
+      const d = resolveDeckAnchors(SHIPS[cls].anchors, cls)
+      for (const o of d.obstacles) {
+        const clearance = o.radius + PLAYER_RADIUS
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2
+          const level = d.walk.findIndex((l) => pointInPolygon([o.center[0] + Math.cos(a) * (clearance + 0.01), o.center[1] + Math.sin(a) * (clearance + 0.01)], l.points))
+          if (level < 0) continue
+          let pose: WalkPose = { x: o.center[0] + Math.cos(a) * (clearance + 0.01), z: o.center[1] + Math.sin(a) * (clearance + 0.01), y: d.walk[level].y, level }
+          for (let i = 0; i < 25; i++) {
+            // head at the mast with a sideways drift, the way a player skirts it
+            pose = stepOnDeck(pose, -Math.cos(a) * 0.012 + Math.sin(a) * 0.006, -Math.sin(a) * 0.012 - Math.cos(a) * 0.006, d)
+            if (pose.level !== level) break
+            expect(Math.hypot(pose.x - o.center[0], pose.z - o.center[1]), `${cls} ${JSON.stringify(o)} k=${k} i=${i} ${JSON.stringify(pose)}`).toBeGreaterThanOrEqual(clearance - 0.002)
+          }
+        }
+      }
+    }
   })
 
   it('while airborne the horizontal clamp still holds: stepping off the rail mid-jump snaps back inside the plan', () => {
