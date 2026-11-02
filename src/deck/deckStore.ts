@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 /**
- * Transient Third-person runtime the HTML HUD reads (the DeckController inside the Canvas writes it once per change,
+ * Transient On-deck runtime the HTML HUD reads (the DeckController inside the Canvas writes it once per change,
  * never per frame except during a fade). Nothing here is game state — that lives in `useGameStore().deck`.
  * The two per-frame HUD elements (floating gun label, compass arrow) are driven directly through DOM refs instead.
  */
