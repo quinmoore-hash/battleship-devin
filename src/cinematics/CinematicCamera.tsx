@@ -336,6 +336,11 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       deckEye.position = deckOn ? [camera.position.x, camera.position.y, camera.position.z] : null
       lastKey.current = ''
       shake.current = 0
+      if (home.current && deckOn && camera.fov !== DECK_FOV) {
+        // the sequence ended before its return beat reached the deck pose (slow frame / skip): give the deck lens back (BUG-725)
+        camera.fov = DECK_FOV
+        camera.updateProjectionMatrix()
+      }
       home.current = null
       return
     }

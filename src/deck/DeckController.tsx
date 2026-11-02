@@ -91,7 +91,10 @@ const tmp = {
 }
 const eye = { position: [0, 0, 0] as Vec3, target: [0, 0, 0] as Vec3 }
 
-type Fade = { phase: 'out' | 'in'; t: number; seconds: number; then?: () => void } | null
+/** `hold`: black, waiting for the director to hand the camera back (thrown overboard) — the fade-in starts on the `camera` event. */
+type Fade = { phase: 'out' | 'in' | 'hold'; t: number; seconds: number; then?: () => void } | null
+/** Longest the screen stays black waiting for the camera hand-back before fading in anyway (a skipped / cancelled beat). */
+const HOLD_MAX = 2.5
 type UsableStation = Station & { usable: boolean }
 
 const isTypingTarget = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]')
@@ -254,7 +257,10 @@ export function DeckController() {
         case 'camera': {
           // the director handed the camera back early (skip, V mid-beat): a pending overboard fade starts right away
           const fd = fade.current
-          if ((e as Extract<DeckBusEvent, { type: 'camera' }>).owner === 'deck' && fd && fd.phase === 'out' && fd.t < 0) fd.t = 0
+          if ((e as Extract<DeckBusEvent, { type: 'camera' }>).owner !== 'deck' || !fd) return
+          if (fd.phase === 'out' && fd.t < 0) fd.t = 0
+          // black and already aboard: the camera is ours again, lift the fade
+          if (fd.phase === 'hold') fade.current = { phase: 'in', t: 0, seconds: FADE_IN }
           return
         }
         default:
@@ -581,6 +587,11 @@ export function DeckController() {
     // 7. to world: the same ship matrix the hull uses this frame. Skipped while the director has borrowed the camera
     // for a follow-cam / overboard beat (session B, `deckCameraLease`): the walk state keeps updating underneath.
     if (deckCameraLease.owner !== 'director') {
+      if (camera.fov !== DECK_FOV) {
+        // a borrowed sequence that ended before its return beat finished (skip, slow frame) can leave its lens behind
+        camera.fov = DECK_FOV
+        camera.updateProjectionMatrix()
+      }
       tmp.v.set(eye.position[0] + Math.sin(st * 37.1) * amp, eye.position[1] + Math.sin(st * 51.7 + 1.3) * amp * 0.8, eye.position[2] + Math.sin(st * 43.3 + 2.1) * amp * 0.6).applyMatrix4(tmp.m)
       tmp.w.set(eye.target[0], eye.target[1], eye.target[2]).applyMatrix4(tmp.m)
       camera.position.copy(tmp.v)
@@ -645,9 +656,13 @@ export function DeckController() {
         runtime.setFade(Math.max(0, Math.min(1, fd.t / fd.seconds)))
         if (fd.t >= fd.seconds) {
           const then = fd.then
-          fade.current = { phase: 'in', t: 0, seconds: FADE_IN }
+          // while the director still has the camera (overboard beat) stay black until it hands it back (BUG-726)
+          fade.current = deckCameraLease.owner === 'director' ? { phase: 'hold', t: 0, seconds: HOLD_MAX } : { phase: 'in', t: 0, seconds: FADE_IN }
           then?.()
         }
+      } else if (fd.phase === 'hold') {
+        runtime.setFade(1)
+        if (fd.t >= fd.seconds || deckCameraLease.owner !== 'director') fade.current = { phase: 'in', t: 0, seconds: FADE_IN }
       } else {
         runtime.setFade(Math.max(0, 1 - fd.t / fd.seconds))
         if (fd.t >= fd.seconds) fade.current = null
