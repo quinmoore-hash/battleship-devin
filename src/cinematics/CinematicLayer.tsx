@@ -29,11 +29,11 @@ export interface CinematicLayerProps {
 type Residual =
   | { id: number; kind: 'splash'; position: Vec3; seed: number; scale: number; delay?: number }
   | { id: number; kind: 'hit'; position: Vec3; normal: Vec3; seed: number; scale: number }
-  | { id: number; kind: 'burn'; position: Vec3; seed: number; born: number; deck?: boolean }
+  | { id: number; kind: 'burn'; position: Vec3; seed: number; born: number; deck?: boolean; uid?: string }
   /** A section of the ship the player stands on breaks up: rail and plank chunks tumble into the sea, splashes where they land. */
   | { id: number; kind: 'breakup'; position: Vec3; normal: Vec3; seed: number }
   /** The charred, ragged gap that section leaves for the rest of the game. */
-  | { id: number; kind: 'gap'; position: Vec3; normal: Vec3; seed: number }
+  | { id: number; kind: 'gap'; position: Vec3; normal: Vec3; seed: number; uid?: string }
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
 type NewResidual = DistributiveOmit<Residual, 'id'>
@@ -66,6 +66,11 @@ export function CinematicLayer({ director = defaultDirector, livery = DEFAULT_LI
     setResidual((list) => [...list, { ...r, id: nextId.current++ } as Residual])
   }, [])
   const remove = useCallback((id: number) => setResidual((list) => list.filter((r) => r.id !== id)), [])
+  // persistent damage (gap, blaze) sits at the hull in world space; when that ship goes down it goes with her (BUG-727)
+  const sinkingUid = active?.event.type === 'sink' ? active.uid : null
+  useEffect(() => {
+    if (sinkingUid) setResidual((list) => list.filter((r) => !('uid' in r) || r.uid !== sinkingUid))
+  }, [sinkingUid])
 
   return (
     <>
@@ -152,12 +157,12 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
           add({ kind: 'splash', position: ob.splashAt, seed: seed + 3, scale: 1.2, delay: (active.seq.beats.find((b) => b.name === 'overboard')?.duration ?? 1) * 0.3 })
         } else if (standingHit) {
           add({ kind: 'breakup', position: point, normal: plan.normal, seed: seed + 5 })
-          add({ kind: 'gap', position: point, normal: plan.normal, seed: seed + 9 })
+          add({ kind: 'gap', position: point, normal: plan.normal, seed: seed + 9, uid: plan.victim?.ship.uid })
         }
         if (ignite) {
           const v = plan.victim
           const deckPoint: Vec3 | null = standingHit && v ? [plan.cellCenter[0], v.pose.position[1] + SHIPS[v.ship.spec.id].anchors.deckY, plan.cellCenter[2]] : null
-          add({ kind: 'burn', position: deckPoint ?? point, seed, born: performance.now(), deck: deckPoint !== null })
+          add({ kind: 'burn', position: deckPoint ?? point, seed, born: performance.now(), deck: deckPoint !== null, uid: v?.ship.uid })
         }
       }
     },
