@@ -8,7 +8,6 @@ import { directionToWorld, localToWorld, type ShipPose, type WorldMuzzle } from 
 import { useGameStore } from '../store/gameStore'
 import { isAfloat, ownBoardOrigin } from './battery'
 import type { Battery, CinematicEvent } from './types'
-import { playerDeck } from '../crew/playerPose'
 
 /**
  * "On deck" point-of-view branch of the director. When `deck.on` the camera belongs to the deck controller
