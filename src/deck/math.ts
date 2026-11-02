@@ -528,26 +528,19 @@ export function nearestStation(stations: readonly Station[], x: number, z: numbe
   return best
 }
 
-/** The manned eye clears the authored rail / netting top by this much (what it wants) and never less than `GUN_EYE_MIN_OVER_RAIL`. */
-export const GUN_EYE_OVER_RAIL = 0.12
-export const GUN_EYE_MIN_OVER_RAIL = 0.04
-/** How far behind the breech the eye may retreat (horizontal) to keep the muzzle in frame. */
-export const GUN_EYE_BACK = 0.04
-/** Steepest the muzzle may sit below eye level (rad) and still count as "in the lower frame" at `GUN_PITCH` (half-FOV is 35°). */
-export const GUN_MUZZLE_MAX_DEPRESSION = 0.6
-export const GUN_PITCH = -0.08
-/** Where the muzzle sits below the view centre at most (rad) and the steepest the view pitches (horizon stays in frame). */
-export const GUN_MUZZLE_IN_FRAME = 0.55
-export const GUN_PITCH_MIN = -0.45
+/** The manned eye clears the authored rail / netting top by this much. */
+export const GUN_EYE_OVER_RAIL = 0.08
+/** Horizontal distance behind the muzzle: just inside the bulwark planking on every class (muzzles poke 0.015–0.05 u out). */
+export const GUN_EYE_BACK = 0.1
+/** Default pitch while manning: a little down, so the near water shows under the horizon (horizon ≈ 7° above centre). */
+export const GUN_PITCH = -0.12
 
 /**
- * Camera pose while manning: the gunner's eye over the authored stand (beside the gun, clear of masts, sails and deck
- * furniture), lifted over the cap rail / hammock netting and sighting along the barrel. It steps inboard toward the
- * breech only as far as keeps the muzzle inside the lower frame once the eye has cleared the rail (the frigate's netting
- * pushes it right back to the breech), and never higher than that either. It used to sit 0.11 over the muzzle, which on the
- * galleon and man-o'-war waists is below the rail and on the frigate inside the netting roll. A short bow gun whose muzzle
- * still drops out of frame pitches the view down after it, but never so far that the view centre meets the rail line.
- * Without a rail (fallback deck) it sights from just above the muzzle, the one anchor guaranteed to be outside the planking.
+ * Camera pose while manning: the gunner leaning over the rail at the gun — the eye 0.1 u behind the muzzle (just inside
+ * the planking, outboard of the stand where the crew figure stands and of the mast shroud fans) and lifted over that
+ * class's authored `rail` (cap rail / hammock netting top), sighting along the barrel. It used to sit 0.11 over the muzzle,
+ * which on the galleon and man-o'-war waists is below the rail and on the frigate inside the netting roll (BUG-770).
+ * Without a rail (fallback deck) the muzzle-relative height is kept; the muzzle is the one anchor guaranteed outside the planking.
  */
 export function gunnerPose(s: Station): { position: Vec3; yaw: number; pitch: number } {
   const [dx, , dz] = s.direction
@@ -555,23 +548,9 @@ export function gunnerPose(s: Station): { position: Vec3; yaw: number; pitch: nu
   const fx = dx / h
   const fz = dz / h
   const yaw = yawToward(fx, fz)
-  if (s.rail === undefined) return { position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06], yaw, pitch: GUN_PITCH }
-  const along = (v: Vec3) => v[0] * fx + v[2] * fz
-  const back: Vec3 = [s.breech[0] - fx * GUN_EYE_BACK, s.breech[1], s.breech[2] - fz * GUN_EYE_BACK]
-  const dStand = along(s.muzzle) - along(s.stand)
-  const dBack = along(s.muzzle) - along(back)
-  const yMin = s.rail + GUN_EYE_MIN_OVER_RAIL
-  // horizontal distance to the muzzle that keeps it in frame from the lowest rail-clearing eye
-  const dNeed = (yMin - s.muzzle[1]) / Math.tan(GUN_MUZZLE_MAX_DEPRESSION)
-  const t = dBack > dStand + 1e-6 ? clamp((dNeed - dStand) / (dBack - dStand), 0, 1) : 0
-  const x = s.stand[0] + (back[0] - s.stand[0]) * t
-  const z = s.stand[2] + (back[2] - s.stand[2]) * t
-  const toMuzzle = Math.max(0.05, along(s.muzzle) - x * fx - z * fz)
-  const y = Math.max(yMin, Math.min(s.rail + GUN_EYE_OVER_RAIL, s.muzzle[1] + toMuzzle * Math.tan(GUN_MUZZLE_MAX_DEPRESSION)))
-  const muzzleAngle = Math.atan2(s.muzzle[1] - y, toMuzzle)
-  const railAngle = Math.atan2(s.rail - y, toMuzzle)
-  const pitch = clamp(Math.min(GUN_PITCH, muzzleAngle + GUN_MUZZLE_IN_FRAME), Math.max(GUN_PITCH_MIN, railAngle + 0.05), GUN_PITCH)
-  return { position: [x, y, z], yaw, pitch }
+  if (s.rail === undefined) return { position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06], yaw, pitch: -0.08 }
+  const y = Math.max(s.muzzle[1] + 0.11, s.rail + GUN_EYE_OVER_RAIL)
+  return { position: [s.muzzle[0] - fx * GUN_EYE_BACK, y, s.muzzle[2] - fz * GUN_EYE_BACK], yaw, pitch: GUN_PITCH }
 }
 
 /** Walking pose while manning (feet stay on the stand) — the eye is `EYE_HEIGHT` above it. */
