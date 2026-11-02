@@ -100,6 +100,8 @@ export interface StationSpec {
   barrel?: number
   /** Deck obstacles: a stand is pushed along the rail / outboard until it clears every one by `STAND_CLEARANCE`. */
   obstacles?: DeckAnchors['obstacles']
+  /** Top of the bulwark / cap rail (plus hammock netting where fitted) at `x`: what the manned eye must look over. */
+  railYAt?: (x: number) => number
 }
 
 /** Minimum gap between a gunner stand and any obstacle edge (player radius 0.03 + margin), so the stand is always reachable. */
@@ -110,7 +112,7 @@ export const STAND_CLEARANCE = 0.06
  * gun's firing direction. `deckYAt(x)` says which level the gun is served from (lower gun decks are served from
  * the weather deck above them, so their stand is further from the muzzle vertically).
  */
-export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['walk'], deckYAt: (x: number) => number, { back = 0.08, barrel = 0.2, obstacles = [] }: StationSpec = {}): DeckAnchors['stations'] {
+export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['walk'], deckYAt: (x: number) => number, { back = 0.08, barrel = 0.2, obstacles = [], railYAt }: StationSpec = {}): DeckAnchors['stations'] {
   return cannons.map((c) => {
     const sign = c.side === 'starboard' ? 1 : -1
     const y = deckYAt(c.muzzle[0])
@@ -141,7 +143,7 @@ export function gunStations(cannons: ShipAnchors['cannons'], walk: DeckAnchors['
     }
     const stand: Vec3 = [x, level.y, z]
     const breech: Vec3 = [c.muzzle[0], c.muzzle[1], breechZ]
-    return { stand, yaw: Math.atan2(c.direction[0], c.direction[2]), breech }
+    return { stand, yaw: Math.atan2(c.direction[0], c.direction[2]), breech, ...(railYAt ? { rail: railYAt(c.muzzle[0]) } : {}) }
   })
 }
 
@@ -160,6 +162,6 @@ export function fitDeck(d: DeckAnchors, scale: number, dx: number): DeckAnchors 
     walk: d.walk.map((w) => ({ points: w.points.map(p2), y: w.y * scale })),
     ramps: d.ramps.map((r) => ({ ...r, a: p2(r.a), b: p2(r.b) })),
     obstacles: d.obstacles.map((o) => ({ center: p2(o.center), radius: o.radius * scale })),
-    stations: d.stations.map((s) => ({ stand: p3(s.stand), yaw: s.yaw, ...(s.breech ? { breech: p3(s.breech) } : {}) })),
+    stations: d.stations.map((s) => ({ stand: p3(s.stand), yaw: s.yaw, ...(s.breech ? { breech: p3(s.breech) } : {}), ...(s.rail !== undefined ? { rail: s.rail * scale } : {}) })),
   }
 }

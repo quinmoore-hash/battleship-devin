@@ -1,9 +1,10 @@
 import type { Vec3 } from '../../scene/layout'
 import type { ShipAnchors } from '../types'
 import { fitAnchors } from '../kit/fit'
-import { BOWSPRIT, FIT, FRIGATE, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, halfBeamAtDeck, sectionHalfWidth } from './form'
+import { BOWSPRIT, FIT, FRIGATE, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, halfBeamAtDeck, railY, sectionHalfWidth } from './form'
 import type { DeckAnchors } from '../../deck/contract'
 import { breakRamp, deckPolygon, gunStations, mastObstacles } from '../kit/deck'
+import { BULWARK_RUNS } from './hull'
 
 /** Scale of the kit cannon and the resulting height of its bore above the deck. */
 export const CANNON_SCALE = 0.4
@@ -24,6 +25,12 @@ export function gunMuzzle(x: number, side: 'port' | 'starboard'): Vec3 {
  */
 export function buildFrigateDeck(cannons: ShipAnchors['cannons'], masts: ShipAnchors['masts']): DeckAnchors {
   const F = FRIGATE
+  // top of the bulwark cap at x, plus the hammock-netting roll (radius 0.032, centred 0.055 over the cap) on the taller runs
+  const railTop = (x: number): number => {
+    const run = BULWARK_RUNS.find(([x0, x1]) => x >= x0 && x <= x1) ?? BULWARK_RUNS[1]
+    const h = run[2]
+    return railY((run[0] + run[1]) / 2) + h + 0.025 + (h > 0.17 ? 0.087 : 0)
+  }
   // the forecastle (x > fcBreakX) is a 0.3 u ledge at the stem, too narrow to stand on: not walkable
   const hw = (x: number) => halfBeamAtDeck(x) - F.bulwarkT
   const walk = [
@@ -36,7 +43,7 @@ export function buildFrigateDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
     walk,
     ramps: [breakRamp(0, 1, F.qdBreakX, 0.12, -0.18)],
     obstacles,
-    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_OUT + 0.7 * CANNON_SCALE, obstacles }),
+    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_OUT + 0.7 * CANNON_SCALE, obstacles, railYAt: railTop }),
   }
 }
 

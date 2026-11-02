@@ -145,9 +145,11 @@ export function mastRigging(index: number, lod: Lod): Segment[] {
     const top: Vec3 = [hounds[0], hounds[1], side * 0.04]
     for (const d of dead) segs.push({ a: d, b: top, r: 0.009 })
     const at = (d: Vec3, t: number): Vec3 => [d[0] + (top[0] - d[0]) * t, d[1] + (top[1] - d[1]) * t, d[2] + (top[2] - d[2]) * t]
-    // ratline rungs: every rung live, every other rung in the baked lod 1 (BUG-706), none in the far silhouette
+    // ratline rungs: every rung live, every other rung in the baked lod 1 (BUG-706), none in the far silhouette. They start
+    // ~0.3 u above the deadeyes (as on a real ship) so a gunner leaning over the rail at a gun abreast the channel looks
+    // out between the bare lower shrouds, not into a rope ladder (BUG-770)
     if (lod < 2) {
-      for (let t = 0.1; t < 0.84; t += lod === 0 ? rungStep : rungStep * 2) {
+      for (let t = 0.3; t < 0.84; t += lod === 0 ? rungStep : rungStep * 2) {
         for (let i = 0; i < 3; i++) segs.push({ a: at(dead[i], t), b: at(dead[i + 1], t), r: 0.004 })
       }
     }

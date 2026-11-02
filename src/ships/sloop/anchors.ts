@@ -24,7 +24,7 @@ export function buildSloopDeck(cannons: ShipAnchors['cannons'], masts: ShipAncho
     walk,
     ramps: [],
     obstacles,
-    stations: gunStations(cannons, walk, () => SLOOP_DIMS.deckHeight, { back: 0.06, barrel: CANNON_MUZZLE_OFFSET + 0.25 * 0.45, obstacles }),
+    stations: gunStations(cannons, walk, () => SLOOP_DIMS.deckHeight, { back: 0.06, barrel: CANNON_MUZZLE_OFFSET + 0.25 * 0.45, obstacles, railYAt: (x) => deckY(x) + SLOOP_DIMS.bulwark }),
   }
 }
 
