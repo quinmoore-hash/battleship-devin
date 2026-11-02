@@ -4,7 +4,7 @@
  */
 import type { Vec3 } from '../../scene/layout'
 import type { CannonRef, ShipAnchors, Side } from '../types'
-import { GALLEON, deckY, halfWidth } from './hull'
+import { GALLEON, deckY, halfWidth, railY } from './hull'
 import type { DeckAnchors } from '../../deck/contract'
 import { breakRamp, deckPolygon, gunStations, mastObstacles } from '../kit/deck'
 
@@ -98,7 +98,7 @@ export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
     walk,
     ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1, 0.15), breakRamp(0, 3, G.forecastleX, 0.12)],
     obstacles,
-    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_CLEARANCE + 0.7 * CANNON_SCALE, obstacles }),
+    stations: gunStations(cannons, walk, deckY, { barrel: MUZZLE_CLEARANCE + 0.7 * CANNON_SCALE, obstacles, railYAt: (x) => railY(x) + 0.03 }),
   }
 }
 

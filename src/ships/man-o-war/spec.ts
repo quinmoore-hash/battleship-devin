@@ -224,7 +224,7 @@ export function buildManOWarDeck(): DeckAnchors {
     walk,
     ramps: [breakRamp(0, 1, BREAK.quarter, 0.12, -0.34), breakRamp(0, 2, BREAK.fore, 0.1, 0.3), breakRamp(0, 2, BREAK.fore, 0.1, -0.3), breakRamp(1, 3, BREAK.poop, 0.1, 0.1)],
     obstacles,
-    stations: gunStations(MOW_CANNONS, walk, deckY, { barrel: 0.14 + 0.3, obstacles }),
+    stations: gunStations(MOW_CANNONS, walk, deckY, { barrel: 0.14 + 0.3, obstacles, railYAt: railY }),
   }
 }
 

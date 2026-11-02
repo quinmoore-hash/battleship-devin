@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS } from '../ships'
 import { BOARD_LAYOUT, boardCenter } from '../scene/layout'
-import type { DeckAnchors } from './contract'
+import { DECK_FOV, type DeckAnchors } from './contract'
 import {
   GROUNDED,
   PLAYER_RADIUS,
@@ -19,6 +19,8 @@ import {
   type WalkPose,
   isFallbackDeck,
   gunnerPose,
+  GUN_PITCH,
+  GUN_EYE_MIN_OVER_RAIL,
   lookForward,
   nearestStation,
   pointInPolygon,
@@ -200,14 +202,24 @@ describe('stations', () => {
     expect(nearestStation(stations, below.stand[0], below.stand[2], 0.01)).toBeNull()
   })
 
-  it('gunnerPose sights along the barrel from just above the muzzle (outside the planking)', () => {
+  it('gunnerPose on the fallback deck (no authored rail) sights along the barrel from just above the muzzle (outside the planking)', () => {
     const s = stations.find((x) => x.onDeck && x.side === 'port')!
+    expect(s.rail).toBeUndefined()
     const pose = gunnerPose(s)
     expect(pose.position[2]).toBeGreaterThan(s.muzzle[2]) // port muzzle is at −z; the eye is a hair inboard of it
     expect(pose.position[2] - s.muzzle[2]).toBeLessThan(0.1)
     expect(pose.position[1]).toBeGreaterThan(s.muzzle[1])
     const f = lookForward(pose.yaw, 0)
     expect(f[2]).toBeLessThan(-0.99)
+  })
+
+  it('gunnerPose on the authored deck sights from behind the breech, above the rail', () => {
+    const s = stationsOf(manOWar, resolveDeckAnchors(manOWar)).find((x) => x.onDeck && x.side === 'port')!
+    const pose = gunnerPose(s)
+    expect(pose.position[2]).toBeGreaterThan(s.breech[2]) // port breech is at −z; the eye is a hair inboard of it
+    expect(pose.position[2] - s.breech[2]).toBeLessThan(0.1)
+    expect(pose.position[1]).toBeGreaterThan(s.rail!)
+    expect(lookForward(pose.yaw, 0)[2]).toBeLessThan(-0.99)
   })
 
   it('the fallback deck is marked and raises the eye over the bulwark; authored decks keep the contract eye height', () => {
@@ -220,6 +232,52 @@ describe('stations', () => {
     expect(isFallbackDeck(resolveDeckAnchors({ ...bare, deck: authored }))).toBe(false)
     expect(eyeFor(authored)).toBe(0.17)
     expect(isFallbackDeck(resolveDeckAnchors(SHIPS.sloop.anchors))).toBe(false)
+  })
+})
+
+describe('manned gun eye looks out of the boat (BUG-770)', () => {
+  const halfFov = (DECK_FOV / 2) * (Math.PI / 180)
+  const classes = Object.entries(SHIPS).map(([id, def]) => {
+    const a = def.anchors
+    return [id, stationsOf(a, resolveDeckAnchors(a))] as const
+  })
+
+  it.each(classes)('%s: the eye clears the rail / netting, the forward ray clears the hull and the muzzle sits in the lower frame', (_id, sts) => {
+    const onDeck = sts.filter((s) => s.onDeck)
+    expect(onDeck.length).toBeGreaterThan(0)
+    for (const s of onDeck) {
+      expect(s.rail, `station ${s.index} has an authored rail top`).toBeDefined()
+      const rail = s.rail!
+      const p = gunnerPose(s)
+      const h = Math.hypot(s.direction[0], s.direction[2])
+      const fx = s.direction[0] / h
+      const fz = s.direction[2] / h
+      const along = (v: readonly number[]) => v[0] * fx + v[2] * fz
+      // above whatever the gunner must see over
+      expect(p.position[1], `station ${s.index} eye over rail`).toBeGreaterThanOrEqual(rail + GUN_EYE_MIN_OVER_RAIL - 1e-9)
+      // inboard of the planking, at the breech end of the gun (never past the centreline side of the breech)
+      expect(along(p.position)).toBeLessThan(along(s.muzzle) - 0.1)
+      expect(along(p.position)).toBeLessThanOrEqual(along(s.breech) + 1e-9)
+      // the forward ray is still above the rail where it crosses the bulwark (the muzzle plane): it clears the hull
+      const look = lookForward(p.yaw, p.pitch)
+      const flat = Math.hypot(look[0], look[2])
+      const toPlank = along(s.muzzle) - along(p.position)
+      expect(p.position[1] + (look[1] / flat) * toPlank, `station ${s.index} forward ray over the rail`).toBeGreaterThan(rail)
+      // looking along the barrel, horizon inside the view, muzzle inside its lower half
+      expect(look[0] * fx + look[2] * fz).toBeGreaterThan(0.99 * flat)
+      expect(p.pitch).toBeLessThanOrEqual(GUN_PITCH)
+      expect(p.pitch).toBeGreaterThan(-halfFov + 0.1)
+      const muzzleInView = Math.atan2(s.muzzle[1] - p.position[1], toPlank) - p.pitch
+      expect(muzzleInView, `station ${s.index} muzzle below centre`).toBeLessThan(0)
+      // the frigate's two bow chasers sit mostly inboard of its narrow bow: their muzzle falls just under the frame once the
+      // eye clears the netting; every other gun's muzzle is in the lower frame
+      if (!(_id === 'frigate' && s.index <= 1)) expect(muzzleInView, `station ${s.index} muzzle inside the frame`).toBeGreaterThan(-halfFov)
+    }
+  })
+
+  it('the old muzzle-relative eye (0.11 over the bore) sat below the rail / in the netting on every class but the sloop', () => {
+    const blocked = classes.filter(([, sts]) => sts.some((s) => s.onDeck && s.muzzle[1] + 0.11 < s.rail! + GUN_EYE_MIN_OVER_RAIL)).map(([id]) => id)
+    expect(blocked.sort()).toEqual(['brigantine', 'frigate', 'galleon', 'man-o-war'])
   })
 })
 

@@ -1,7 +1,7 @@
 import type { Vec3 } from '../../scene/layout'
 import type { ShipAnchors, Side } from '../types'
 import { fitAnchors } from '../kit/fit'
-import { BEAM, BULWARK_THICKNESS, CABIN_FRONT_X, CABIN_TOP_Y, CANNON_X, DECK_Y, DRAFT, FIT, FOREMAST_HEIGHT, FOREMAST_X, HALF, LENGTH, MAINMAST_HEIGHT, MAINMAST_X, STEM_X, TRANSOM_X, hullHalfWidth } from './hull'
+import { BEAM, BULWARK_THICKNESS, CABIN_FRONT_X, CABIN_TOP_Y, CANNON_X, DECK_Y, DRAFT, FIT, FOREMAST_HEIGHT, FOREMAST_X, HALF, LENGTH, MAINMAST_HEIGHT, MAINMAST_X, STEM_X, TRANSOM_X, hullHalfWidth, sheerY } from './hull'
 import type { DeckAnchors } from '../../deck/contract'
 import { breakRamp, deckPolygon, gunStations, mastObstacles } from '../kit/deck'
 
@@ -75,7 +75,7 @@ export function buildBrigantineDeck(): DeckAnchors {
     walk,
     ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12, 0.2)],
     obstacles,
-    stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y, { barrel: CANNON_MUZZLE_LEN + 0.25 * CANNON_SCALE, obstacles }),
+    stations: gunStations(MODEL_CANNONS, walk, () => DECK_Y, { barrel: CANNON_MUZZLE_LEN + 0.25 * CANNON_SCALE, obstacles, railYAt: sheerY }),
   }
 }
 

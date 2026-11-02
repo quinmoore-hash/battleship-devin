@@ -64,9 +64,10 @@ export interface DeckAnchors {
   /**
    * One entry per `ShipAnchors.cannons[i]`: where the gunner stands and the yaw (radians, ship space) they face when
    * manning it. `breech` (optional, session C) is the inboard end of that gun's barrel on its deck — the spot to mark /
-   * walk to; the gun's side is `ShipAnchors.cannons[i].side`.
+   * walk to; the gun's side is `ShipAnchors.cannons[i].side`. `rail` (optional) is the top of whatever the gunner must
+   * see over at that gun — cap rail, hammock netting — in ship space: the manned eye is placed above it.
    */
-  stations: { stand: Vec3; yaw: number; breech?: Vec3 }[]
+  stations: { stand: Vec3; yaw: number; breech?: Vec3; rail?: number }[]
 }
 
 /** Fallback used by session A until a class ships real `DeckAnchors`: a rectangle `length × beam` at `deckY`, masts as obstacles. */

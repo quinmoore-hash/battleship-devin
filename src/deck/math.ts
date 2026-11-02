@@ -481,6 +481,8 @@ export interface Station {
   breech: Vec3
   /** False for guns below the main deck (a lower gun deck): visible in the hull, not reachable from the deck. */
   onDeck: boolean
+  /** Top of the rail / netting the gunner looks over at this gun (authored `deck.stations[i].rail`), ship space. */
+  rail?: number
 }
 
 /** One station per cannon, standing on the deck (authored `deck.stations[i]` when present, else inboard of the muzzle). */
@@ -498,6 +500,7 @@ export function stationsOf(a: ShipAnchors, deck: DeckAnchors): Station[] {
       yaw: authored ? authored.yaw : yawToward(c.direction[0], c.direction[2]),
       breech: authored?.breech ?? [c.muzzle[0] - c.direction[0] * 0.1, c.muzzle[1], c.muzzle[2] - c.direction[2] * 0.1],
       onDeck: c.muzzle[1] >= stand[1] - 0.05,
+      ...(authored?.rail !== undefined ? { rail: authored.rail } : {}),
     }
   })
 }
@@ -525,20 +528,45 @@ export function nearestStation(stations: readonly Station[], x: number, z: numbe
   return best
 }
 
+/** The manned eye clears the authored rail / netting top by this much (what it wants) and never less than `GUN_EYE_MIN_OVER_RAIL`. */
+export const GUN_EYE_OVER_RAIL = 0.08
+export const GUN_EYE_MIN_OVER_RAIL = 0.04
+/** Eye over the bore and behind the breech (horizontal) when the rail does not force it higher. */
+export const GUN_EYE_UP = 0.12
+export const GUN_EYE_BACK = 0.04
+/** Steepest the muzzle may sit below eye level (rad) before the eye stops rising; past that the view pitches down to keep it in frame. */
+export const GUN_MUZZLE_MAX_DEPRESSION = 0.6
+export const GUN_PITCH = -0.08
+/** Where the muzzle sits below the view centre at most (rad, inside the 35° half-FOV) and the steepest the view pitches (horizon stays in frame). */
+export const GUN_MUZZLE_IN_FRAME = 0.55
+export const GUN_PITCH_MIN = -0.45
+
 /**
- * Camera pose while manning: sighting along the barrel from just above and behind the muzzle. The muzzle is the one
- * anchor guaranteed to be outside the planking (enclosed gun decks, castles), so the enemy waters are always in view.
+ * Camera pose while manning: the gunner's eye just behind and above the breech, sighting along the barrel. With an
+ * authored `rail` the eye is lifted over the cap rail / hammock netting (it used to sit 0.11 over the muzzle, which on the
+ * galleon and man-o'-war waists is below the rail and on the frigate inside the netting roll) but, where the rail allows,
+ * no higher than keeps the muzzle inside the lower part of the frame; when a short bow gun still drops out of frame the
+ * view pitches down after it. Without a rail (fallback deck) it sights from just above the muzzle, the one anchor
+ * guaranteed to be outside the planking.
  */
 export function gunnerPose(s: Station): { position: Vec3; yaw: number; pitch: number } {
   const [dx, , dz] = s.direction
   const h = Math.hypot(dx, dz) || 1
   const fx = dx / h
   const fz = dz / h
-  return {
-    position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06],
-    yaw: yawToward(fx, fz),
-    pitch: -0.08,
-  }
+  const yaw = yawToward(fx, fz)
+  if (s.rail === undefined) return { position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06], yaw, pitch: GUN_PITCH }
+  const x = s.breech[0] - fx * GUN_EYE_BACK
+  const z = s.breech[2] - fz * GUN_EYE_BACK
+  const toMuzzle = Math.max(0.05, (s.muzzle[0] - x) * fx + (s.muzzle[2] - z) * fz)
+  const want = Math.max(s.muzzle[1] + GUN_EYE_UP, s.rail + GUN_EYE_OVER_RAIL)
+  const muzzleInFrame = s.muzzle[1] + toMuzzle * Math.tan(GUN_MUZZLE_MAX_DEPRESSION)
+  const y = Math.max(s.rail + GUN_EYE_MIN_OVER_RAIL, Math.min(want, muzzleInFrame))
+  // pitch down after a muzzle that would drop out of frame, but never so far that the view centre meets the rail line
+  const muzzleAngle = Math.atan2(s.muzzle[1] - y, toMuzzle)
+  const railAngle = Math.atan2(s.rail - y, toMuzzle)
+  const pitch = clamp(Math.min(GUN_PITCH, muzzleAngle + GUN_MUZZLE_IN_FRAME), Math.max(GUN_PITCH_MIN, railAngle + 0.05), GUN_PITCH)
+  return { position: [x, y, z], yaw, pitch }
 }
 
 /** Walking pose while manning (feet stay on the stand) — the eye is `EYE_HEIGHT` above it. */
