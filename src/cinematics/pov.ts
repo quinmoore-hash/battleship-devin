@@ -1,6 +1,8 @@
 import type { PlacedShip, Player } from '../engine'
+import { playerDeck } from '../crew/playerPose'
 import { DEFAULT_DECK, type DeckBusEvent, type DeckState } from '../deck/contract'
-import type { Vec3 } from '../scene/layout'
+import { deckGun, resolveDeckAnchors, stationsOf } from '../deck/math'
+import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { directionToWorld, localToWorld, type ShipPose, type WorldMuzzle } from '../vfx/cannon/anchors'
 import { useGameStore } from '../store/gameStore'
@@ -96,17 +98,33 @@ export function povFor(event: CinematicEvent, deck: DeckState, fleets: FleetsLik
 }
 
 /** The manned gun as a one-cannon battery (outgoing shots only); null → the director's usual battery pick. */
+/**
+ * The gun a deck chart shot leaves from: the manned station, else (walking) the usable gun nearest the player's feet on
+ * the ship they stand on (`deckGun`), so firing is never from thin air. One pick shared by the recoil swing
+ * (`mannedCannon`) and the cinematic (`stationBattery` / `stationMuzzle`).
+ */
+export function deckGunIndex(standing: PlacedShip, deck: DeckState, perspective: Player): number | null {
+  const anchors = SHIPS[standing.spec.id].anchors
+  if (deck.station !== null) return anchors.cannons[deck.station] ? deck.station : null
+  const pose = shipWorldTransform(standing, ownBoardOrigin(perspective))
+  const foe = boardCenter(BOARD_LAYOUT[perspective === 'human' ? 'enemy' : 'player'])
+  const feet: Vec3 | undefined = playerDeck.uid === standing.uid ? [playerDeck.x, 0, playerDeck.z] : undefined
+  return deckGun(stationsOf(anchors, resolveDeckAnchors(anchors, standing.spec.id)), null, pose.rotationY, pose.position, foe, feet)?.index ?? null
+}
+
 export function stationBattery(pov: PovContext | null): Battery | null {
-  if (!pov || !pov.outgoing || !pov.standing || pov.deck.station === null) return null
-  const cannon = SHIPS[pov.standing.spec.id].anchors.cannons[pov.deck.station]
+  if (!pov || !pov.outgoing || !pov.standing) return null
+  const index = deckGunIndex(pov.standing, pov.deck, pov.perspective)
+  const cannon = index === null ? undefined : SHIPS[pov.standing.spec.id].anchors.cannons[index]
   if (!cannon) return null
   return { shipId: pov.standing.spec.id, uid: pov.standing.uid, side: cannon.side, cells: [cannon.cell] }
 }
 
 /** The manned gun's muzzle in world space (a cell can carry two guns a side; the player fires exactly this one). */
 export function stationMuzzle(pov: PovContext | null, shooter: ShipPose | null): WorldMuzzle | null {
-  if (!pov || !pov.outgoing || !pov.standing || pov.deck.station === null || !shooter) return null
-  const c = SHIPS[pov.standing.spec.id].anchors.cannons[pov.deck.station]
+  if (!pov || !pov.outgoing || !pov.standing || !shooter) return null
+  const index = deckGunIndex(pov.standing, pov.deck, pov.perspective)
+  const c = index === null ? undefined : SHIPS[pov.standing.spec.id].anchors.cannons[index]
   if (!c) return null
   return { cell: c.cell, side: c.side, position: localToWorld(c.muzzle, shooter), direction: directionToWorld(c.direction, shooter.rotationY) }
 }

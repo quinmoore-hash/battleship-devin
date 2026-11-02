@@ -440,3 +440,9 @@ Known and not re-reported: BUG-707 (375×812 camera framed the horizon) was repr
 | 12 Medium perf while playing (`?perf`) | PASS draws — settled "Your turn" after 10 shots **280** draws / 332k tris, after 30 shots **343** draws / 430k tris (budget ≤ 350); full Easy game to victory (58 shots); no white frames seen in the recording; triangles logged as **BUG-762** (P3) | `12-perf-10.png`, `12-perf-30.png`, `12-perf-report.png` |
 | Console (all 12 scenarios) | PASS — 0 page errors, 0 console errors, 0 warnings | `console.json` in the session |
 | Gates `npm run lint && npm run typecheck && npm test && npm run build` | see the PR | — |
+
+## Owner requests — 2026-11-02 (On deck firing, ids BUG-780–789)
+
+| id | sev | area | status | title | repro / notes | found by | fix PR |
+|---|---|---|---|---|---|---|---|
+| BUG-780 | P2 | deck/cinematics | fixed | On deck, the chart shot did not visibly leave the gun you man / stand beside: before #49 the overview battery (up to 3 guns nearest the target) fired; after #49 the manned gun fires but the launch point sat on the still waterline while the hull (and the eye) rode the swell, and a chart click while walking refused with "Man a gun to fire" instead of firing a gun of the ship you stand on | 3D battle → V → (E at a glowing gun) → click an enemy square. Fix: `deckGunIndex` (manned station, else `deckGun`: the usable gun nearest your feet) feeds both `stationBattery`/`stationMuzzle` (#49's single-muzzle path) and the recoil swing (`mannedCannon`); `ShotFx` lifts the launch point by the firing ship's wave height at the fire beat; Salvo: every volley ball leaves that gun in turn; Two Captains: only the perspective captain's shots (`pov.outgoing`) | owner: "also can we make it when we fire - it's actually shooting from the cannon im on in first person" | this PR |

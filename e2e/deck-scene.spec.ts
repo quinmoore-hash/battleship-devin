@@ -37,18 +37,16 @@ test('on deck: V toggles mid-turn without changing the game, a manned gun fires 
   await openShotLog(page)
   await expect(page.getByTestId('shot-log')).toContainText('No shots yet')
 
-  // not manning: the chart refuses with a nudge
-  await page.getByTestId('enemy-grid-0-0').click()
-  await expect(page.getByTestId('deck-prompt')).toHaveText('Man a gun to fire')
-  await expect(page.getByTestId('enemy-grid-0-0')).toHaveAttribute('data-state', 'unknown')
-
-  // man the nearest gun that bears, then click a square: the volley counter advances
-  await page.getByTestId('deck-man').click()
-  await expect(page.getByTestId('deck-station')).toContainText('Manning the')
-  await expect(hud).toHaveAttribute('data-station')
+  // walking (not manning): the chart still fires — from the usable gun beside you — and the volley counter advances
   await expect(page.getByTestId('deck-salvo')).toHaveText(/shot 1 of 5/)
   await page.getByTestId('enemy-grid-0-0').click()
   await expect(page.getByTestId('deck-salvo')).toHaveText(/shot 2 of 5/)
+  await expect(page.getByTestId('deck-prompt')).not.toHaveText(/Man a gun/)
+
+  // man the nearest gun that bears, then click a square: the next volley shot leaves that gun
+  await page.getByTestId('deck-man').click()
+  await expect(page.getByTestId('deck-station')).toContainText('Manning the')
+  await expect(hud).toHaveAttribute('data-station')
   await page.getByTestId('enemy-grid-1-0').click()
   await expect(page.getByTestId('deck-salvo')).toHaveText(/shot 3 of 5/)
 
