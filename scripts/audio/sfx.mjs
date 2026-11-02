@@ -500,3 +500,37 @@ export function gull(seed = 41) {
   cry(1.18, 0.6, 1050 + r() * 150)
   return finish(reverb(out, { mixLevel: 0.2, decay: 0.72, tail: 0.5, size: 2.0 }), { peak: 0.75 })
 }
+
+/** Ship's horn: battle start heard from the deck — two blasts, low reedy tone with a breathy onset. */
+export function horn() {
+  const r = rng(707)
+  const out = buffer(1.9)
+  const blast = (at, len, f, g) => {
+    const freq = (t) => f * (1 + 0.012 * Math.sin(TAU * 5.5 * t)) * (t < 0.08 ? 0.94 + 0.06 * (t / 0.08) : 1)
+    let v = tone(len, freq, (t) => asrEnv(t, len, 0.09, 0.25), waves.softSaw)
+    v = resonantLowpass(v, (t) => 420 + 380 * Math.sin(Math.min(1, t / len) * Math.PI), 0.45)
+    mix(out, v, at, g)
+    mix(out, tone(len, (t) => freq(t) * 1.5, (t) => asrEnv(t, len, 0.12, 0.25)), at, g * 0.22)
+    mix(out, lowpass(noise(len, (t) => asrEnv(t, len, 0.03, 0.3) * 0.25, r), 900), at, g * 0.5)
+  }
+  blast(0, 0.6, 146, 1)
+  blast(0.8, 0.85, 146, 1)
+  return finish(reverb(out, { mixLevel: 0.3, decay: 0.8, tail: 0.45, size: 2, damp: 0.45 }), { peak: 0.92 })
+}
+
+/** Water rushing over the rail while the ship you stand on goes down (~2.8 s swell, one shot). */
+export function waterRush() {
+  const r = rng(808)
+  const LEN = 1.7
+  const out = buffer(LEN + 0.3)
+  const swell = (t) => Math.pow(Math.sin(Math.PI * Math.min(1, t / LEN)), 0.7)
+  mix(out, lowpass(noise(LEN, (t) => swell(t), r), (t) => 900 + 2200 * swell(t)), 0, 0.9)
+  mix(out, bandpass(noise(LEN, (t) => swell(t) * 0.8, r), (t) => 300 + 250 * Math.sin(TAU * 0.7 * t), 0.8), 0, 0.6)
+  mix(out, lowpass(pinkNoise(LEN, (t) => swell(t), r), 160, 2), 0, 1.4)
+  for (let i = 0; i < 18; i++) {
+    const at = 0.4 + r() * 2.0
+    const f = 260 + r() * 700
+    mix(out, tone(0.07, (t) => expInterp(f, f * 1.6, Math.min(1, t / 0.06)), (t) => adEnv(t, 0.004, 0.06, 3)), at, 0.12)
+  }
+  return finish(reverb(out, { mixLevel: 0.22, decay: 0.7, tail: 0.8, size: 1.6, damp: 0.5 }), { peak: 0.9 })
+}

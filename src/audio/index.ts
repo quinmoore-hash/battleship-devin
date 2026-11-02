@@ -34,8 +34,10 @@ import {
   type MusicTrack,
   type Sfx,
 } from './manifest'
-import { broadsideTimeline, shotTimeline, type AudioCue, type BroadsideOptions, type ShotOutcome, type ShotTimingOptions } from './sequence'
+import {
+  SHOT_FLIGHT_MS, broadsideTimeline, shotTimeline, type AudioCue, type BroadsideOptions, type ShotOutcome, type ShotTimingOptions } from './sequence'
 import { useAudioSettings } from './settings'
+import { deckShotTimeline, deckSinkTimeline } from './deck'
 import { DEFAULT_LISTENER, spatialize, type AudioListener, type SpatialOptions, type Vec3 } from './spatial'
 
 export type { Sfx, SfxName, CanonicalSfx, LegacySfx, MusicTrack } from './manifest'
@@ -45,6 +47,7 @@ export type { AudioSettingsState } from './settings'
 export { spatialize, DEFAULT_LISTENER } from './spatial'
 export type { AudioListener, SpatialOptions, Vec3 } from './spatial'
 export { shotTimeline, broadsideTimeline, timelineLength, SHOT_FLIGHT_MS } from './sequence'
+export { deckShotTimeline, deckSinkTimeline, createDeckLoops, INCOMING_LEAD_MS, OWN_GUN_GAIN, DISTANT_GUN_GAIN, AMBIENCE_MS, type DeckShotAudio, type DeckLoops, type DeckLoopsState } from './deck'
 export type { AudioCue, ShotOutcome, ShotTimingOptions, BroadsideOptions } from './sequence'
 
 const MUSIC_FADE_IN_MS = 1500
@@ -639,8 +642,28 @@ function targetPosition(by: 'human' | 'enemy', coord: { x: number; y: number }):
  * (the director owns timing; pass `flightMs` for the shot's actual ball flight). Until the director lands,
  * `bindGameAudio` drives the same cues from store events.
  */
-export function playCinematicAudio(event: CinematicEvent, options: { flightMs?: number; fast?: boolean } = {}): TimelineHandle {
+export interface CinematicAudioOptions {
+  flightMs?: number
+  fast?: boolean
+  /**
+   * "On deck": the player stands on a ship, so the cues are heard from there (own gun loud, distant boom → whistle
+   * lead on incoming balls, water-rush when the standing ship sinks). `at` is the gun / impact / sinking-ship point.
+   */
+  pov?: { outgoing: boolean; standingHit: boolean; nearby: boolean; from?: Vec3; at: Vec3 }
+}
+
+export function playCinematicAudio(event: CinematicEvent, options: CinematicAudioOptions = {}): TimelineHandle {
   const fast = options.fast ?? fastCues()
+  const { pov } = options
+  if (pov && event.type === 'shot') {
+    duckMusic(fast ? 1200 : 3000)
+    const flightMs = options.flightMs ?? (fast ? SHOT_FLIGHT_MS.fast : SHOT_FLIGHT_MS.full)
+    return playTimeline(deckShotTimeline(event.result.outcome, { ...pov, to: pov.at, flightMs, fast }))
+  }
+  if (pov && event.type === 'sink') {
+    duckMusic(fast ? 2000 : 6000)
+    return playTimeline(deckSinkTimeline(pov.standingHit, pov.at, !pov.nearby))
+  }
   switch (event.type) {
     case 'shot':
       duckMusic(fast ? 1200 : 3000)
@@ -653,7 +676,8 @@ export function playCinematicAudio(event: CinematicEvent, options: { flightMs?: 
       })
     case 'sink': {
       duckMusic(fast ? 2000 : 6000)
-      const pos = fleetGunPosition(event.owner === 'human' ? 'enemy' : 'human')
+      // the sinking ship is on its owner's waters (BUG-710: this used to be placed on the other fleet's board)
+      const pos = fleetGunPosition(event.owner)
       return playTimeline([
         { at: 0, sfx: 'mast-snap', at3d: pos },
         { at: 500, sfx: 'sinking-groan', at3d: pos },

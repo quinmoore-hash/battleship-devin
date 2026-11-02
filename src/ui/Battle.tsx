@@ -68,6 +68,7 @@ export function BattleScreen() {
   const busy = useBattleController((s) => s.busy)
   const beat = useBattleController((s) => s.beat)
   const last = useBattleController((s) => s.last)
+  const exchange = useBattleController((s) => s.exchange)
 
   const hover = useUiStore((s) => s.hover)
   const setHover = useUiStore((s) => s.setHover)
@@ -249,7 +250,7 @@ export function BattleScreen() {
               {statusText}
             </p>
             <span className="sr-only" aria-live="assertive" data-testid="shot-announcer">
-              {last ? shotLine(last.by, last.result, who, hotSeat) : ''}
+              {exchange.map((e) => shotLine(e.by, e.result, who, hotSeat)).join(' ')}
             </span>
             {busy && cinematics !== 'off' && (
               <button type="button" className="link-btn skip-hint" data-testid="skip-cinematic" onClick={skip}>

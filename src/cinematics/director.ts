@@ -2,10 +2,13 @@ import { createStore, useStore, type StoreApi } from 'zustand'
 import { duckMusic, playCinematicAudio, playSfx } from '../audio'
 import type { PlacedShip, Player } from '../engine'
 import { defaultQuality } from '../scene'
+import { deckBus, type DeckState } from '../deck/contract'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
 import type { CannonRef } from '../ships/types'
 import { sinkProgressAt } from '../vfx/sinking/timeline'
-import { planShot, type ShotPlan } from './battery'
+import type { Vec3 } from '../scene/layout'
+import { ownBoardOrigin, planShot, type ShotPlan } from './battery'
+import { POV, nextAfloatUid, povBeatEvents, povFor, readDeckState, shipWorldPosition, stationBattery, stationMuzzle, type PovContext } from './pov'
 import { allowShake, beatAt, buildSequence, createSequenceClock, maxBalls, timeScaleAt, type BeatName, type BeatState, type Budget, type Sequence, type SequenceClock } from './sequence'
 import type { CinematicDirector, CinematicEvent } from './types'
 
@@ -28,6 +31,8 @@ export interface ActiveCinematic {
   beat: BeatName | null
   /** The shot's fire → whistle → impact audio timeline, cancelled if the shot is skipped before it lands. */
   audio?: { cancel(): void } | null
+  /** Set while the player stands on deck: the camera is left alone and beats emit `deckBus` events instead. */
+  pov: PovContext | null
 }
 
 export interface DirectorState {
@@ -66,6 +71,8 @@ export interface DirectorOptions {
   autoTick?: boolean
   /** Fire SFX / duck music on beats (default true when a DOM exists). */
   audio?: boolean
+  /** The "On deck" slice; defaults to `useGameStore().deck` (or `DEFAULT_DECK` until it exists). */
+  deck?: () => DeckState
 }
 
 export interface Director extends CinematicDirector {
@@ -95,6 +102,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
   const beatScratch: BeatState = { beat: null, k: 1, index: -1 }
   const autoTick = opts.autoTick ?? true
   const audio = opts.audio ?? typeof document !== 'undefined'
+  const deckOf = opts.deck ?? readDeckState
   const store = createStore<DirectorState>(() => ({
     active: null,
     busy: false,
@@ -128,9 +136,38 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     raf = requestAnimationFrame(loop)
   }
 
+  /** Where the player on deck should look for this beat (impact point, sinking ship, fireworks). */
+  const povTarget = (a: ActiveCinematic): Vec3 | null => {
+    if (a.event.type === 'shot') return a.plan?.impact ?? null
+    if (a.event.type === 'sink') {
+      const ship = a.fleets[a.event.owner].find((s) => s.uid === a.uid)
+      return ship ? shipWorldPosition(ship, a.event.owner) : null
+    }
+    if (a.event.type === 'victory') {
+      const o = ownBoardOrigin(store.getState().perspective)
+      return [o[0] + 5, o[1] + 6, o[2] + 5]
+    }
+    return null
+  }
+
+  /** Where the on-deck listener hears this sequence from (own gun, impact point, sinking ship). */
+  const povAudio = (a: ActiveCinematic) => {
+    if (!a.pov) return undefined
+    const at = povTarget(a) ?? a.plan?.cellCenter ?? ownBoardOrigin(a.pov.perspective)
+    return { outgoing: a.pov.outgoing, standingHit: a.pov.standingHit, nearby: a.pov.ownSide, from: a.plan?.muzzles[0]?.position, at }
+  }
+
+  const abandonShip = (a: ActiveCinematic) => {
+    if (!a.pov || a.pov.abandoned || a.event.type !== 'sink' || !a.pov.standingHit || !a.uid) return
+    a.pov.abandoned = true
+    deckBus.emit({ type: 'abandon-ship', nextUid: nextAfloatUid(a.fleets[a.pov.perspective], a.uid) })
+  }
+
   const finish = () => {
     const { active } = store.getState()
     if (!active) return
+    abandonShip(active)
+    if (active.event.type === 'sink' && active.clock.skipped) active.audio?.cancel()
     const settled: Partial<DirectorState> = { active: null, busy: false, firing: {}, impacted: false, timeScale: 1, letterbox: false, completed: store.getState().completed + 1 }
     if (active.event.type === 'sink') settled.sinkProgress = { ...store.getState().sinkProgress, [active.event.uid ?? active.event.shipId]: 1 }
     store.setState(settled)
@@ -155,14 +192,14 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       if (beat === 'fire') {
         if (plan.battery) patch.firing = { [plan.battery.uid]: plan.battery.cells.map((cell) => ({ cell, side: plan.battery!.side })) }
         // one audio timeline per shot, its impact cue timed to land with the ball (fire beat → impact beat)
-        if (audio) a.audio = playCinematicAudio(a.event, { flightMs: shotFlightMs(a.seq), fast: a.seq.level !== 'full' })
+        if (audio) a.audio = playCinematicAudio(a.event, { flightMs: shotFlightMs(a.seq), fast: a.seq.level !== 'full', pov: povAudio(a) })
       }
       if (beat === 'impact' || beat === 'return') {
         if (!store.getState().impacted) {
           patch.impacted = true
           // a killing blow reveals the ship afloat; its `sink` sequence then takes the progress 0 → 1
           if (plan.result.outcome === 'sunk' && plan.result.shipId) patch.sinkProgress = { ...store.getState().sinkProgress, [plan.result.shipUid ?? plan.result.shipId]: 0 }
-          if (allowShake(a.seq)) patch.shake = SHAKE[plan.result.outcome] ?? 0.1
+          if (allowShake(a.seq) && !a.pov) patch.shake = SHAKE[plan.result.outcome] ?? 0.1
           if (audio && (beat === 'return' || a.clock.skipped)) {
             // skipped before the ball landed: drop the scheduled cues and land the impact now
             a.audio?.cancel()
@@ -175,9 +212,14 @@ export function createDirector(opts: DirectorOptions = {}): Director {
     }
     if (a.event.type === 'sink' && beat === 'sink' && audio) {
       // the killing shot's timeline already played mast snap → groan → bubbles; just keep the music down
-      duckMusic(a.seq.duration * 1000)
+      if (a.pov) a.audio = playCinematicAudio(a.event, { fast: a.seq.level !== 'full', pov: povAudio(a) })
+      else duckMusic(a.seq.duration * 1000)
     }
     if (a.event.type === 'victory' && beat === 'flyover' && audio) playSfx(a.event.winner === 'human' ? 'victory' : 'defeat')
+    if (a.pov) {
+      for (const e of povBeatEvents(a.event, a.pov, beat, povTarget(a), a.seq.reducedMotion)) deckBus.emit(e)
+      if (a.event.type === 'battle-start' && beat === 'flyover' && audio) playSfx('horn')
+    }
     if (Object.keys(patch).length) store.setState(patch)
   }
 
@@ -202,11 +244,18 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         finish()
       }
       const fleets = fleetsOf()
-      const seq = buildSequence(event, level, reducedMotionOf(), budgetOf())
+      const pov = povFor(event, deckOf(), fleets, store.getState().perspective)
+      const seq = buildSequence(event, level, reducedMotionOf(), budgetOf(), pov !== null)
+      // on deck a manned gun fires the shot; otherwise (and for Broadside's explicit battery) the usual pick
+      const battery = event.type === 'shot' ? event.battery ?? stationBattery(pov) ?? undefined : undefined
       const plan =
         event.type === 'shot'
-          ? planShot(event.by, event.result, event.by === 'human' ? fleets.human : fleets.enemy, event.by === 'human' ? fleets.enemy : fleets.human, event.battery, maxBalls(seq))
+          ? planShot(event.by, event.result, event.by === 'human' ? fleets.human : fleets.enemy, event.by === 'human' ? fleets.enemy : fleets.human, battery, maxBalls(seq))
           : null
+      if (plan && event.type === 'shot' && battery && !event.battery) {
+        const m = stationMuzzle(pov, plan.shooter)
+        if (m) plan.muzzles = [m]
+      }
       const active: ActiveCinematic = {
         id: nextId++,
         event,
@@ -217,15 +266,17 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         beat: null,
         owner: event.type === 'sink' ? event.owner : event.type === 'victory' ? event.winner : undefined,
         uid: event.type === 'sink' ? event.uid ?? event.shipId : undefined,
+        pov,
       }
       if (seq.duration === 0) {
         // `off`: apply the end state synchronously and resolve
         store.setState({ active, busy: true })
         if (event.type === 'shot') enterBeat(active, 'return')
+        abandonShip(active)
         store.setState({ active: null, busy: false, firing: {}, impacted: false, shake: 0, letterbox: false, completed: store.getState().completed + 1, ...(event.type === 'sink' ? { sinkProgress: { ...store.getState().sinkProgress, [event.uid ?? event.shipId]: 1 } } : {}) })
         return Promise.resolve()
       }
-      store.setState({ active, busy: true, impacted: false, firing: {}, letterbox: true, timeScale: 1, sinkProgress: event.type === 'sink' ? { ...store.getState().sinkProgress, [event.uid ?? event.shipId]: 0 } : store.getState().sinkProgress })
+      store.setState({ active, busy: true, impacted: false, firing: {}, letterbox: !active.pov, timeScale: 1, sinkProgress: event.type === 'sink' ? { ...store.getState().sinkProgress, [event.uid ?? event.shipId]: 0 } : store.getState().sinkProgress })
       enterBeat(active, beatAt(seq, 0, beatScratch).beat?.name ?? null)
       startTicker()
       return new Promise<void>((resolve) => {
@@ -246,6 +297,7 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       const { beat } = beatAt(seq, clock.t, beatScratch)
       const name = beat?.name ?? null
       if (name !== active.beat) enterBeat(active, name)
+      if (active.pov?.standingHit && clock.t >= POV.abandonAt) abandonShip(active)
       if (seq.sink && active.uid) {
         const p = sinkProgressAt(clock.t, seq.sink)
         const ts = timeScaleAt(seq, clock.t)

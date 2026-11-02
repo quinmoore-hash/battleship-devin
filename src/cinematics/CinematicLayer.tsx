@@ -28,7 +28,7 @@ export interface CinematicLayerProps {
 type Residual =
   | { id: number; kind: 'splash'; position: Vec3; seed: number; scale: number }
   | { id: number; kind: 'hit'; position: Vec3; normal: Vec3; seed: number; scale: number }
-  | { id: number; kind: 'burn'; position: Vec3; seed: number; born: number }
+  | { id: number; kind: 'burn'; position: Vec3; seed: number; born: number; deck?: boolean }
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
 type NewResidual = DistributiveOmit<Residual, 'id'>
@@ -119,20 +119,27 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
     [],
   )
 
-  const ignite = active.seq.level === 'full' && active.seq.budget === 'high'
+  // on deck: a ball into the ship you stand on reads at eye height (bigger splinter burst, blaze on the deck at the cell)
+  const standingHit = !!active.pov?.standingHit
+  const nearby = !!active.pov?.ownSide
+  const ignite = (active.seq.level === 'full' || standingHit) && active.seq.budget === 'high'
   const onImpact = useCallback(
     (point: Vec3, index: number) => {
       const s = director.store.getState()
       if (!s.impacted && s.active?.id === active.id) director.store.setState({ impacted: true })
       if (index !== 0) return // one splash / one impact per shot: the lead ball
-      if (plan.result.outcome === 'miss') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed, scale: 1 })
+      if (plan.result.outcome === 'miss') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed, scale: nearby ? 1.25 : 1 })
       else if (plan.result.outcome === 'lost') add({ kind: 'splash', position: [point[0], BOARD_LAYOUT.surfaceY, point[2]], seed, scale: LOST_SPLASH_SCALE })
       else {
-        add({ kind: 'hit', position: point, normal: plan.normal, seed, scale: 1 })
-        if (ignite) add({ kind: 'burn', position: point, seed, born: performance.now() })
+        add({ kind: 'hit', position: point, normal: plan.normal, seed, scale: standingHit ? 1.6 : 1 })
+        if (ignite) {
+          const v = plan.victim
+          const deckPoint: Vec3 | null = standingHit && v ? [plan.cellCenter[0], v.pose.position[1] + SHIPS[v.ship.spec.id].anchors.deckY, plan.cellCenter[2]] : null
+          add({ kind: 'burn', position: deckPoint ?? point, seed, born: performance.now(), deck: deckPoint !== null })
+        }
       }
     },
-    [plan, seed, add, director, active.id, ignite],
+    [plan, seed, add, director, active.id, ignite, standingHit, nearby],
   )
 
   if (!fired || shots.length === 0) return null
@@ -154,7 +161,7 @@ function HitFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'hit' }>; onDone:
   return (
     <>
       <ImpactFlash position={fx.position} normal={fx.normal} scale={fx.scale} onDone={one} />
-      <SplinterBurst position={fx.position} normal={fx.normal} seed={fx.seed} count={fx.scale < 1 ? 10 : undefined} waterY={BOARD_LAYOUT.surfaceY} onDone={one} />
+      <SplinterBurst position={fx.position} normal={fx.normal} seed={fx.seed} count={fx.scale < 1 ? 10 : fx.scale > 1 ? 30 : undefined} waterY={BOARD_LAYOUT.surfaceY} onDone={one} />
     </>
   )
 }
@@ -175,11 +182,12 @@ function BurnFx({ fx, onDone }: { fx: Extract<Residual, { kind: 'burn' }>; onDon
       onDone()
     }
   })
-  const pos: Vec3 = [fx.position[0], fx.position[1] + 0.15, fx.position[2]]
+  // `deck`: the blaze sits on the planks of the ship the player stands on, sized to read from 0.3–3 u
+  const pos: Vec3 = [fx.position[0], fx.position[1] + (fx.deck ? 0.04 : 0.15), fx.position[2]]
   return (
     <group name="cinematic" ref={group} position={pos} scale={0.001}>
-      <Fire position={[0, 0, 0]} seed={fx.seed} scale={0.8} intensity={1} />
-      <Smoke position={[0, 0, 0]} seed={fx.seed} scale={0.9} intensity={1} />
+      <Fire position={[0, 0, 0]} seed={fx.seed} scale={fx.deck ? 1.1 : 0.8} intensity={1} />
+      <Smoke position={[0, 0, 0]} seed={fx.seed} scale={fx.deck ? 1.2 : 0.9} intensity={1} />
     </group>
   )
 }

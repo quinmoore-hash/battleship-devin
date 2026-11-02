@@ -2,7 +2,7 @@
 // calls plus a white-canvas probe (readPixels on the composited frame), so one-frame spikes / blow-outs
 // (BUG-223 / BUG-503) show up even though `perf:game` only samples a frame per checkpoint.
 // Needs a built app or PERF_URL. GPU-less VM: PERF_HEADED=1 under xvfb-run (SwiftShader).
-//   PERF_TIER=high PERF_SHOTS=24 PERF_CINEMATICS=full PERF_FRAMES_OUT=frames.json PERF_SHOT_DIR=dir
+//   PERF_TIER=high PERF_SHOTS=24 PERF_CINEMATICS=full PERF_FRAMES_OUT=frames.json PERF_SHOT_DIR=dir PERF_QUERY=… (extra URL params) PERF_DECK=1 (go On deck with V and man a gun before firing)
 import { chromium } from '@playwright/test'
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -49,7 +49,7 @@ page.on('console', (m) => { if (/^\[(frames|bake)\]/.test(m.text())) console.log
 const summary = async () => page.evaluate(() => window.__frames.summary())
 
 try {
-  await page.goto(`${base}/?perf&quality=${tier}&gpu=${tier}`)
+  await page.goto(`${base}/?perf&quality=${tier}&gpu=${tier}${process.env.PERF_QUERY ? `&${process.env.PERF_QUERY}` : ''}`)
   await page.getByTestId('main-menu').waitFor({ timeout: 60_000 })
   await page.waitForFunction(() => !!window.__perf?.gl(), null, { timeout: 60_000 })
   // per-frame probe: runs after r3f's render in the same rAF turn (registered later), reads the
@@ -126,6 +126,19 @@ try {
   await page.getByTestId('battle').waitFor({ timeout: 60_000 })
   const yourTurn = () => page.getByTestId('status').filter({ hasText: /your turn/i }).waitFor({ timeout: 120_000 })
   await yourTurn()
+  // PERF_DECK=1: stand on deck (V) and man the nearest gun that bears; after a ship switch the gun has to be manned again
+  const onDeck = process.env.PERF_DECK === '1'
+  const manGun = async () => {
+    if (!onDeck) return
+    if ((await page.getByTestId('battle').getAttribute('data-deck')) !== 'true') {
+      await page.keyboard.press('v')
+      await page.locator('[data-testid="battle"][data-deck="true"]').waitFor({ timeout: 10_000 })
+    }
+    const man = page.getByTestId('deck-man')
+    if (await man.isVisible().catch(() => false)) await man.click()
+  }
+  await manGun()
+  if (onDeck) await page.waitForTimeout(2000)
   // PERF_WRECKS=N: BUG-404 budget check — sink N ships up front (half ours, half theirs, never a whole fleet) via the perf store hook
   const wrecks = Number(process.env.PERF_WRECKS ?? 0)
   if (wrecks > 0) {
@@ -148,6 +161,7 @@ try {
     if ((await page.getByTestId('ui-root').getAttribute('data-phase')) !== 'battle') break
     const cell = page.getByTestId(`enemy-grid-${x}-${y}`)
     if ((await cell.getAttribute('data-state')) && (await cell.getAttribute('data-state')) !== 'unknown') continue
+    await manGun()
     await cell.click({ force: true })
     fired++
     await page.evaluate((n) => { window.__frames.shot = n }, fired)

@@ -17,6 +17,8 @@ interface BattleControllerState {
   beat: TurnBeat
   /** The most recent shot by either side, for the status line / flash. */
   last: { by: 'human' | 'enemy'; result: ShotResult } | null
+  /** The shots of the current exchange (your volley, then the reply) for the assertive announcer, see `nextExchange`. */
+  exchange: AnnouncedShot[]
   busy: boolean
   flow: TurnFlow | null
   start: () => void
@@ -36,9 +38,26 @@ interface BattleControllerState {
 
 let swingTimer: ReturnType<typeof setTimeout> | undefined
 
+export interface AnnouncedShot {
+  by: 'human' | 'enemy'
+  result: ShotResult
+}
+
+/**
+ * What the assertive live region reads after a shot. With reduced motion (or cinematics off) the reply lands 60–120 ms
+ * after your own shot, so announcing only the latest shot replaced "You fired at A2" before a screen reader could say it
+ * (BUG-724). Instead the region holds the whole exchange: your shots this turn, then the reply; it starts over when you
+ * fire again after a reply.
+ */
+export function nextExchange(exchange: AnnouncedShot[], shot: AnnouncedShot): AnnouncedShot[] {
+  const prev = exchange[exchange.length - 1]
+  return shot.by === 'human' && prev?.by === 'enemy' ? [shot] : [...exchange, shot]
+}
+
 export const useBattleController = create<BattleControllerState>((set, get) => ({
   beat: { phase: 'idle' },
   last: null,
+  exchange: [],
   busy: false,
   flow: null,
 
@@ -49,18 +68,19 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
         const patch: Partial<BattleControllerState> = { beat }
         if (beat.phase === 'player-shot' && beat.result) patch.last = { by: 'human', result: beat.result }
         if (beat.phase === 'enemy-shot' && beat.result) patch.last = { by: 'enemy', result: beat.result }
+        if (patch.last) patch.exchange = nextExchange(get().exchange, patch.last)
         if (beat.phase === 'intro') patch.busy = true
         if (beat.phase === 'done') patch.busy = false
         set(patch)
       },
     })
-    set({ flow, beat: { phase: 'idle' }, last: null, busy: false })
+    set({ flow, beat: { phase: 'idle' }, last: null, exchange: [], busy: false })
     void flow.intro()
   },
 
   stop: () => {
     get().flow?.dispose()
-    set({ flow: null, beat: { phase: 'idle' }, last: null, busy: false })
+    set({ flow: null, beat: { phase: 'idle' }, last: null, exchange: [], busy: false })
   },
 
   fire: async (coord, power) => {
