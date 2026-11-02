@@ -12,7 +12,7 @@ export interface DeckRuntime {
   approach: number | null
   /** Black overlay opacity 0..1 (Tab ship switch, abandon-ship beat). */
   fade: number
-  /** One-line nudge shown briefly ("Man a gun to fire"). */
+  /** One-line nudge shown briefly ("No gun bears — Tab to another ship"). */
   nudge: string | null
   /** The controller is mounted and driving the camera (3D battle, deck on). */
   active: boolean

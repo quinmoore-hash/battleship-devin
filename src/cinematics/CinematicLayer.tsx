@@ -73,6 +73,8 @@ export function CinematicLayer({ director = defaultDirector, livery = DEFAULT_LI
 
 function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan: ShotPlan; director: Director; add: (r: NewResidual) => void }) {
   const [fired, setFired] = useState(false)
+  // the firing ship's wave height at the fire beat: the muzzles ride the hull the eye is attached to, not the still waterline
+  const [bob, setBob] = useState(0)
   const handle = useRef<BroadsideHandle>(null)
   const skipped = useRef(false)
   const fireAt = beatStart(active.seq, 'fire')
@@ -85,9 +87,9 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
     return plan.muzzles.map((m, i) => {
       const jitter = water ? 0.38 : 0.12
       const to: Vec3 = i === 0 ? plan.impact : [plan.impact[0] + (rnd() - 0.5) * 2 * jitter, plan.impact[1], plan.impact[2] + (rnd() - 0.5) * 2 * jitter]
-      return { from: m.position, to }
+      return { from: [m.position[0], m.position[1] + bob, m.position[2]] as Vec3, to }
     })
-  }, [plan, seed])
+  }, [plan, seed, bob])
 
   // the balls must land when the flight beat ends: speed from the chord length and the beat's length
   const { speed, stagger } = useMemo(() => {
@@ -98,9 +100,12 @@ function ShotFx({ active, plan, director, add }: { active: ActiveCinematic; plan
     return { speed: d / Math.max(0.2, dur - stagger * (n - 1) - 0.05), stagger }
   }, [shots, flight])
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
     const t = active.clock.t
-    if (!fired && t >= fireAt) setFired(true)
+    if (!fired && t >= fireAt) {
+      if (plan.shooter) setBob(sampleWaveHeight(plan.shooter.position[0], plan.shooter.position[2], clock.elapsedTime))
+      setFired(true)
+    }
     if (active.clock.skipped && !skipped.current) {
       skipped.current = true
       handle.current?.skip()

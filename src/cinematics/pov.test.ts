@@ -78,11 +78,12 @@ describe('on-deck POV branch', () => {
     expect(events[2]).toMatchObject({ type: 'shake', intensity: POV.farShake })
   })
 
-  it('station null falls back to the director battery pick; an explicit battery (Broadside) wins', () => {
+  it('station null (walking) fires one usable gun of the standing ship; an explicit battery (Broadside) wins', () => {
     const d = make()
     void d.play(outgoing, 'full')
     expect(d.active?.plan?.battery?.shipId).toBe('frigate')
-    expect(d.active?.plan?.muzzles.length).toBeGreaterThan(1)
+    expect(d.active?.plan?.battery?.cells).toHaveLength(1)
+    expect(d.active?.plan?.muzzles.length).toBe(1)
     d.skip()
     const battery = { shipId: 'sloop' as const, uid: 'sloop', side: 'port' as const, cells: [0] }
     const d2 = make({ ...onDeck, station: 0 })

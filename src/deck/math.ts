@@ -571,3 +571,23 @@ export function cycleShip(afloat: readonly string[], current: string | null, ste
  * uids repeat (spec ids, both hot-seat fleets), so a stale 1 from a wreck of the previous game must not drown an afloat ship.
  */
 export const sinkProgressFor = (sunk: boolean, progress: number | undefined): number => (sunk ? (progress ?? 1) : 0)
+
+/**
+ * The gun a chart shot leaves from while on deck: the manned station, else (walking) the usable gun — one facing the
+ * enemy waters — whose stand is nearest the player's feet, so a deck shot never fires from thin air. Null only when
+ * no gun of the ship can bear.
+ */
+export function deckGun(stations: readonly Station[], station: number | null, rotationY: number, shipPos: Vec3, enemyCenter: Vec3, feet?: Vec3): Station | null {
+  if (station !== null && stations[station]) return stations[station]
+  let best: Station | null = null
+  let bestD = Infinity
+  for (const s of stations) {
+    if (!stationUsable(s, rotationY, shipPos, enemyCenter)) continue
+    const d = feet ? Math.hypot(s.stand[0] - feet[0], s.stand[2] - feet[2]) : s.index
+    if (d < bestD) {
+      bestD = d
+      best = s
+    }
+  }
+  return best
+}

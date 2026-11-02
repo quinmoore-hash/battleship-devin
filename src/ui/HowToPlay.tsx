@@ -58,7 +58,8 @@ export function HowToPlayModal({ onClose }: { onClose: () => void }) {
           hops to your next afloat ship. You cannot fall off, walk through the bulwarks or the masts; the quarterdeck and forecastle are steps
           up. The guns that bear on the enemy waters glow brass with a ring on the deck and a compass arrow points to the nearest; walk up and
           press <kbd>E</kbd> to man one — you step to the gunner's eye behind the breech. The mouse never aims: <b>click a square on
-          the chart</b> (or a visible enemy square on the water) and the gun swings to bear and fires there. No free aim: the same odds as the
+          the chart</b> (or a visible enemy square on the water) and the gun swings to bear and fires there — the flash, smoke and ball leave
+          the very muzzle you stand behind (while walking, the nearest gun that bears fires for you). No free aim: the same odds as the
           overview. Salvo counts the volley (<em>shot 2 of 4</em>), Broadside (<kbd>B</kbd>) and Spyglass (<kbd>G</kbd>) work from a gun — pick
           the square on the chart — and a stormy sea still swallows its 30 %. <kbd>E</kbd> again steps away. The enemy's balls splash around
           you or strike your hull; when your ship goes down you wake on the next one (<kbd>Tab</kbd> to choose). Each captain in Two captains

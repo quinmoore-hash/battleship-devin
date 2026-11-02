@@ -15,6 +15,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { director } from '../cinematics'
+import { deckGunIndex } from '../cinematics/pov'
 import { setPlayerDeck } from '../crew/playerPose'
 import { isSunk } from '../engine'
 import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
@@ -645,13 +646,17 @@ export function DeckController() {
   )
 }
 
-/** Cannon index + side of the manned gun, for the fleet's `firing` recoil before a deck shot. */
+/**
+ * Cannon + side of the gun a deck chart shot fires from (the manned gun, else the usable gun beside you — the same
+ * `deckGunIndex` pick the cinematic uses), for the fleet's `firing` recoil before the shot. Null when no gun bears.
+ */
 export function mannedCannon(): { uid: string; cell: number; side: 'port' | 'starboard' } | null {
   const g = useGameStore.getState()
-  if (!g.deck.on || g.deck.station === null || !g.deck.shipUid) return null
+  if (!g.deck.on || !g.deck.shipUid) return null
   const ship = g[ownBoardKey(g.perspective)].ships.find((x) => x.uid === g.deck.shipUid)
-  if (!ship) return null
-  const c = SHIPS[ship.spec.id].anchors.cannons[g.deck.station]
+  if (!ship || isSunk(ship)) return null
+  const index = deckGunIndex(ship, g.deck, g.perspective)
+  const c = index === null ? undefined : SHIPS[ship.spec.id].anchors.cannons[index]
   return c ? { uid: ship.uid, cell: c.cell, side: c.side } : null
 }
 

@@ -115,8 +115,8 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
     const { busy, beat } = get()
     if (game.phase !== 'battle' || game.handoff || game.turn !== shooter || (busy && beat.phase !== 'intro')) return
     const foeBoard = game[targetBoardKey(shooter)]
-    if (game.deck.on && game.deck.station === null) {
-      useDeckStore.getState().showNudge('Man a gun to fire')
+    if (game.deck.on && !mannedCannon()) {
+      useDeckStore.getState().showNudge('No gun bears — Tab to another ship')
       return playSfx('miss')
     }
     if (ui.armed === 'spyglass') {
@@ -141,7 +141,8 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
       if (touch) return get().requestFire(coord, 'touch')
       shoot = () => void get().fire(coord)
     }
-    // on deck the manned gun swings to bear (the fleet's `firing` recoil) before the shot resolves — same odds, just a beat later
+    // on deck the gun the shot leaves from (manned, else the usable one beside you) swings to bear (the fleet's `firing`
+    // recoil) before the shot resolves — same odds, just a beat later
     const gun = mannedCannon()
     if (!gun || swingTimer) return shoot()
     director.store.setState({ firing: { [gun.uid]: [{ cell: gun.cell, side: gun.side }] } })
