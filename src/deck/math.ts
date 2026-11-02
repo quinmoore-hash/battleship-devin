@@ -378,10 +378,15 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
     return q
   }
   let q = settle(deck.obstacles)
-  // pinned: the rail clamp dropped the player back inside an obstacle they already stood in (a narrow bow tip, a landing),
-  // so that obstacle does not push this frame and they can walk out of it; everything else pushes as usual
+  // pinned: the rail clamp drops the player back inside an obstacle they already stood in and the step goes nowhere
+  // (a narrow bow tip, a landing) — then that obstacle does not push this frame so they can walk out of it; a mere
+  // graze that still slides along the ring keeps pushing as usual
   const inside = (o: DeckAnchors['obstacles'][number], at: Pt) => Math.hypot(at[0] - o.center[0], at[1] - o.center[1]) < o.radius + PLAYER_RADIUS - 1e-6
-  const pinned = deck.obstacles.filter((o) => inside(o, start) && inside(o, q))
+  const progress = (q[0] - start[0]) * dx + (q[1] - start[1]) * dz
+  const pinned =
+    progress <= 1e-9 && Math.hypot(dx, dz) > 1e-6
+      ? deck.obstacles.filter((o) => inside(o, start) && inside(o, q) && !pointInPolygon(pushOutOfObstacles(start, [o]), walk))
+      : []
   if (pinned.length) q = settle(deck.obstacles.filter((o) => !pinned.includes(o)))
   return { x: q[0], z: q[1], y: deckHeightAt(q, level, deck), level }
 }

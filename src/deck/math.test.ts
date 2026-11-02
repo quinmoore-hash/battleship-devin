@@ -364,6 +364,8 @@ describe('walk acceleration and jump', () => {
             // head at the mast with a sideways drift, the way a player skirts it
             pose = stepOnDeck(pose, -Math.cos(a) * 0.012 + Math.sin(a) * 0.006, -Math.sin(a) * 0.012 - Math.cos(a) * 0.006, d)
             if (pose.level !== level) break
+            // where the ring reaches past the rail the deck is narrower than the clearance: the player may squeeze by
+            if (!pointInPolygon(pushOutOfObstacles([pose.x, pose.z], [o]), d.walk[level].points)) break
             expect(Math.hypot(pose.x - o.center[0], pose.z - o.center[1]), `${cls} ${JSON.stringify(o)} k=${k} i=${i} ${JSON.stringify(pose)}`).toBeGreaterThanOrEqual(clearance - 0.002)
           }
         }
