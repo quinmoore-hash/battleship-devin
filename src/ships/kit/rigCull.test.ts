@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SHIPS } from '..'
+import { SHIPS, standingShipLod } from '..'
 import { RIG_CULL_RADIUS, rigCulled } from './rigCull'
 
 describe('standing-rigging cull while manning (BUG-800)', () => {
@@ -26,5 +26,15 @@ describe('standing-rigging cull while manning (BUG-800)', () => {
         for (const m of culled) expect(Math.abs(m.base[0] - c.muzzle[0]), `${id} cannon ${c.cell}`).toBeLessThan(RIG_CULL_RADIUS)
       }
     }
+  })
+})
+
+describe('standing ship lod while manning', () => {
+  it('the dressed ship goes live (lod 0) only while a cannon is manned; other ships keep the tier lod', () => {
+    expect(standingShipLod(1, true, true)).toBe(0)
+    expect(standingShipLod(2, true, true)).toBe(0)
+    expect(standingShipLod(1, true, false)).toBe(1)
+    expect(standingShipLod(1, false, true)).toBe(1)
+    expect(standingShipLod('auto', false, false)).toBe(2)
   })
 })

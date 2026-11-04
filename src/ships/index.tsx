@@ -22,7 +22,7 @@ import { FRIGATE } from './frigate'
 import { GALLEON } from './galleon'
 import { MAN_O_WAR } from './man-o-war'
 import { SLOOP } from './sloop'
-import type { CannonRef, CellDamage, Livery, ShipDefinition, ShipModelProps } from './types'
+import type { CannonRef, CellDamage, Livery, Lod, ShipDefinition, ShipModelProps } from './types'
 import { lastHitIndex, placedShipSeed, sinkPose } from '../vfx/sinking/pose'
 
 export * from './types'
@@ -135,6 +135,16 @@ function Afloat({ position, depth, rotationY, children }: { position: Vec3; dept
   )
 }
 
+/**
+ * Lod of a ship in a fixed-lod fleet. The dressed (standing) ship goes live (lod 0) while a cannon is manned: the
+ * Medium / Low tiers render the standing ship from the bake (one merged mesh per material), where neither the
+ * rigging cull (`kit/rigCull`) nor per-mast hiding can apply — the gunner's view cone would keep its own shrouds.
+ */
+export function standingShipLod(lod: Lod | 'auto', dressed: boolean, manning: boolean): Lod {
+  if (dressed && manning) return 0
+  return lod === 'auto' ? 2 : lod
+}
+
 export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality, staticWrecks, dressedUid, rigCullX = null }: FleetProps) {
   return (
     <group>
@@ -155,7 +165,7 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
                   {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={dressedUid === ship.uid ? 0 : autoLod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />}
                 </LodGroup>
               ) : (
-                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={standingShipLod(lod ?? 'auto', dressedUid === ship.uid, rigCullX != null)} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
           </Afloat>
