@@ -103,18 +103,32 @@ export function PhotoMode({ boards, onClose, timeOfDay = GOLDEN_HOUR, weather: i
   const [capturing, setCapturing] = useState(false)
   const [lastShot, setLastShot] = useState<string | null>(null)
   const [flash, setFlash] = useState(false)
+  const flashTimers = useRef(new Set<number>())
 
   const captured = useCallback(
     (dataUrl: string) => {
       setCapturing(false)
       setLastShot(dataUrl)
       setFlash(true)
-      window.setTimeout(() => setFlash(false), 350)
+      const timers = flashTimers.current
+      const id = window.setTimeout(() => {
+        timers.delete(id)
+        setFlash(false)
+      }, 350)
+      timers.add(id)
       if (onCapture) onCapture(dataUrl)
       else downloadDataUrl(dataUrl, photoFileName())
     },
     [onCapture],
   )
+
+  useEffect(() => {
+    const timers = flashTimers.current
+    return () => {
+      for (const id of timers) window.clearTimeout(id)
+      timers.clear()
+    }
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
