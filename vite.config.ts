@@ -23,7 +23,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        // Vite 8 (rolldown): vendor groups, first match wins. Keeps three/drei/gsap/howler out of the
+        // Vite 8 (rolldown): vendor groups, first match wins. Keeps three/drei/howler out of the
         // app chunk so the initial download stays < 600 kB gzip (BUG-022). `postprocessing` is deliberately
         // not grouped: only the lazy `Effects` chunk imports it, so left alone it stays off the menu's
         // critical path (a dedicated group dragged ~80 kB gzip of it into the eager preload list).
@@ -31,7 +31,6 @@ export default defineConfig({
           groups: [
             { name: 'three', test: /node_modules[\\/]three[\\/]/ },
             { name: 'drei', test: /node_modules[\\/](@react-three[\\/]drei|three-stdlib|maath|camera-controls|three-mesh-bvh|stats-gl|troika|@mediapipe|hls\.js)[\\/]/ },
-            { name: 'gsap', test: /node_modules[\\/]gsap[\\/]/ },
             { name: 'howler', test: /node_modules[\\/]howler[\\/]/ },
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler|zustand|@react-three[\\/]fiber|its-fine|suspend-react|react-reconciler|react-use-measure)[\\/]/ },
             { name: 'vendor', test: /node_modules[\\/]/ },
