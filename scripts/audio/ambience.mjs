@@ -27,7 +27,7 @@ function creak(r, len) {
   return resonantLowpass(v, 900, 0.4)
 }
 
-function distantBell(r) {
+function distantBell() {
   const out = buffer(3)
   const f = 740
   for (const [ratio, g] of [[0.5, 0.5], [1, 1], [1.183, 0.5], [1.506, 0.35], [2, 0.3]]) mix(out, tone(3, () => f * ratio, (t) => adEnv(t, 0.002, 2.6, 3.2)), 0, g)
@@ -78,8 +78,8 @@ export function ambienceSea() {
   mix(out, gull(44), 27 + r() * 4, 0.08)
   mix(out, gull(45), 39 + r() * 3, 0.07)
   // a bell from across the bay
-  mix(out, distantBell(r), 18.5, 0.12)
-  mix(out, distantBell(r), 19.1, 0.1)
+  mix(out, distantBell(), 18.5, 0.12)
+  mix(out, distantBell(), 19.1, 0.1)
   return normalize(foldLoop(out, LOOP, true), 0.75)
 }
 
