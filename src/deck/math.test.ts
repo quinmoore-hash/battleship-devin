@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS } from '../ships'
-import { BOARD_LAYOUT, boardCenter } from '../scene/layout'
+import { BOARD_LAYOUT, boardCenter, cellToWorld } from '../scene/layout'
+import { shipRotationY, shipWorldTransform } from '../ships'
+import { FLEET_BY_ID, type PlacedShip } from '../engine'
 import { DECK_FOV, DECK_NEAR, EYE_HEIGHT, type DeckAnchors } from './contract'
 import {
   EYE_CLEARANCE,
@@ -26,6 +28,22 @@ import {
   JUMP_APEX,
   JUMP_TIME,
   afloatUids,
+  blockedBands,
+  clearAhead,
+  clearLookYaw,
+  SPAWN_CLEAR_AHEAD,
+  RAIL_INSET,
+  railAhead,
+  rayToPolygonEdge,
+  spawnStand,
+  spawnYawFallbacks,
+  hitSections,
+  inBand,
+  sectionAtX,
+  sectionX,
+  spawnPoseAvoiding,
+  withBlocked,
+  type WalkableDeck,
   approach,
   startJump,
   stepJump,
@@ -571,5 +589,278 @@ describe('eye outside the geometry (BUG-7xx, owner clips a + b)', () => {
         }
       }
     }
+  })
+})
+
+describe('damage-aware spawn and no-walk bands (BUG-7xx: Tab onto a burning ship)', () => {
+  const ids = Object.keys(SHIPS) as (keyof typeof SHIPS)[]
+  /** Every 1–2 hit-section combination that leaves the ship afloat (all sections hit = sunk, never boarded). */
+  const combos = (n: number): number[][] => {
+    const out: number[][] = []
+    for (let i = 0; i < n; i++) {
+      out.push([i])
+      for (let j = i + 1; j < n; j++) if (n > 2) out.push([i, j])
+    }
+    return out
+  }
+  const inObstacle = (d: DeckAnchors, p: WalkPose) => d.obstacles.some((o) => Math.hypot(p.x - o.center[0], p.z - o.center[1]) < o.radius + PLAYER_RADIUS - 1e-6)
+  const placed = (id: string, orientation: PlacedShip['orientation'], hitIdx: number[]): PlacedShip => {
+    const spec = FLEET_BY_ID[id]
+    const cells = Array.from({ length: spec.length }, (_, i) => (orientation === 'horizontal' ? { x: 2 + i, y: 4 } : { x: 4, y: 2 + i }))
+    return { spec, uid: id, origin: cells[0], orientation, cells, hits: hitIdx.map((i) => cells[i]) }
+  }
+
+  it('sectionX is where the ship transform puts the cell: the origin cell is the stern (−x), both orientations', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const ship = placed('galleon', orientation, [])
+      const { position, rotationY } = shipWorldTransform(ship)
+      expect(rotationY).toBe(shipRotationY(orientation))
+      ship.cells.forEach((c, i) => {
+        const w = cellToWorld(c, BOARD_LAYOUT.player.origin)
+        const dx = w[0] - position[0]
+        const dz = w[2] - position[2]
+        // world → ship space (inverse rotation about y)
+        const localX = dx * Math.cos(rotationY) - dz * Math.sin(rotationY)
+        expect(localX).toBeCloseTo(sectionX(i, ship.cells.length), 6)
+        expect(sectionAtX(localX, ship.cells.length)).toBe(i)
+      })
+    }
+  })
+
+  it('hitSections / blockedBands: one hull-cell band per hit, in cell order', () => {
+    const ship = placed('frigate', 'horizontal', [2, 0])
+    expect(hitSections(ship)).toEqual([0, 2])
+    expect(blockedBands([0, 2], 3)).toEqual([
+      { x0: -1.5, x1: -0.5 },
+      { x0: 0.5, x1: 1.5 },
+    ])
+    expect(blockedBands([], 3)).toEqual([])
+    expect(inBand(-0.5 + PLAYER_RADIUS, { x0: -1.5, x1: -0.5 })).toBe(false)
+    expect(inBand(-0.5 + PLAYER_RADIUS / 2, { x0: -1.5, x1: -0.5 })).toBe(true)
+  })
+
+  it('withBlocked keeps the deck identity when nothing is hit (fallback-deck flag survives either way)', () => {
+    const d = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    expect(withBlocked(d, [])).toBe(d)
+    const fb = resolveDeckAnchors({ ...SHIPS.frigate.anchors, deck: undefined })
+    expect(isFallbackDeck(withBlocked(fb, blockedBands([0], 3)))).toBe(true)
+    expect(isFallbackDeck(withBlocked(d, blockedBands([0], 3)))).toBe(false)
+  })
+
+  it('every ship, every 1–2 hit sections: the spawn is on an intact section, on the deck, outside every obstacle', () => {
+    for (const id of ids) {
+      const n = FLEET_BY_ID[id].length
+      const deck = resolveDeckAnchors(SHIPS[id].anchors, id)
+      for (const hit of combos(n)) {
+        const d = withBlocked(deck, blockedBands(hit, n))
+        const p = spawnPoseAvoiding(d, hit, n)
+        const label = `${id} hit ${hit.join(',')}`
+        expect(hit, label).not.toContain(sectionAtX(p.x, n))
+        expect(d.blocked!.some((b) => inBand(p.x, b)), label).toBe(false)
+        expect(pointInPolygon([p.x, p.z], d.walk[p.level].points), label).toBe(true)
+        expect(inObstacle(d, p), label).toBe(false)
+        // the authored spawn itself was the problem on these decks: it sits on the stern section
+        if (hit.includes(sectionAtX(deck.spawn[0], n))) expect(sectionAtX(p.x, n), label).not.toBe(sectionAtX(deck.spawn[0], n))
+      }
+    }
+  })
+
+  it('picks the intact section farthest from the fire, and the authored spawn when it is intact', () => {
+    const frigate = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    expect(sectionAtX(spawnPoseAvoiding(frigate, [0, 1], 3).x, 3)).toBe(2)
+    expect(sectionAtX(spawnPoseAvoiding(frigate, [1, 2], 3).x, 3)).toBe(0)
+    const mow = resolveDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
+    expect(sectionAtX(spawnPoseAvoiding(mow, [0], 5).x, 5)).toBe(4)
+    expect(sectionAtX(spawnPoseAvoiding(mow, [4], 5).x, 5)).toBe(0)
+    // nothing hit → exactly the old spawn
+    for (const id of ids) {
+      const d = resolveDeckAnchors(SHIPS[id].anchors, id)
+      expect(spawnPoseAvoiding(d, [], FLEET_BY_ID[id].length)).toEqual(spawnPose(d))
+    }
+  })
+
+  it('the controller mirror step (same z side as the enemy) stays off the hit section', () => {
+    for (const id of ids) {
+      const n = FLEET_BY_ID[id].length
+      const deck = resolveDeckAnchors(SHIPS[id].anchors, id)
+      for (const hit of combos(n)) {
+        const d = withBlocked(deck, blockedBands(hit, n))
+        const p = spawnPoseAvoiding(d, hit, n)
+        for (const side of [1, -1]) {
+          const q = stepOnDeck({ ...p, z: side * Math.abs(p.z) }, 0, 0, d)
+          expect(hit, `${id} hit ${hit.join(',')} side ${side}`).not.toContain(sectionAtX(q.x, n))
+          expect(inObstacle(d, q)).toBe(false)
+        }
+      }
+    }
+  })
+
+  describe('stepOnDeck with blocked bands', () => {
+    // a 4-section rectangular deck (x ∈ [-2, 2]), section 2 (x ∈ [0, 1]) hit
+    const d: WalkableDeck = withBlocked({ spawn: [-1, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [], stations: [] }, blockedBands([2], 4))
+    expect(d.blocked).toEqual([{ x0: 0, x1: 1 }])
+    const at = (x: number, z = 0): WalkPose => ({ x, z, y: 0, level: 0 })
+
+    it('a walk toward the breach stops at its edge and never enters it', () => {
+      let p = at(-0.5)
+      for (let i = 0; i < 40; i++) p = stepOnDeck(p, 0.05, 0, d)
+      expect(p.x).toBeCloseTo(-PLAYER_RADIUS, 6)
+      expect(inBand(p.x, d.blocked![0])).toBe(false)
+      // and from the bow side it stops on the far edge
+      p = at(1.9)
+      for (let i = 0; i < 40; i++) p = stepOnDeck(p, -0.05, 0, d)
+      expect(p.x).toBeCloseTo(1 + PLAYER_RADIUS, 6)
+    })
+
+    it('sliding along the breach edge (z) is free', () => {
+      const p = stepOnDeck(at(-PLAYER_RADIUS, 0), 0, 0.1, d)
+      expect(p.z).toBeCloseTo(0.1, 6)
+      expect(p.x).toBeCloseTo(-PLAYER_RADIUS, 6)
+    })
+
+    it('a player standing where the ball struck is pushed out, not pinned', () => {
+      const p = stepOnDeck(at(0.7), 0.02, 0, d)
+      expect(inBand(p.x, d.blocked![0])).toBe(false)
+      expect(p.x).toBeCloseTo(1 + PLAYER_RADIUS, 6)
+      const q = stepOnDeck(at(0.3), -0.02, 0, d)
+      expect(q.x).toBeCloseTo(-PLAYER_RADIUS, 6)
+    })
+
+    it('a level the breach swallows whole never traps a player already on it (they keep walking)', () => {
+      const dd: WalkableDeck = withBlocked({ spawn: [-1, 0, 0], walk: [{ points: rectPolygon(1, 1, 0), y: 0 }], ramps: [], obstacles: [], stations: [] }, [{ x0: -1, x1: 1 }])
+      expect(stepOnDeck(at(-0.4), 0.1, 0, dd).x).toBeCloseTo(-0.3, 6)
+      expect(stepOnDeck(at(0.1), 0.1, 0, dd).x).toBeCloseTo(0.2, 6)
+    })
+
+    it('spawnPose itself lands clear of the bands', () => {
+      const p = spawnPose(withBlocked({ spawn: [0.5, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [], stations: [] }, blockedBands([2], 4)))
+      expect(inBand(p.x, { x0: 0, x1: 1 })).toBe(false)
+    })
+  })
+})
+
+describe('spawn facing is clear of obstacles (vertical man-o-war looked into the mizzen)', () => {
+  const ids = Object.keys(SHIPS) as (keyof typeof SHIPS)[]
+  const foe = boardCenter(BOARD_LAYOUT.enemy)
+  /** What `spawn()` in DeckController does for a whole ship placed `orientation` on the player board. */
+  const controllerSpawn = (id: keyof typeof SHIPS, orientation: PlacedShip['orientation']) => {
+    const n = FLEET_BY_ID[id].length
+    const cells = Array.from({ length: n }, (_, i) => (orientation === 'horizontal' ? { x: 2 + i, y: 4 } : { x: 4, y: 2 + i }))
+    const ship: PlacedShip = { spec: FLEET_BY_ID[id], uid: id, origin: cells[0], orientation, cells, hits: [] }
+    const deck = resolveDeckAnchors(SHIPS[id].anchors, id)
+    const { rotationY, position } = shipWorldTransform(ship)
+    const localYaw = Math.atan2(-(foe[0] - position[0]), -(foe[2] - position[2])) - rotationY
+    let p = spawnPoseAvoiding(deck, [], n)
+    const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
+    p = spawnStand(deck, p, side, localYaw)
+    return { deck, p, localYaw, side, yaw: clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side), undefined, p.level) }
+  }
+
+  it('clearAhead: ray–circle distance, player radius wide', () => {
+    const d: DeckAnchors = { spawn: [0, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [{ center: [0.5, 0], radius: 0.1 }], stations: [] }
+    expect(clearAhead(d, [0, 0], yawToward(1, 0))).toBeCloseTo(0.5 - 0.1 - PLAYER_RADIUS, 6) // looking +x into it
+    expect(clearAhead(d, [0, 0], yawToward(-1, 0))).toBe(SPAWN_CLEAR_AHEAD) // away from it
+    expect(clearAhead(d, [0, 0], yawToward(0, 1))).toBe(SPAWN_CLEAR_AHEAD) // across
+    expect(clearAhead(d, [0.45, 0], yawToward(1, 0))).toBe(0) // standing inside it, looking into it
+    expect(clearAhead(d, [0.5 - 0.1 - PLAYER_RADIUS, 0], yawToward(-1, 0))).toBe(SPAWN_CLEAR_AHEAD) // on its clearance ring, looking away
+    expect(clearAhead(d, [0, 0], yawToward(1, 0), 0.3)).toBe(0.3) // shorter reach: clear
+  })
+
+  it('clearAhead: the front of a higher level is a wall, a break down to a lower deck or a rail is not', () => {
+    const quarter = rectPolygon(1, 1, 0).map(([x, z]): [number, number] => [x + 0.5, z]) // x ∈ [0, 1]
+    const waist = rectPolygon(1, 1, 0).map(([x, z]): [number, number] => [x - 0.5, z]) // x ∈ [-1, 0]
+    const d: DeckAnchors = { spawn: [0, 0, 0], walk: [{ points: waist, y: 0 }, { points: quarter, y: 0.1 }], ramps: [], obstacles: [], stations: [] }
+    expect(clearAhead(d, [-0.3, 0], yawToward(1, 0), undefined, undefined, 0)).toBeCloseTo(0.3, 9) // waist → quarterdeck front: wall
+    expect(clearAhead(d, [0.3, 0], yawToward(-1, 0), undefined, undefined, 1)).toBe(SPAWN_CLEAR_AHEAD) // quarterdeck → down to the waist: clear
+    expect(clearAhead(d, [-0.3, 0], yawToward(-1, 0), undefined, undefined, 0)).toBe(SPAWN_CLEAR_AHEAD) // over the stern rail: clear
+    expect(clearAhead(d, [-0.3, 0.3], yawToward(0, 1), undefined, undefined, 0)).toBe(SPAWN_CLEAR_AHEAD) // over the beam rail: clear
+  })
+
+  it('clearLookYaw keeps the enemy facing when clear, else the first clear fallback, else the farthest view', () => {
+    const d: DeckAnchors = { spawn: [0, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [{ center: [0.3, 0], radius: 0.1 }], stations: [] }
+    const ahead = yawToward(1, 0)
+    expect(clearLookYaw(d, [0, 0], yawToward(0, 1), spawnYawFallbacks(1))).toBe(yawToward(0, 1))
+    expect(clearLookYaw(d, [0, 0], ahead, spawnYawFallbacks(-1))).toBe(yawToward(0, -1))
+    const boxed: DeckAnchors = { ...d, obstacles: [{ center: [0.3, 0], radius: 0.1 }, { center: [0, 0.2], radius: 0.1 }, { center: [0, -0.4], radius: 0.1 }, { center: [-0.5, 0], radius: 0.1 }] }
+    const pick = clearLookYaw(boxed, [0, 0], ahead, spawnYawFallbacks(1))
+    const seen = clearAhead(boxed, [0, 0], pick)
+    for (const y of [ahead, ...spawnYawFallbacks(1)]) expect(seen).toBeGreaterThanOrEqual(clearAhead(boxed, [0, 0], y))
+    expect(seen).toBeGreaterThan(clearAhead(boxed, [0, 0], yawToward(-1, 0))) // the sweep found a better diagonal
+  })
+
+  it('every class, horizontal and vertical: the spawn view is clear for SPAWN_CLEAR_AHEAD (or as clear as the deck allows)', () => {
+    for (const id of ids) {
+      for (const orientation of ['horizontal', 'vertical'] as const) {
+        const { deck, p, localYaw, side, yaw } = controllerSpawn(id, orientation)
+        const label = `${id} ${orientation}`
+        const d = clearAhead(deck, [p.x, p.z], yaw, undefined, undefined, p.level)
+        const alternatives = [localYaw, ...spawnYawFallbacks(side), ...Array.from({ length: 16 }, (_, i) => localYaw + (i * Math.PI) / 8)].map((y) => clearAhead(deck, [p.x, p.z], y, undefined, undefined, p.level))
+        expect(d, label).toBeGreaterThanOrEqual(Math.min(SPAWN_CLEAR_AHEAD, Math.max(...alternatives)) - 1e-9)
+        expect(d, label).toBeGreaterThan(0.1)
+      }
+    }
+  })
+
+  it('rayToPolygonEdge: distance to the rail along a direction', () => {
+    expect(rayToPolygonEdge([0, 0], [0, 1], rect)).toBeCloseTo(0.5, 9)
+    expect(rayToPolygonEdge([0, 0.3], [0, -1], rect)).toBeCloseTo(0.8, 9)
+    expect(rayToPolygonEdge([1, 0], [1, 0], rect)).toBeCloseTo(1, 9)
+    expect(rayToPolygonEdge([0, 0.5], [0, 1], rect)).toBeCloseTo(0, 9)
+    expect(rayToPolygonEdge([0, 0], [1, 0], [[-1, -1], [-1, 1]])).toBe(Infinity)
+  })
+
+  it('spawnStand keeps RAIL_INSET of deck before the facing rail, or the centreline on a narrow deck', () => {
+    const d: DeckAnchors = { spawn: [0, 0, -0.45], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [], stations: [] }
+    const toEnemy = yawToward(0, 1)
+    const p = spawnStand(d, { x: 0, z: -0.45, y: 0, level: 0 }, 1, toEnemy)
+    expect(p.z).toBeCloseTo(0.5 - RAIL_INSET - PLAYER_RADIUS, 9)
+    expect(p.x).toBe(0)
+    expect(railAhead(d, [p.x, p.z], 0, toEnemy)).toBeCloseTo(RAIL_INSET + PLAYER_RADIUS, 9)
+    // already deep enough: only mirrored
+    expect(spawnStand(d, { x: 0.2, z: -0.1, y: 0, level: 0 }, -1, yawToward(0, -1)).z).toBeCloseTo(-0.1, 9)
+    const narrow: DeckAnchors = { ...d, walk: [{ points: rectPolygon(4, 0.2, 0), y: 0 }] }
+    expect(spawnStand(narrow, { x: 0, z: -0.09, y: 0, level: 0 }, 1, toEnemy).z).toBeCloseTo(0, 9)
+    // boxed in at the spawn: backs off along the deck to the nearest stand with a clear view
+    const trunk: DeckAnchors = { ...d, obstacles: [{ center: [0, 0.3], radius: 0.1 }, { center: [0.2, 0.2], radius: 0.1 }, { center: [-0.2, 0.2], radius: 0.1 }] }
+    const off = spawnStand(trunk, { x: 0, z: -0.45, y: 0, level: 0 }, 1, toEnemy)
+    expect(Math.abs(off.x)).toBeGreaterThan(0.1)
+    expect(clearAhead(trunk, [off.x, off.z], clearLookYaw(trunk, [off.x, off.z], toEnemy, spawnYawFallbacks(1)))).toBe(SPAWN_CLEAR_AHEAD)
+  })
+
+  it('every class, horizontal and vertical: the spawn stand has ≥ RAIL_INSET of deck ahead before the rail', () => {
+    for (const id of ids) {
+      for (const orientation of ['horizontal', 'vertical'] as const) {
+        const { deck, p, side, yaw } = controllerSpawn(id, orientation)
+        const label = `${id} ${orientation}`
+        expect(pointInPolygon([p.x, p.z], deck.walk[p.level].points), label).toBe(true)
+        // the beam-wise inset the stand guarantees — unless a centreline fixture (the frigate's wheel) leaves no room:
+        // then it stands as far from the rail as the fixture allows
+        const toRail = rayToPolygonEdge([p.x, p.z], [0, side], deck.walk[p.level].points)
+        const closer: [number, number] = [p.x, p.z - side * 0.02]
+        const fixtureBehind = deck.obstacles.some((o) => Math.hypot(closer[0] - o.center[0], closer[1] - o.center[1]) < o.radius + PLAYER_RADIUS)
+        expect(toRail >= RAIL_INSET + PLAYER_RADIUS - 1e-6 || fixtureBehind, `${label}: ${toRail.toFixed(3)} to the rail`).toBe(true)
+        expect(toRail, label).toBeGreaterThan(0.1)
+        // and along the look: either ≥ RAIL_INSET of deck before the edge, or that edge is a deck break (another level continues)
+        const ahead = railAhead(deck, [p.x, p.z], p.level, yaw)
+        if (ahead < RAIL_INSET) {
+          const f = lookForward(yaw, 0)
+          const len = Math.hypot(f[0], f[2])
+          // (the authored levels leave a gap at a break: probe a little past the edge, or accept a ramp end nearby)
+          const hit: [number, number] = [p.x + (f[0] / len) * ahead, p.z + (f[2] / len) * ahead]
+          const beyond = [0.03, 0.08, 0.15].map((d): [number, number] => [hit[0] + (f[0] / len) * d, hit[1] + (f[2] / len) * d])
+          const otherLevel = beyond.some((b) => deck.walk.some((w, i) => i !== p.level && pointInPolygon(b, w.points)))
+          const rampNear = deck.ramps.some((r) => Math.min(Math.hypot(hit[0] - r.a[0], hit[1] - r.a[1]), Math.hypot(hit[0] - r.b[0], hit[1] - r.b[1])) < 0.3)
+          expect(otherLevel || rampNear, `${label}: edge ${ahead.toFixed(3)} ahead is a rail`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('the vertical man-o-war no longer stares into the mizzen', () => {
+    const v = controllerSpawn('man-o-war', 'vertical')
+    expect(clearAhead(v.deck, [v.p.x, v.p.z], v.localYaw)).toBeLessThan(SPAWN_CLEAR_AHEAD)
+    expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw)).toBe(SPAWN_CLEAR_AHEAD)
+    const h = controllerSpawn('man-o-war', 'horizontal')
+    expect(h.yaw).toBe(h.localYaw)
   })
 })

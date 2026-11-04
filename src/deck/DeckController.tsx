@@ -47,7 +47,14 @@ import {
   pickStation,
   resolveDeckAnchors,
   sinkProgressFor,
-  spawnPose,
+  blockedBands,
+  clearLookYaw,
+  hitSections,
+  SPAWN_PITCH,
+  spawnPoseAvoiding,
+  spawnStand,
+  spawnYawFallbacks,
+  withBlocked,
   startJump,
   stationUsable,
   stationsOf,
@@ -125,10 +132,13 @@ export function DeckController() {
   const geometry = useMemo(() => {
     if (!ship) return null
     const anchors = SHIPS[ship.spec.id].anchors
-    const deckA = resolveDeckAnchors(anchors, ship.spec.id)
+    // hit hull sections (breach + fire) are no-walk bands of this ship instance's deck
+    const hit = hitSections(ship)
+    const sections = ship.cells.length
+    const deckA = withBlocked(resolveDeckAnchors(anchors, ship.spec.id), blockedBands(hit, sections))
     const transform = shipWorldTransform(ship, ownOrigin)
     const stations: UsableStation[] = stationsOf(anchors, deckA).map((s) => ({ ...s, usable: stationUsable(s, transform.rotationY, transform.position, foeCenter) }))
-    return { anchors, deckA, transform, stations, hull: anchors.hull, seed: placedShipSeed(ship), eyeHeight: walkEyeHeight(deckA, stations) }
+    return { anchors, deckA, transform, stations, hull: anchors.hull, seed: placedShipSeed(ship), eyeHeight: walkEyeHeight(deckA, stations), hit, sections }
   }, [ship, ownOrigin, foeCenter])
 
   // --- mutable per-frame state -------------------------------------------------------------------------------
@@ -165,13 +175,15 @@ export function DeckController() {
     const { rotationY, position } = geometry.transform
     const worldYaw = Math.atan2(-(foeCenter[0] - position[0]), -(foeCenter[2] - position[2]))
     const localYaw = worldYaw - rotationY
-    let p = spawnPose(geometry.deckA)
-    const side = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
-    p = stepOnDeck({ ...p, z: side * Math.abs(p.z) }, 0, 0, geometry.deckA)
+    // an intact, unburning section (farthest from the fire), never a breach
+    let p = spawnPoseAvoiding(geometry.deckA, geometry.hit, geometry.sections)
+    const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
+    p = spawnStand(geometry.deckA, p, side, localYaw) // their side of the deck, RAIL_INSET back from the rail, view clear
     pose.current = p
     vel.current = { x: 0, z: 0 }
     air.current = GROUNDED
-    look.current = { yaw: localYaw, pitch: 0 }
+    // a vertical ship faces the enemy along its own deck — into a mast trunk; look where the near view is clear
+    look.current = { yaw: clearLookYaw(geometry.deckA, [p.x, p.z], localYaw, spawnYawFallbacks(side), undefined, p.level), pitch: SPAWN_PITCH }
     glance.current = { yaw: 0, pitch: 0 }
     tumble.current = 0
   }, [foeCenter])
