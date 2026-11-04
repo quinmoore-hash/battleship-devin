@@ -11,10 +11,11 @@ import { useGameStore } from '../../store/gameStore'
 import { Flag } from '../kit'
 import type { ShipDefinition, ShipModelProps } from '../types'
 import { Bowsprit, DeckFurniture, Damage, Figurehead, Flags, GunDecks, Hull, Jibs, Mast, NoShadowCasting, Rigging, SternGallery, type SailState } from './parts'
+import { rigCulled } from '../kit/rigCull'
 import { MAN_O_WAR_ANCHORS, MASTS, mastOnCell, mastSnap, sinkTorn, smoothstep } from './spec'
 import { manOWarMaterials } from './textures'
 
-function ManOWarModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing }: ShipModelProps) {
+function ManOWarModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing, rigCullX = null }: ShipModelProps) {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const m = manOWarMaterials(livery)
   const effectiveLod = (quality === 'low' ? Math.max(lod, 1) : lod) as 0 | 1 | 2
@@ -62,7 +63,7 @@ function ManOWarModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'hi
           }
         />
       ))}
-      <Rigging {...common} snaps={snaps} />
+      <Rigging {...common} snaps={snaps} hide={MASTS.map((s) => rigCulled(s.x, rigCullX))} />
       {effectiveLod < 2 && (
         <>
           <Jibs m={m} sail={sailStates[0]} snap={snaps[0]} />

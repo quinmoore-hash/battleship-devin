@@ -12,6 +12,7 @@ import { seededRandom } from '../../vfx/random'
 import { Anchor, Barrel, Cannon, Crate, HullHole, RopeCoil, Wheel } from '../kit'
 import type { CannonRef, CellDamage, Lod, ShipModelProps } from '../types'
 import { CANNON_SCALE, FRIGATE_ANCHORS, GUN_AXIS_Y, MUZZLE_OUT } from './anchors'
+import { rigCulled } from '../kit/rigCull'
 import { FIT, FRIGATE as F, GUN_PORT_W, GUN_X, MASTS, bulwarkHalfWidth, cellCenterX, deckY, gunCell, gunX, railY, sectionHalfWidth } from './form'
 import { PROP_SPOTS, buildFurniture } from './furniture'
 import { box, breachGeometry, mergeGeometries } from './geometry'
@@ -116,7 +117,7 @@ function CellDamageFx({ cell, state, mats, lod }: { cell: number; state: CellDam
   )
 }
 
-export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [] }: ShipModelProps) {
+export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [], rigCullX = null }: ShipModelProps) {
   const mats = frigateMaterials(livery, quality)
   const hull = buildHullParts(lod)
   const furniture = buildFurniture(lod)
@@ -158,6 +159,7 @@ export function FrigateModel({ livery, damage, sinkProgress = 0, lod = 0, qualit
           <FrigateMast
             key={i}
             index={i}
+            hideRigging={rigCulled(MASTS[i].x, rigCullX)}
             mats={mats}
             livery={livery}
             sails={sails}

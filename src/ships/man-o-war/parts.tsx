@@ -891,10 +891,10 @@ const bowRiggingGeo = cached((lodKey: string) =>
   ),
 )
 
-export function Rigging({ m, lod, snaps }: PartProps & { snaps: number[] }) {
+export function Rigging({ m, lod, snaps, hide = [] }: PartProps & { snaps: number[]; hide?: boolean[] }) {
   return (
     <group>
-      {MASTS.map((_, i) => (snaps[i] > 0.05 ? null : <mesh key={i} geometry={riggingGeo(`${i},${lod}`)} material={m.rope} />))}
+      {MASTS.map((_, i) => (snaps[i] > 0.05 || hide[i] ? null : <mesh key={i} geometry={riggingGeo(`${i},${lod}`)} material={m.rope} />))}
       <mesh geometry={bowRiggingGeo(String(lod))} material={m.rope} />
       <Channels m={m} lod={lod} />
     </group>

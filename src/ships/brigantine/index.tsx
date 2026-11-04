@@ -57,6 +57,7 @@ import {
   SwivelGun,
   Windlass,
 } from './parts'
+import { rigCulled } from '../kit/rigCull'
 import { Cloth, Ensign, ForeMast, MAIN_BOOM_LENGTH, MAIN_BOOM_Y, MainMast, Pennant, RopeSet, type RopeLine, gaffPose, shroudLines } from './rig'
 
 export { BRIGANTINE_ANCHORS } from './anchors'
@@ -181,7 +182,7 @@ function mainRopes(lod: Lod, sails: number): RopeLine[] {
   return lines
 }
 
-function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [] }: ShipModelProps) {
+function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [], rigCullX = null }: ShipModelProps) {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const motion = reducedMotion ? 0 : 1
   const mats = useMemo(() => brigMaterials(livery), [livery])
@@ -402,8 +403,8 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
       {lod < 2 && (
         <>
           <RopeSet lines={hullLines} mats={mats} lod={lod} visible={bowspritSnap < 0.3} />
-          <RopeSet lines={foreLines} mats={mats} lod={lod} visible={foreSnap < 0.15} />
-          <RopeSet lines={mainLines} mats={mats} lod={lod} visible={mainSnap < 0.15} />
+          <RopeSet lines={foreLines} mats={mats} lod={lod} visible={foreSnap < 0.15 && !rigCulled(FOREMAST_X, rigCullX)} />
+          <RopeSet lines={mainLines} mats={mats} lod={lod} visible={mainSnap < 0.15 && !rigCulled(MAINMAST_X, rigCullX)} />
         </>
       )}
 

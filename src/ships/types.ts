@@ -37,6 +37,8 @@ export interface ShipModelProps {
   phase?: number
   /** Which cannons are recoiling right now (cell index + side), driven by the cinematic director. */
   firing?: readonly CannonRef[]
+  /** Ship-local x of the manned cannon: the standing rigging of masts within `RIG_CULL_RADIUS` is hidden (kit/rigCull). */
+  rigCullX?: number | null
 }
 
 export type Side = 'port' | 'starboard'

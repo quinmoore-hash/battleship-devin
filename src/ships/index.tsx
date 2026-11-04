@@ -114,6 +114,8 @@ export interface FleetProps {
   staticWrecks?: boolean
   /** `PlacedShip.uid` the player is standing on ("On deck"): that ship gets the lod-0 deck dressing. Never set in the overview. */
   dressedUid?: string | null
+  /** Ship-local x of the manned cannon on the dressed ship (hides the rigging of masts beside it, kit/rigCull). */
+  rigCullX?: number | null
 }
 
 /**
@@ -133,7 +135,7 @@ function Afloat({ position, depth, rotationY, children }: { position: Vec3; dept
   )
 }
 
-export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality, staticWrecks, dressedUid }: FleetProps) {
+export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYOUT.player.origin, cellSize = 1, sinkProgress, firing, lod, quality, staticWrecks, dressedUid, rigCullX = null }: FleetProps) {
   return (
     <group>
       {ships.map((ship) => {
@@ -150,10 +152,10 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
             <group rotation={[pose.roll, 0, pose.pitch]}>
               {lod === 'auto' && sink < 1 ? (
                 <LodGroup position={position} hullLength={ship.spec.length}>
-                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={dressedUid === ship.uid ? 0 : autoLod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} phase={ship.origin.x * 1.7 + ship.origin.y} />}
+                  {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={dressedUid === ship.uid ? 0 : autoLod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />}
                 </LodGroup>
               ) : (
-                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} phase={ship.origin.x * 1.7 + ship.origin.y} />
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={lod === 'auto' ? 2 : lod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
           </Afloat>
