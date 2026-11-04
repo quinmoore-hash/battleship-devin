@@ -162,11 +162,6 @@ export function hullHalfWidth(x: number, y: number): number {
   return b * (1 - 0.2 * Math.pow(u, 1.4))
 }
 
-/** Which anchor cannons sit on a cell (bow = 0). */
-export function gunsInCell(cell: number): GunSpec[] {
-  return GUNS.filter((g) => cellOf(g.x) === cell)
-}
-
 export function muzzleOf(g: GunSpec, side: Side): Vec3 {
   const y = g.deck === 'lower' ? LOWER_GUN_Y : UPPER_GUN_Y
   return [g.x, y, sideSign(side) * (hullHalfWidth(g.x, y) + 0.14)]

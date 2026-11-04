@@ -9,8 +9,6 @@ import { seededRandom } from '../../vfx/random'
 import type { HullSection } from '../kit'
 import { hullHalfWidth, keelY, railY, X_BOW, X_STERN } from './spec'
 
-export type Tri = [number, number, number]
-
 const tmpA = new THREE.Vector3()
 const tmpB = new THREE.Vector3()
 const tmpC = new THREE.Vector3()
