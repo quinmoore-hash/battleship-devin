@@ -8,7 +8,7 @@ import type { CannonRef } from '../ships/types'
 import { sinkProgressAt } from '../vfx/sinking/timeline'
 import type { Vec3 } from '../scene/layout'
 import { ownBoardOrigin, planShot, type ShotPlan } from './battery'
-import { POV, nextAfloatUid, overboardFor, playerEye, povBeatEvents, povFor, readDeckState, shipWorldPosition, stationBattery, stationMuzzle, type PovContext } from './pov'
+import { POV, abandonAtFor, nextAfloatUid, overboardFor, playerEye, povBeatEvents, povFor, readDeckState, shipWorldPosition, sinkHoldLook, sinkViewFor, stationBattery, stationMuzzle, type PovContext } from './pov'
 import { allowShake, beatAt, buildSequence, createSequenceClock, maxBalls, timeScaleAt, type BeatName, type BeatState, type Budget, type Sequence, type SequenceClock } from './sequence'
 import type { CinematicDirector, CinematicEvent } from './types'
 
@@ -266,6 +266,15 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       const overboard = pov ? overboardFor(pov, event, fleets[pov.perspective], playerEye(pov)) : null
       if (pov && overboard) pov.overboard = overboard
       const seq = buildSequence(event, level, reducedMotionOf(), budgetOf(), pov !== null, overboard !== null)
+      if (pov && event.type === 'sink') {
+        if (pov.standingHit) pov.abandonAt = abandonAtFor(pov, seq)
+        else if (pov.ownSide) {
+          // another own ship goes down: hold the look on it, or borrow the camera when the standing ship's own rigging hides it
+          const ship = fleets[event.owner].find((s) => s.uid === (event.uid ?? event.shipId))
+          pov.sinkTarget = ship ? shipWorldPosition(ship, event.owner) : null
+          pov.sinkView = pov.sinkTarget ? sinkViewFor(pov, pov.sinkTarget, playerEye(pov)) : 'look'
+        }
+      }
       // on deck a manned gun fires the shot; otherwise (and for Broadside's explicit battery) the usual pick
       const battery = event.type === 'shot' ? event.battery ?? stationBattery(pov) ?? undefined : undefined
       const plan =
@@ -299,8 +308,9 @@ export function createDirector(opts: DirectorOptions = {}): Director {
         store.setState({ active: null, busy: false, firing: {}, impacted: false, shake: 0, letterbox: false, completed: store.getState().completed + 1, ...(event.type === 'sink' ? { sinkProgress: { ...store.getState().sinkProgress, [event.uid ?? event.shipId]: 1 } } : {}) })
         return Promise.resolve()
       }
-      // on deck the director borrows the camera for shots (follow-cam / overboard); sinks, horns and victories leave it with the deck
-      const borrow = !!active.pov && event.type === 'shot'
+      // on deck the director borrows the camera for shots (follow-cam / overboard) and for an own ship sinking out of sight
+      // behind the standing ship's rigging; other sinks, horns and victories leave it with the deck
+      const borrow = !!active.pov && (event.type === 'shot' || active.pov.sinkView === 'borrow')
       if (borrow) {
         active.pov!.cameraBorrowed = true
         deckCameraLease.owner = 'director'
@@ -327,7 +337,12 @@ export function createDirector(opts: DirectorOptions = {}): Director {
       const { beat } = beatAt(seq, clock.t, beatScratch)
       const name = beat?.name ?? null
       if (name !== active.beat) enterBeat(active, name)
-      if (active.pov?.standingHit && clock.t >= POV.abandonAt) abandonShip(active)
+      if (active.pov) {
+        if (active.pov.standingHit && clock.t >= (active.pov.abandonAt ?? POV.abandonAt)) abandonShip(active)
+        // another own ship sinking in view: keep the look on it for the whole sink beat
+        const hold = sinkHoldLook(active.event, active.pov, name, active.pov.sinkTarget ?? null, seq.reducedMotion)
+        if (hold) deckBus.emit(hold)
+      }
       if (seq.sink && active.uid) {
         const p = sinkProgressAt(clock.t, seq.sink)
         const ts = timeScaleAt(seq, clock.t)

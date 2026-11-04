@@ -169,6 +169,37 @@ function povShotPose(out: Pose, active: ActiveCinematic, plan: NonNullable<Activ
 }
 
 /**
+ * On deck, another own ship sinks where the standing ship's own masts and sails hide it: the borrowed camera rises from the
+ * player's eye to a vantage above the rigging, a little toward the wreck, and holds on it (drifting slowly, following the hull
+ * down) for the whole sink; the `return` beat eases back to the deck pose the director borrowed.
+ */
+function povSinkPose(out: Pose, active: ActiveCinematic, beat: Beat | null, k: number, start: Pose, deck: DeckPov): void {
+  const { event } = active
+  if (event.type !== 'sink') return
+  const ship = active.fleets[event.owner].find((s) => s.uid === (event.uid ?? event.shipId))
+  if (!ship || beat?.name !== 'sink') {
+    lerpPose(out, start, deck.home, smoothstep(k))
+    return
+  }
+  const C = set(tmp.a, shipWorldPosition(ship, event.owner))
+  const H = deck.home.position
+  const standing = active.pov?.standing
+  const mastTop = standing ? SHIPS[standing.spec.id].anchors.hull.height : 1.6
+  const away = tmp.dir.set(H.x - C.x, 0, H.z - C.z)
+  const d = away.length()
+  if (d < 1e-6) away.set(0, 0, 1)
+  else away.multiplyScalar(1 / d)
+  // stay on the player's side of the wreck, at least a hull's width away, drifting a little round it as it goes down
+  away.applyAxisAngle(UP, k * 0.35)
+  const r = Math.max(2.6, d * 0.65)
+  const vantage: Pose = { position: tmp.b, target: tmp.n, fov: 46 - k * 4 }
+  vantage.position.copy(C).addScaledVector(away, r)
+  vantage.position.y = Math.max(H.y + mastTop + 0.4, C.y + 1.2) + k * 0.3
+  vantage.target.set(C.x, C.y + 0.4 - k * 0.5, C.z)
+  lerpPose(out, start, vantage, smoothstep(k / 0.18))
+}
+
+/**
  * The wanted camera pose for `active` at `beat` / `k`. `start` is the camera pose when the beat began, so
  * eases run from wherever the camera actually was. Returns `cut` = true when the pose should be applied
  * without smoothing (a hard cut). `perspective` is the side the camera films from (hot-seat: the active captain);
@@ -189,6 +220,10 @@ export function wantedPose(out: Pose, active: ActiveCinematic, beat: Beat | null
     const cut = povShotPose(out, active, plan, beat, k, start, deck)
     // reduced motion on deck: cuts instead of moves
     return cut || active.seq.reducedMotion
+  }
+  if (deck && event.type === 'sink') {
+    povSinkPose(out, active, beat, k, start, deck)
+    return active.seq.reducedMotion
   }
   if (event.type === 'shot' && plan) {
     // the AI fires from the unseen gun line (no shooter); a hot-seat captain's Navy ships are real and filmed like the pirates'
@@ -344,10 +379,11 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       home.current = null
       return
     }
-    // on deck the director only drives the camera for shots it borrowed it for (sinks / horns / victories leave it with the deck);
-    // V mid-sequence drops the deck → the sequence finishes on the overview path and the lease is handed back
+    // on deck the director only drives the camera for sequences it borrowed it for (shots; an own ship sinking behind the
+    // standing ship's rigging) — other sinks / horns / victories leave it with the deck; V mid-sequence drops the deck → the
+    // sequence finishes on the overview path and the lease is handed back
     const borrowed = deckCameraLease.owner === 'director'
-    const povDrive = !!active.pov && active.event.type === 'shot' && deckOn && borrowed
+    const povDrive = !!active.pov?.cameraBorrowed && deckOn && borrowed
     if (active.pov && !povDrive) {
       if (borrowed) releaseLease()
       if (deckOn) {
