@@ -21,7 +21,7 @@ import type { Livery } from './types'
  * (`anchors.deck.spawn`, else a quarterdeck guess) at `deckY + EYE_HEIGHT`, near `DECK_NEAR`, fov `DECK_FOV`, and
  * rides the hull on the waves. `look`: `fwd` down the deck toward the bow, `rail` across the port rail toward
  * the enemy board, `aft` toward the stern, `port` = `rail` pitched up to the horizon, `down` from `eye=x,y,z` (ship frame,
- * overrides the spawn; no eye-height offset) for a top-down check of the deck.
+ * overrides the spawn; no eye-height offset) for a top-down check of the deck, or any `look=x,y,z` direction (ship frame).
  */
 const LOOKS: Record<string, Vec3> = {
   fwd: [1, -0.08, 0],
@@ -83,7 +83,8 @@ export function DeckDemo() {
   const q = new URLSearchParams(window.location.search)
   const id = (q.get('ship') as ShipId | null) ?? 'man-o-war'
   const shipId: ShipId = SHIPS[id] ? id : 'man-o-war'
-  const look = LOOKS[q.get('look') ?? 'fwd'] ?? LOOKS.fwd
+  const lookParam = q.get('look')?.split(',').map(Number)
+  const look = lookParam?.length === 3 && lookParam.every(Number.isFinite) ? (lookParam as Vec3) : (LOOKS[q.get('look') ?? 'fwd'] ?? LOOKS.fwd)
   // same tiering as GameWorld on deck: the standing ship at the tier's lod (Medium = baked lod 1, High = live lod 0),
   // the rest of the own fleet one step coarser, the enemy wrecks by distance
   const tierLod = usePerf().lod
