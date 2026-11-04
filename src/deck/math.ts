@@ -350,7 +350,7 @@ function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
   return Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t))
 }
 
-export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnchors): WalkPose {
+export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: WalkableDeck): WalkPose {
   const levelOk = deck.walk[from.level] ? from.level : 0
   const start: Pt = [from.x, from.z]
   let level = levelOk
@@ -392,7 +392,22 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
       ? deck.obstacles.filter((o) => inside(o, start) && inside(o, q) && !pointInPolygon(pushOutOfObstacles(start, [o]), walk))
       : []
   if (pinned.length) q = settle(deck.obstacles.filter((o) => !pinned.includes(o)))
+  q = keepOutOfBands(start, q, deck, walk)
   return { x: q[0], z: q[1], y: deckHeightAt(q, level, deck), level }
+}
+
+/**
+ * The step landed on a hit hull section (`deck.blocked`): leave the band on the side the player came from, settled on
+ * the polygon and clear of obstacles. A level the breach swallows whole cannot be left along x — then the step is
+ * refused from outside, but a player already standing in the band when the ball struck keeps walking (never pinned).
+ */
+function keepOutOfBands(start: Pt, q: Pt, deck: WalkableDeck, walk: readonly Pt[]): Pt {
+  const band = deck.blocked?.find((b) => inBand(q[0], b))
+  if (!band) return q
+  let s: Pt = [start[0] <= (band.x0 + band.x1) / 2 ? band.x0 - PLAYER_RADIUS : band.x1 + PLAYER_RADIUS, q[1]]
+  for (let pass = 0; pass < 3; pass++) s = clampToPolygon(pushOutOfObstacles(s, deck.obstacles), walk)
+  if (!deck.blocked!.some((b) => inBand(s[0], b))) return s
+  return deck.blocked!.some((b) => inBand(start[0], b)) ? q : start
 }
 
 
@@ -428,14 +443,144 @@ export function stepJump(air: AirPose, dt: number, deckBefore: number, deckAfter
   return { height: Math.max(0, height), vy, airborne: true }
 }
 
-/** Where boarding puts the player: the spawn, snapped onto the deck. */
-export function spawnPose(deck: DeckAnchors): WalkPose {
+/** Where boarding puts the player: the spawn, snapped onto the deck (and out of any blocked band). */
+export function spawnPose(deck: WalkableDeck): WalkPose {
   const p: Pt = [deck.spawn[0], deck.spawn[2]]
   const level = Math.max(0, levelAt(p, deck))
   return stepOnDeck({ x: p[0], z: p[1], y: deck.walk[level]?.y ?? deck.spawn[1], level }, 0, 0, deck)
 }
 
+// ---- damage: hit hull sections are no-walk bands ---------------------------------------------------------------
+
+/** A band of ship-space x the player may not stand in (a hit hull section: breach + fire). */
+export interface XBand {
+  x0: number
+  x1: number
+}
+/** Resolved deck anchors of one ship instance: the authored deck plus its hit sections as no-walk bands. */
+export type WalkableDeck = DeckAnchors & { blocked?: readonly XBand[] }
+
+/** Hull cells are one ship unit long, so a section is the ±0.5 band around `sectionX`. */
+export const SECTION_HALF = 0.5
+
+/** Ship-space x of hull cell `i` of an `n`-cell ship: the origin cell is the stern (−x), as the breach / fire placement (`impactPointFor`) and `shipWorldTransform` lay the cells out. */
+export const sectionX = (i: number, n: number): number => i - (n - 1) / 2
+
+/** Index of the hull section under ship-space `x` (clamped to the hull). */
+export const sectionAtX = (x: number, n: number): number => clamp(Math.round(x + (n - 1) / 2), 0, n - 1)
+
+/** Indices of the ship's hit hull cells (the engine's hit list → cell order). */
+export const hitSections = (ship: { cells: readonly Coord[]; hits: readonly Coord[] }): number[] =>
+  ship.cells.map((c, i) => (ship.hits.some((h) => h.x === c.x && h.y === c.y) ? i : -1)).filter((i) => i >= 0)
+
+/** No-walk bands for the hit sections `hit` of an `n`-cell ship, one hull cell wide each. */
+export const blockedBands = (hit: readonly number[], n: number): XBand[] =>
+  hit.filter((i) => i >= 0 && i < n).map((i) => ({ x0: sectionX(i, n) - SECTION_HALF, x1: sectionX(i, n) + SECTION_HALF }))
+
+/** Is a player of radius `r` standing at `x` overlapping the band? */
+export const inBand = (x: number, b: XBand, r = PLAYER_RADIUS): boolean => x > b.x0 - r && x < b.x1 + r
+
+/** `deck` with `blocked` attached; the same object when nothing is blocked (the fallback-deck identity is kept). */
+export function withBlocked(deck: DeckAnchors, blocked: readonly XBand[]): WalkableDeck {
+  if (!blocked.length) return deck
+  const d: WalkableDeck = { ...deck, blocked }
+  if (fallbackDecks.has(deck)) fallbackDecks.add(d)
+  return d
+}
+
+/**
+ * Where boarding a damaged ship puts the player: on the intact section farthest from the fire (nearest the authored
+ * spawn among equals), at the walkable point of that section closest to the authored spawn — never on a hit section,
+ * never inside an obstacle. Falls back to `spawnPose` when the ship is whole (or nothing intact is walkable).
+ */
+export function spawnPoseAvoiding(deck: WalkableDeck, hit: readonly number[], n: number): WalkPose {
+  const bands = deck.blocked ?? blockedBands(hit, n)
+  const d = deck.blocked ? deck : withBlocked(deck, bands)
+  const hits = hit.filter((i) => i >= 0 && i < n)
+  if (!hits.length) return spawnPose(d)
+  const home: Pt = [deck.spawn[0], deck.spawn[2]]
+  const intact = Array.from({ length: n }, (_, i) => i).filter((i) => !hits.includes(i))
+  const fireDistance = (i: number) => Math.min(...hits.map((h) => Math.abs(h - i)))
+  intact.sort((a, b) => fireDistance(b) - fireDistance(a) || Math.abs(sectionX(a, n) - home[0]) - Math.abs(sectionX(b, n) - home[0]))
+  const step = 0.05
+  for (const i of intact) {
+    const cx = sectionX(i, n)
+    let best: { p: Pt; level: number; d: number } | null = null
+    d.walk.forEach((w, level) => {
+      const zs = w.points.map((p) => p[1])
+      const z0 = Math.min(...zs)
+      const z1 = Math.max(...zs)
+      for (let x = cx - SECTION_HALF + PLAYER_RADIUS; x <= cx + SECTION_HALF - PLAYER_RADIUS + 1e-9; x += step) {
+        if (bands.some((b) => inBand(x, b))) continue
+        for (let z = z0; z <= z1 + 1e-9; z += step) {
+          const p: Pt = [x, z]
+          if (!pointInPolygon(p, w.points)) continue
+          if (d.obstacles.some((o) => dist(p, o.center) < o.radius + PLAYER_RADIUS)) continue
+          const dd = dist(p, home)
+          if (!best || dd < best.d) best = { p, level, d: dd }
+        }
+      }
+    })
+    if (best) {
+      const { p, level } = best as { p: Pt; level: number }
+      return stepOnDeck({ x: p[0], z: p[1], y: d.walk[level].y, level }, 0, 0, d)
+    }
+  }
+  return spawnPose(d)
+}
+
 // ---- look -----------------------------------------------------------------------------------------------------
+
+/** How far ahead of a freshly spawned player the view must be clear of obstacles (a mast trunk 0.2 u ahead fills the screen). */
+export const SPAWN_CLEAR_AHEAD = 0.6
+
+/** Distance along the look direction `yaw` from `p` before the ray (a player-radius wide) meets an obstacle; ≥ `reach` when clear. */
+export function clearAhead(deck: DeckAnchors, p: Pt, yaw: number, reach = SPAWN_CLEAR_AHEAD, radius = PLAYER_RADIUS): number {
+  const f = lookForward(yaw, 0)
+  let best = reach
+  for (const o of deck.obstacles) {
+    // ray–circle: |p + t·f − c| = r + radius, smallest t ≥ 0
+    const r = o.radius + radius
+    const ox = p[0] - o.center[0]
+    const oz = p[1] - o.center[1]
+    const b = ox * f[0] + oz * f[2]
+    const c = ox * ox + oz * oz - r * r
+    if (c <= 1e-9) {
+      // inside or touching (a clamp leaves the player exactly on the clearance ring): blocked only when looking into it
+      if (b < 0) return 0
+      continue
+    }
+    const disc = b * b - c
+    if (disc < 0 || b >= 0) continue
+    const t = -b - Math.sqrt(disc)
+    if (t < best) best = t
+  }
+  return best
+}
+
+/**
+ * The spawn facing: `yaw` (toward the enemy waters) when the first `reach` ahead is free of obstacles, else the first
+ * of `fallbacks` that is (the enemy's side of the ship, then the other beam, then along the deck), else whichever of
+ * them sees farthest.
+ */
+export function clearLookYaw(deck: DeckAnchors, p: Pt, yaw: number, fallbacks: readonly number[], reach = SPAWN_CLEAR_AHEAD): number {
+  let best = yaw
+  let bestD = clearAhead(deck, p, yaw, reach)
+  if (bestD >= reach) return yaw
+  for (const y of fallbacks) {
+    const d = clearAhead(deck, p, y, reach)
+    if (d >= reach) return y
+    if (d > bestD) {
+      best = y
+      bestD = d
+    }
+  }
+  return best
+}
+
+/** Yaws to try after the enemy-facing one: the enemy's beam (`side` = sign of z toward the enemy), the other beam, bow, stern. */
+export const spawnYawFallbacks = (side: 1 | -1): number[] => [yawToward(0, side), yawToward(0, -side), yawToward(1, 0), yawToward(-1, 0)]
+
 
 /** Yaw (radians, 'YXZ' camera convention: yaw 0 looks down −z) that faces the horizontal direction (dx, dz). */
 export const yawToward = (dx: number, dz: number): number => Math.atan2(-dx, -dz)
