@@ -8,6 +8,9 @@ import { BoardGrid } from '../../scene/BoardGrid'
 import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
 import { Fleet, SHIPS, Ship } from '../../ships'
 import { resolveDeckAnchors } from '../../deck/math'
+
+/** How long after V / Tab / respawn the rigging beside the spawn stays hidden (the first look). */
+export const FIRST_LOOK_SECONDS = 2.5
 import { CrewLayer } from '../../crew'
 import { isHotSeat, other, placementBoard, useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
@@ -286,10 +289,21 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const onDeck = deck.on && !over
   const standing = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid === deck.shipUid) : []), [onDeck, own.ships, deck.shipUid])
   // rigging beside the player is hidden on deck: the manned cannon's x, else the spawn's (the first look after V / Tab / respawn)
+  // (the walking cull lasts FIRST_LOOK_SECONDS after boarding, then the standing ship drops back to the baked lod: a live
+  // Man-o'-War while walking measured up to 349 draws at Medium)
+  const [firstLook, setFirstLook] = useState(false)
+  useEffect(() => {
+    if (!onDeck || !deck.shipUid) return
+    setFirstLook(true)
+    const t = window.setTimeout(() => setFirstLook(false), FIRST_LOOK_SECONDS * 1000)
+    return () => window.clearTimeout(t)
+  }, [onDeck, deck.shipUid])
   const rigCullX = standing[0]
     ? deck.station !== null
       ? (SHIPS[standing[0].spec.id].anchors.cannons[deck.station]?.muzzle[0] ?? null)
-      : resolveDeckAnchors(SHIPS[standing[0].spec.id].anchors, standing[0].spec.id).spawn[0]
+      : firstLook
+        ? resolveDeckAnchors(SHIPS[standing[0].spec.id].anchors, standing[0].spec.id).spawn[0]
+        : null
     : null
   const ownRest = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid !== deck.shipUid) : own.ships), [onDeck, own.ships, deck.shipUid])
   // Medium budget (≤ 350 draws): a live lod-0 man-o'-war alone is ~420 draws, so only High stands on a live ship; Medium

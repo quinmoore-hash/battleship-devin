@@ -596,17 +596,17 @@ function StandingRigging({ lod, livery, sink, cullX = null }: { lod: Lod; livery
           </group>
         )
       })}
-      {/* stays and backstays */}
-      <Rope from={top(fore, 0.98)} to={[G.xBow + 0.95, 1.48, 0]} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(fore, 0.62)} to={[G.xBow + 0.3, 1.18, 0]} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(main, 0.98)} to={top(fore, 0.62)} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(main, 0.62)} to={[fore.x - 0.1, G.forecastleDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(mizzen, 0.98)} to={top(main, 0.62)} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(mizzen, 0.6)} to={[main.x - 0.12, G.mainDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />
+      {/* stays and backstays: hidden with the mast they rise from while that mast's rigging is culled (first look / manning) */}
+      {!rigCulled(fore.x, cullX) && <Rope from={top(fore, 0.98)} to={[G.xBow + 0.95, 1.48, 0]} livery={livery} sag={0.03} lod={lod} />}
+      {!rigCulled(fore.x, cullX) && <Rope from={top(fore, 0.62)} to={[G.xBow + 0.3, 1.18, 0]} livery={livery} sag={0.03} lod={lod} />}
+      {!rigCulled(main.x, cullX) && <Rope from={top(main, 0.98)} to={top(fore, 0.62)} livery={livery} sag={0.03} lod={lod} />}
+      {!rigCulled(main.x, cullX) && <Rope from={top(main, 0.62)} to={[fore.x - 0.1, G.forecastleDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />}
+      {!rigCulled(mizzen.x, cullX) && <Rope from={top(mizzen, 0.98)} to={top(main, 0.62)} livery={livery} sag={0.03} lod={lod} />}
+      {!rigCulled(mizzen.x, cullX) && <Rope from={top(mizzen, 0.6)} to={[main.x - 0.12, G.mainDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />}
       {[1, -1].map((s) => (
         <group key={s}>
-          <Rope from={top(main, 0.97)} to={[G.poopX + 0.05, G.quarterDeckY + 0.08, s * (halfWidth(G.poopX + 0.05, 1.05) - 0.08)]} livery={livery} lod={lod} />
-          <Rope from={top(mizzen, 0.97)} to={[G.xStern + 0.1, G.poopDeckY + 0.08, s * (halfWidth(G.xStern + 0.1, 1.45) - 0.08)]} livery={livery} lod={lod} />
+          {!rigCulled(main.x, cullX) && <Rope from={top(main, 0.97)} to={[G.poopX + 0.05, G.quarterDeckY + 0.08, s * (halfWidth(G.poopX + 0.05, 1.05) - 0.08)]} livery={livery} lod={lod} />}
+          {!rigCulled(mizzen.x, cullX) && <Rope from={top(mizzen, 0.97)} to={[G.xStern + 0.1, G.poopDeckY + 0.08, s * (halfWidth(G.xStern + 0.1, 1.45) - 0.08)]} livery={livery} lod={lod} />}
         </group>
       ))}
     </group>

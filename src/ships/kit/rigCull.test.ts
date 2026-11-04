@@ -49,6 +49,13 @@ describe('first look after V / Tab / respawn (BUG-802) and the brigantine nettin
     }
   })
 
+  it('galleon spawn: the main and mizzen (whose stays cross the quarterdeck first look) are culled, the foremast is not', () => {
+    const a = SHIPS.galleon.anchors
+    const spawnX = resolveDeckAnchors(a, 'galleon').spawn[0]
+    const culled = a.masts.map((m) => rigCulled(m.base[0], spawnX))
+    expect(culled).toEqual([false, true, true])
+  })
+
   it('brigantine: the netting panel beside the manned cannon is hidden, the other panel stays', () => {
     const a = SHIPS.brigantine.anchors
     for (const c of a.cannons) {
