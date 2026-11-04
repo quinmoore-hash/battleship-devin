@@ -41,7 +41,7 @@ test('on deck: V toggles mid-turn without changing the game, a manned gun fires 
   await expect(page.getByTestId('deck-salvo')).toHaveText(/shot 1 of 5/)
   await page.getByTestId('enemy-grid-0-0').click()
   await expect(page.getByTestId('deck-salvo')).toHaveText(/shot 2 of 5/)
-  await expect(page.getByTestId('deck-prompt')).not.toHaveText(/Man a gun/)
+  await expect(page.getByTestId('deck-prompt')).not.toHaveText(/Leave the cannon/)
 
   // man the nearest gun that bears, then click a square: the next volley shot leaves that gun
   await page.getByTestId('deck-man').click()
@@ -68,8 +68,21 @@ test('on deck: V toggles mid-turn without changing the game, a manned gun fires 
   await expect(page.getByTestId('deck-station')).toHaveText('Walking the deck')
   await page.getByTestId('deck-man').click()
   await expect(page.getByTestId('deck-station')).toContainText('Manning the')
+  await expect(page.getByTestId('deck-step-away')).toHaveText(/Leave the cannon/)
   await page.getByTestId('deck-step-away').click()
   await expect(page.getByTestId('deck-station')).toHaveText('Walking the deck')
+  await expect(page.getByTestId('deck-prompt')).toHaveText('Cannon released')
+
+  // Esc leaves the cannon too (the prompt says so the whole time), without leaving the deck or opening anything
+  await page.getByTestId('deck-man').click()
+  await expect(hud).toHaveAttribute('data-view', 'gun')
+  await expect(page.getByTestId('deck-prompt')).toContainText('Esc — Leave the cannon')
+  await page.keyboard.press('Escape')
+  await expect(hud).toHaveAttribute('data-view', 'walk')
+  await expect(page.getByTestId('deck-station')).toHaveText('Walking the deck')
+  await expect(page.getByTestId('deck-prompt')).toHaveText('Cannon released')
+  await expect(toggle).toHaveAttribute('data-on', 'true')
+  await expect(page.locator('[role="dialog"]')).toHaveCount(0)
 
   // Tab / the button hops to the next afloat ship
   const first = await page.getByTestId('deck-ship-name').textContent()

@@ -26,5 +26,8 @@ test('?no3d: no On-deck toggle, V does nothing, settings and How to play still c
 
   await page.getByTestId('nav-how-to-play').click()
   await expect(page.getByTestId('howto-on-deck')).toContainText('same odds as the overview')
+  await expect(page.getByTestId('howto-on-deck')).toContainText('Esc')
+  await expect(page.getByTestId('howto-on-deck')).toContainText('steps away from the cannon')
+  await expect(page.getByTestId('howto-on-deck')).not.toContainText(/\bguns?\b/)
   await expect(page.getByTestId('howto-on-deck')).toContainText('Not available without 3D')
 })

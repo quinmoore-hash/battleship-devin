@@ -93,7 +93,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <input type="checkbox" checked={settings.crew} data-testid="setting-crew" onChange={(e) => updateSettings({ crew: e.target.checked })} />
             <span>Crew on deck (pirates working the ships; off removes them)</span>
           </label>
-          <p className="muted small">Press V in battle to walk your own deck at eye height; man a glowing gun and click the chart to fire. Same shots, same odds — just a different seat.</p>
+          <p className="muted small">Press V in battle to walk your own deck at eye height; man a glowing cannon and click the chart to fire (Esc or E leaves it). Same shots, same odds — just a different seat.</p>
         </fieldset>
         <fieldset>
           <legend>Accessibility</legend>
