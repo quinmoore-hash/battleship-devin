@@ -3,6 +3,11 @@ import { SHIPS } from '../ships'
 import { MASTS, bulwarkSegments, mastBase, mastTop, riggingSegments } from '../ships/galleon/anchors'
 import { YARDS } from '../ships/galleon'
 import { GALLEON } from '../ships/galleon/hull'
+import { BOWSPRIT_BASE, JIBBOOM_TIP, foreRopes, hullRopes, mainRopes, railPoint } from '../ships/brigantine'
+import { BRIGANTINE_MODEL_ANCHORS } from '../ships/brigantine/anchors'
+import { DECK_Y as BRIG_DECK_Y, FIT as BRIG_FIT, FOREMAST_HEIGHT, FOREMAST_X, MAINMAST_HEIGHT, MAINMAST_X, STEM_X as BRIG_STEM_X, TRANSOM_X as BRIG_TRANSOM_X } from '../ships/brigantine/hull'
+import { MAIN_BOOM_LENGTH, MAIN_BOOM_Y, foreYards, gaffPose } from '../ships/brigantine/rig'
+import { rigCulled, spanCulled } from '../ships/kit/rigCull'
 import type { Vec3 } from '../scene/layout'
 import { BOARD_LAYOUT, boardCenter, cellToWorld } from '../scene/layout'
 import { shipRotationY, shipWorldTransform } from '../ships'
@@ -566,7 +571,7 @@ describe('station pick hysteresis + marker fade (BUG-7xx)', () => {
 
 describe('eye outside the geometry (BUG-7xx, owner clips a + b)', () => {
   it('the walking eye sees over the lowest reachable cap rail on every class (0.17 u was under the bulwark on three of five)', () => {
-    const want: Record<string, number> = { 'man-o-war': 0.31, galleon: 0.46, frigate: 0.275, brigantine: 0.183, sloop: 0.18 }
+    const want: Record<string, number> = { 'man-o-war': 0.31, galleon: 0.46, frigate: 0.275, brigantine: 0.286, sloop: 0.18 }
     for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
       const a = SHIPS[id].anchors
       const deck = resolveDeckAnchors(a, id)
@@ -888,6 +893,26 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(Math.abs(angleDelta(h.yaw, h.localYaw))).toBeLessThan(0.1) // the enemy beam (openView) ≈ the enemy bearing
   })
 
+  const CREW_FIGURE_HEIGHT = 0.3
+  const W = 1440
+  const H = 900
+  const BOX = { x0: 480, x1: 960, y0: 180, y1: 720 }
+  /** Pixel position of ship-space point `q` for an eye at `eye` looking (`yaw`, `pitch`) through the deck camera (vertical fov DECK_FOV). */
+  const project = (eye: Vec3, yaw: number, pitch: number, q: Vec3) => {
+    const f = lookForward(yaw, pitch)
+    const r: Vec3 = [-f[2], 0, f[0]]
+    const rl = Math.hypot(r[0], r[2])
+    r[0] /= rl
+    r[2] /= rl
+    const u: Vec3 = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]]
+    const d: Vec3 = [q[0] - eye[0], q[1] - eye[1], q[2] - eye[2]]
+    const z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2]
+    const x = d[0] * r[0] + d[1] * r[1] + d[2] * r[2]
+    const y = d[0] * u[0] + d[1] * u[1] + d[2] * u[2]
+    const t = Math.tan(DECK_FOV_RAD / 2)
+    return { z, px: W / 2 + ((x / z) * (W / 2)) / (t * (W / H)), py: H / 2 - ((y / z) * (H / 2)) / t, dist: Math.hypot(d[0], d[1], d[2]) }
+  }
+
   describe('galleon spawn first frame (BUG-893): 1440×900 central box clear of own-ship lines, cap rail in the bottom fifth', () => {
     /** Own-ship lines a first look can cross: shrouds + stays, mast trunks, yards, guns (breech → muzzle), cap rail + pins, and a crew figure at every on-deck gun stand. */
     const ownLines = (stations: readonly Station[]) => {
@@ -900,26 +925,6 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
       for (const s of stations) if (s.onDeck) segs.push({ a: s.stand, b: [s.stand[0], s.stand[1] + CREW_FIGURE_HEIGHT, s.stand[2]] })
       return segs
     }
-    const CREW_FIGURE_HEIGHT = 0.3
-    const W = 1440
-    const H = 900
-    const BOX = { x0: 480, x1: 960, y0: 180, y1: 720 }
-    /** Pixel position of ship-space point `q` for an eye at `eye` looking (`yaw`, `pitch`) through the deck camera (vertical fov DECK_FOV). */
-    const project = (eye: Vec3, yaw: number, pitch: number, q: Vec3) => {
-      const f = lookForward(yaw, pitch)
-      const r: Vec3 = [-f[2], 0, f[0]]
-      const rl = Math.hypot(r[0], r[2])
-      r[0] /= rl
-      r[2] /= rl
-      const u: Vec3 = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]]
-      const d: Vec3 = [q[0] - eye[0], q[1] - eye[1], q[2] - eye[2]]
-      const z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2]
-      const x = d[0] * r[0] + d[1] * r[1] + d[2] * r[2]
-      const y = d[0] * u[0] + d[1] * u[1] + d[2] * u[2]
-      const t = Math.tan(DECK_FOV_RAD / 2)
-      return { z, px: W / 2 + ((x / z) * (W / 2)) / (t * (W / H)), py: H / 2 - ((y / z) * (H / 2)) / t, dist: Math.hypot(d[0], d[1], d[2]) }
-    }
-
     it.each(['horizontal', 'vertical'] as const)('%s placement', (orientation) => {
       const { deck, p, side, yaw } = controllerSpawn('galleon', orientation)
       const stations = stationsOf(SHIPS.galleon.anchors, deck)
@@ -942,6 +947,72 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
         }
       }
       // (a) the nearest own-ship line across the box columns (the cap rail) starts in the bottom fifth of the frame
+      expect(railTop).toBeGreaterThanOrEqual(BOX.y1)
+    })
+  })
+
+  describe('brigantine spawn first frame (BUG-895): horizontal placement looks over the enemy rail, not into the mainsail / boom / fittings', () => {
+    /**
+     * Own-ship lines as the dressed ship renders them on the first look, model frame → ship frame (root FIT): the bowsprit
+     * ropes, the shrouds + stays of masts the spawn cull leaves (rigCulled on the spawn x, as BrigantineModel does), mast
+     * trunks, fore yards, main boom + gaff + leech, bowsprit, every deck fitting (walk obstacle as a 0.3 u post ring),
+     * cap rail + the netting panels the cull leaves, guns.
+     */
+    const ownLines = (cullX: number) => {
+      const p = (v: Vec3): Vec3 => [v[0] * BRIG_FIT.scale + BRIG_FIT.dx, v[1] * BRIG_FIT.scale, v[2] * BRIG_FIT.scale]
+      const cullM = (cullX - BRIG_FIT.dx) / BRIG_FIT.scale
+      const segs: { a: Vec3; b: Vec3 }[] = []
+      const seg = (a: Vec3, b: Vec3) => segs.push({ a: p(a), b: p(b) })
+      for (const [a, b] of hullRopes(0)) seg(a, b)
+      if (!rigCulled(FOREMAST_X, cullM)) for (const [a, b] of foreRopes(0)) seg(a, b)
+      if (!rigCulled(MAINMAST_X, cullM)) for (const [a, b] of mainRopes(0, 1)) seg(a, b)
+      for (const m of BRIGANTINE_MODEL_ANCHORS.masts) seg(m.base, [m.base[0], m.base[1] + m.height, m.base[2]])
+      for (const y of foreYards(FOREMAST_HEIGHT)) seg([FOREMAST_X, BRIG_DECK_Y + y.y, -y.w / 2], [FOREMAST_X, BRIG_DECK_Y + y.y, y.w / 2])
+      const boomEnd: Vec3 = [MAINMAST_X - MAIN_BOOM_LENGTH, BRIG_DECK_Y + MAIN_BOOM_Y, 0]
+      const { jawsY, peak } = gaffPose(MAINMAST_HEIGHT, 1)
+      const peakW: Vec3 = [MAINMAST_X + peak[0], BRIG_DECK_Y + peak[1], 0]
+      seg([MAINMAST_X, BRIG_DECK_Y + MAIN_BOOM_Y, 0], boomEnd)
+      seg([MAINMAST_X, BRIG_DECK_Y + jawsY, 0], peakW)
+      seg(peakW, boomEnd) // mainsail leech
+      seg(BOWSPRIT_BASE, JIBBOOM_TIP)
+      for (const o of BRIGANTINE_MODEL_ANCHORS.deck?.obstacles ?? []) {
+        const y = BRIGANTINE_MODEL_ANCHORS.deck?.walk.find((w) => w.points.some(([x]) => Math.abs(x - o.center[0]) < 0.8))?.y ?? BRIG_DECK_Y
+        for (const [dx, dz] of [[o.radius, 0], [-o.radius, 0], [0, o.radius], [0, -o.radius]]) seg([o.center[0] + dx, y, o.center[1] + dz], [o.center[0] + dx, y + 0.3, o.center[1] + dz])
+      }
+      for (let x = BRIG_TRANSOM_X + 0.05; x < BRIG_STEM_X - 0.3; x += 0.1) for (const s of [1, -1] as const) seg(railPoint(x, s), railPoint(x + 0.1, s))
+      for (const [x0, x1] of [[-1.0, -0.65], [0.0, 0.5]]) {
+        if (spanCulled(x0, x1, cullM)) continue
+        for (const s of [1, -1] as const) {
+          const a = railPoint(x0, s)
+          const b = railPoint(x1, s)
+          seg([a[0], a[1] + 0.07, a[2]], [b[0], b[1] + 0.07, b[2]]) // hammock netting
+        }
+      }
+      for (const c of SHIPS.brigantine.anchors.cannons) segs.push({ a: [c.muzzle[0], c.muzzle[1], c.muzzle[2] * 0.4], b: c.muzzle })
+      return segs
+    }
+
+    it.each(['horizontal', 'vertical'] as const)('%s placement', (orientation) => {
+      const { deck, p, side, yaw } = controllerSpawn('brigantine', orientation)
+      const stations = stationsOf(SHIPS.brigantine.anchors, deck)
+      expect(p.y).toBeCloseTo(BRIG_DECK_Y * BRIG_FIT.scale, 6) // the main deck, not the cabin roof
+      expect(Math.sign(p.z)).toBe(side)
+      expect(Math.abs(lookForward(yaw, 0)[2])).toBeGreaterThan(0.95) // the enemy's beam
+      const eye: Vec3 = [p.x, p.y + walkEyeHeight(deck, stations), p.z]
+      const segs = ownLines(deck.spawn[0])
+      expect(segs.length).toBeGreaterThan(60)
+      let railTop = Infinity
+      for (const seg of segs) {
+        for (let i = 0; i <= 16; i++) {
+          const t = i / 16
+          const q: Vec3 = [seg.a[0] + (seg.b[0] - seg.a[0]) * t, seg.a[1] + (seg.b[1] - seg.a[1]) * t, seg.a[2] + (seg.b[2] - seg.a[2]) * t]
+          const { z, px, py, dist } = project(eye, yaw, SPAWN_PITCH, q)
+          if (z <= 0 || px < BOX.x0 || px > BOX.x1) continue
+          if (dist <= 1.5) railTop = Math.min(railTop, py)
+          if (dist <= GUN_CONE_CLEAR) expect(py, `${JSON.stringify(seg)} at ${px.toFixed(0)},${py.toFixed(0)} (${dist.toFixed(2)} u) inside the central box`).toBeGreaterThan(BOX.y1)
+        }
+      }
+      // the cap rail (the nearest own-ship line across the box) starts in the bottom fifth of the frame
       expect(railTop).toBeGreaterThanOrEqual(BOX.y1)
     })
   })

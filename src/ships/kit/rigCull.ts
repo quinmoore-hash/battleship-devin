@@ -12,3 +12,18 @@ export const spanCulled = (x0: number, x1: number, cullX: number | null | undefi
 
 export const rigCulled = (mastX: number, cullX: number | null | undefined): boolean =>
   cullX != null && Math.abs(mastX - cullX) < RIG_CULL_RADIUS
+
+/**
+ * Walking cull (BUG-894): on deck the cull x is the player's own deck x, re-committed only once they have walked
+ * WALK_CULL_STEP from the last committed x, so nothing pops while they stand still (the first look is seeded with the
+ * spawn x). It is null — the standing ship back on the baked lod — when no mast is within RIG_CULL_RADIUS of it, and a
+ * committed cull holds until the nearest mast is RIG_CULL_RADIUS + WALK_CULL_STEP away (hysteresis at the boundary).
+ */
+export const WALK_CULL_STEP = 0.2
+export function walkCullX(prev: number | null, playerX: number, mastXs: readonly number[]): number | null {
+  let nearest = Infinity
+  for (const m of mastXs) nearest = Math.min(nearest, Math.abs(m - playerX))
+  if (prev == null) return nearest < RIG_CULL_RADIUS ? playerX : null
+  if (Math.abs(playerX - prev) < WALK_CULL_STEP) return prev
+  return nearest < RIG_CULL_RADIUS + WALK_CULL_STEP ? playerX : null
+}

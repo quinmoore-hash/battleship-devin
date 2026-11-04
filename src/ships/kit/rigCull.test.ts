@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS, standingShipLod } from '..'
-import { RIG_CULL_RADIUS, rigCulled, spanCulled } from './rigCull'
+import { RIG_CULL_RADIUS, rigCulled, spanCulled, WALK_CULL_STEP, walkCullX } from './rigCull'
 import { resolveDeckAnchors } from '../../deck/math'
 
 describe('standing-rigging cull while manning (BUG-800)', () => {
@@ -65,5 +65,31 @@ describe('first look after V / Tab / respawn (BUG-802) and the brigantine nettin
       expect(fore === (c.muzzle[0] > -0.3 && c.muzzle[0] < 0.8), `cannon ${c.cell} fore panel`).toBe(true)
     }
     expect(spanCulled(0, 0.5, null)).toBe(false)
+  })
+})
+
+describe('walking cull follows the player, nothing pops while standing still (BUG-894)', () => {
+  const masts = [0.5, -0.6]
+  it('seeds from the spawn x only when a mast is within RIG_CULL_RADIUS', () => {
+    expect(walkCullX(null, 0.1, masts)).toBe(0.1)
+    expect(walkCullX(null, 2.0, masts)).toBeNull()
+    expect(walkCullX(null, 0, [])).toBeNull()
+  })
+  it('holds the committed x through sub-step drift (standing still, settling), re-commits after WALK_CULL_STEP', () => {
+    expect(walkCullX(0.1, 0.1 + WALK_CULL_STEP * 0.9, masts)).toBe(0.1)
+    expect(walkCullX(0.1, 0.1 - WALK_CULL_STEP * 0.9, masts)).toBe(0.1)
+    expect(walkCullX(0.1, 0.1 + WALK_CULL_STEP, masts)).toBe(0.1 + WALK_CULL_STEP)
+  })
+  it('hysteresis: live until the nearest mast is RIG_CULL_RADIUS + WALK_CULL_STEP away, back when it is within RIG_CULL_RADIUS', () => {
+    expect(walkCullX(1.3, 1.6, masts)).toBe(1.6) // 1.1 from the fore mast: still live
+    expect(walkCullX(1.6, 1.85, masts)).toBeNull() // 1.35 away: baked
+    expect(walkCullX(null, 1.6, masts)).toBeNull() // not back yet
+    expect(walkCullX(null, 1.4, masts)).toBe(1.4)
+  })
+  it('a committed cull never changes without the player moving (same x in → same x out)', () => {
+    for (const x of [-1.5, -0.3, 0.1, 0.9, 1.7]) {
+      const c = walkCullX(null, x, masts)
+      expect(walkCullX(c, x, masts)).toBe(c)
+    }
   })
 })

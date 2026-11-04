@@ -71,7 +71,12 @@ export function buildBrigantineDeck(): DeckAnchors {
       { center: [-1.17, -0.14], radius: 0.07 },
     ]
   return {
-    spawn: [-1.2, CABIN_TOP_Y, 0.18],
+    // the waist between the main hatch and the main bitts, clear of both channels (shroud fans) and the quarterdeck
+    // fittings; the enemy side's cap rail is the only own-ship line in the first look (BUG-895)
+    spawn: [0.1, DECK_Y, 0.2],
+    // the walking eye clears the cap rail so it sits in the bottom fifth of the first frame (0.29 u after FIT, as the
+    // galleon's authored eye; the rail-lift default left it mid-frame)
+    eyeHeight: 0.34,
     walk,
     ramps: [breakRamp(0, 1, CABIN_FRONT_X, 0.12, 0.2)],
     obstacles,

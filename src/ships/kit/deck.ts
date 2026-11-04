@@ -163,5 +163,6 @@ export function fitDeck(d: DeckAnchors, scale: number, dx: number): DeckAnchors 
     ramps: d.ramps.map((r) => ({ ...r, a: p2(r.a), b: p2(r.b) })),
     obstacles: d.obstacles.map((o) => ({ center: p2(o.center), radius: o.radius * scale })),
     stations: d.stations.map((s) => ({ stand: p3(s.stand), yaw: s.yaw, ...(s.breech ? { breech: p3(s.breech) } : {}), ...(s.rail !== undefined ? { rail: s.rail * scale } : {}) })),
+    ...(d.eyeHeight !== undefined ? { eyeHeight: d.eyeHeight * scale } : {}),
   }
 }

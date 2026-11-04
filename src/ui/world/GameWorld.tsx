@@ -8,9 +8,9 @@ import { BoardGrid } from '../../scene/BoardGrid'
 import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
 import { Fleet, SHIPS, Ship } from '../../ships'
 import { resolveDeckAnchors } from '../../deck/math'
+import { playerDeck } from '../../crew/playerPose'
+import { walkCullX } from '../../ships/kit/rigCull'
 
-/** How long after V / Tab / respawn the rigging beside the spawn stays hidden (the first look). */
-export const FIRST_LOOK_SECONDS = 2.5
 import { CrewLayer } from '../../crew'
 import { isHotSeat, other, placementBoard, useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
@@ -288,22 +288,32 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
   const onDeck = deck.on && !over
   const standing = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid === deck.shipUid) : []), [onDeck, own.ships, deck.shipUid])
-  // rigging beside the player is hidden on deck: the manned cannon's x, else the spawn's (the first look after V / Tab / respawn)
-  // (the walking cull lasts FIRST_LOOK_SECONDS after boarding, then the standing ship drops back to the baked lod: a live
-  // Man-o'-War while walking measured up to 349 draws at Medium)
-  const [firstLook, setFirstLook] = useState(false)
-  useEffect(() => {
-    if (!onDeck || !deck.shipUid) return
-    setFirstLook(true)
-    const t = window.setTimeout(() => setFirstLook(false), FIRST_LOOK_SECONDS * 1000)
-    return () => window.clearTimeout(t)
-  }, [onDeck, deck.shipUid])
+  // rigging beside the player is hidden on deck: the manned cannon's x, else the player's own deck x (walkCullX: seeded
+  // with the spawn x on the first look, re-committed only after walking WALK_CULL_STEP, so nothing pops while standing
+  // still; null once no mast is in reach, and the standing ship then drops back to the baked lod — a live Man-o'-War
+  // while walking measured up to 349 draws at Medium)
+  const standingId = standing[0]?.spec.id
+  const mastXs = useMemo(() => (standingId ? SHIPS[standingId].anchors.masts.map((m) => m.base[0]) : []), [standingId])
+  const spawnCull = useMemo(() => (standingId ? walkCullX(null, resolveDeckAnchors(SHIPS[standingId].anchors, standingId).spawn[0], mastXs) : null), [standingId, mastXs])
+  const [walkCull, setWalkCull] = useState<{ uid: string | null; x: number | null }>({ uid: null, x: null })
+  const walkCullRef = useRef(walkCull)
+  useFrame(() => {
+    const uid = onDeck ? deck.shipUid : null
+    if (!uid) {
+      if (walkCullRef.current.uid !== null) setWalkCull((walkCullRef.current = { uid: null, x: null }))
+      return
+    }
+    if (playerDeck.uid !== uid) return
+    const cur = walkCullRef.current.uid === uid ? walkCullRef.current.x : spawnCull
+    const next = walkCullX(cur, playerDeck.x, mastXs)
+    if (walkCullRef.current.uid !== uid || next !== walkCullRef.current.x) setWalkCull((walkCullRef.current = { uid, x: next }))
+  })
   const rigCullX = standing[0]
     ? deck.station !== null
       ? (SHIPS[standing[0].spec.id].anchors.cannons[deck.station]?.muzzle[0] ?? null)
-      : firstLook
-        ? resolveDeckAnchors(SHIPS[standing[0].spec.id].anchors, standing[0].spec.id).spawn[0]
-        : null
+      : walkCull.uid === deck.shipUid
+        ? walkCull.x
+        : spawnCull
     : null
   const ownRest = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid !== deck.shipUid) : own.ships), [onDeck, own.ships, deck.shipUid])
   // Medium budget (≤ 350 draws): a live lod-0 man-o'-war alone is ~420 draws, so only High stands on a live ship; Medium

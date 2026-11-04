@@ -102,13 +102,13 @@ function sharedGeometry(): SharedGeometry {
 }
 
 /** Bowsprit geometry constants (ship frame). */
-const BOWSPRIT_BASE: Vec3 = [1.38, 0.6, 0]
+export const BOWSPRIT_BASE: Vec3 = [1.38, 0.6, 0]
 const BOWSPRIT_ANGLE = 0.38
 const BOWSPRIT_LEN = 0.55
 const JIBBOOM_EXTRA = 0.08
 const bowspritPoint = (t: number): Vec3 => [BOWSPRIT_BASE[0] + Math.cos(BOWSPRIT_ANGLE) * BOWSPRIT_LEN * t, BOWSPRIT_BASE[1] + Math.sin(BOWSPRIT_ANGLE) * BOWSPRIT_LEN * t, 0]
 const BOWSPRIT_TIP = bowspritPoint(1)
-const JIBBOOM_TIP = bowspritPoint(1 + JIBBOOM_EXTRA / BOWSPRIT_LEN)
+export const JIBBOOM_TIP = bowspritPoint(1 + JIBBOOM_EXTRA / BOWSPRIT_LEN)
 
 const FORE_LOWER_HEAD: Vec3 = [FOREMAST_X, DECK_Y + FOREMAST_HEIGHT * 0.6, 0]
 const FORE_HEAD: Vec3 = [FOREMAST_X + 0.035, DECK_Y + FOREMAST_HEIGHT, 0]
@@ -117,7 +117,7 @@ const MAIN_HEAD: Vec3 = [MAINMAST_X + 0.035, DECK_Y + MAINMAST_HEIGHT, 0]
 
 const lerp3 = (a: Vec3, b: Vec3, t: number): Vec3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 
-function railPoint(x: number, side: 1 | -1, inset = BULWARK_THICKNESS / 2): Vec3 {
+export function railPoint(x: number, side: 1 | -1, inset = BULWARK_THICKNESS / 2): Vec3 {
   const y = sheerY(x)
   return [x, y + 0.01, side * (hullHalfWidth(x, y) - inset)]
 }
@@ -128,7 +128,7 @@ function channelPoint(x: number, side: 1 | -1): Vec3 {
 }
 
 /** Standing rigging that stays with the hull (bowsprit gear, lifelines), independent of mast state. */
-function hullRopes(lod: Lod): RopeLine[] {
+export function hullRopes(lod: Lod): RopeLine[] {
   const lines: RopeLine[] = [
     [BOWSPRIT_TIP, [STEM_X - 0.02, 0.05, 0], 0.011], // bobstay
     [BOWSPRIT_TIP, [1.3, 0.47, 0.3], 0.008],
@@ -146,7 +146,7 @@ function hullRopes(lod: Lod): RopeLine[] {
   return lines
 }
 
-function foreRopes(lod: Lod): RopeLine[] {
+export function foreRopes(lod: Lod): RopeLine[] {
   const lines: RopeLine[] = []
   for (const s of [1, -1] as const) {
     const bases = [0.63, 0.75, 0.87].map((x) => channelPoint(x, s))
@@ -162,7 +162,7 @@ function foreRopes(lod: Lod): RopeLine[] {
   return lines
 }
 
-function mainRopes(lod: Lod, sails: number): RopeLine[] {
+export function mainRopes(lod: Lod, sails: number): RopeLine[] {
   const lines: RopeLine[] = []
   const { peak } = gaffPose(MAINMAST_HEIGHT, sails)
   const peakW: Vec3 = [MAINMAST_X + peak[0], DECK_Y + peak[1], 0]
@@ -186,6 +186,7 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const motion = reducedMotion ? 0 : 1
   const mats = useMemo(() => brigMaterials(livery), [livery])
+  const cullX = rigCullX == null ? null : (rigCullX - FIT.dx) / FIT.scale // ship-local → model frame (the root FIT group)
   const geo = useMemo(sharedGeometry, [])
   const shadows = quality === 'high'
   const sink = clamp01(sinkProgress)
@@ -324,10 +325,10 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
           <RopeCoil position={[MAINMAST_X - 0.14, DECK_Y, -0.1]} livery={livery} />
           <RopeCoil position={[1.0, DECK_Y, 0]} livery={livery} />
           <Cleats xs={[1.05, 0.45, -0.05, -0.75, -1.3]} mats={mats} />
-          {!spanCulled(-1.0, -0.65, rigCullX) && <Netting x0={-1.0} x1={-0.65} side="port" height={0.07} mats={mats} />}
-          {!spanCulled(-1.0, -0.65, rigCullX) && <Netting x0={-1.0} x1={-0.65} side="starboard" height={0.07} mats={mats} />}
-          {!spanCulled(0.0, 0.5, rigCullX) && <Netting x0={0.0} x1={0.5} side="port" height={0.07} mats={mats} />}
-          {!spanCulled(0.0, 0.5, rigCullX) && <Netting x0={0.0} x1={0.5} side="starboard" height={0.07} mats={mats} />}
+          {!spanCulled(-1.0, -0.65, cullX) && <Netting x0={-1.0} x1={-0.65} side="port" height={0.07} mats={mats} />}
+          {!spanCulled(-1.0, -0.65, cullX) && <Netting x0={-1.0} x1={-0.65} side="starboard" height={0.07} mats={mats} />}
+          {!spanCulled(0.0, 0.5, cullX) && <Netting x0={0.0} x1={0.5} side="port" height={0.07} mats={mats} />}
+          {!spanCulled(0.0, 0.5, cullX) && <Netting x0={0.0} x1={0.5} side="starboard" height={0.07} mats={mats} />}
           <BrigLantern position={[MAINMAST_X + 0.12, DECK_Y + 0.22, 0.02]} mats={mats} scale={0.7} />
         </>
       )}
@@ -403,8 +404,8 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
       {lod < 2 && (
         <>
           <RopeSet lines={hullLines} mats={mats} lod={lod} visible={bowspritSnap < 0.3} />
-          <RopeSet lines={foreLines} mats={mats} lod={lod} visible={foreSnap < 0.15 && !rigCulled(FOREMAST_X, rigCullX)} />
-          <RopeSet lines={mainLines} mats={mats} lod={lod} visible={mainSnap < 0.15 && !rigCulled(MAINMAST_X, rigCullX)} />
+          <RopeSet lines={foreLines} mats={mats} lod={lod} visible={foreSnap < 0.15 && !rigCulled(FOREMAST_X, cullX)} />
+          <RopeSet lines={mainLines} mats={mats} lod={lod} visible={mainSnap < 0.15 && !rigCulled(MAINMAST_X, cullX)} />
         </>
       )}
 
