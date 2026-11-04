@@ -1,9 +1,9 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { easeOutCubic } from '../math'
-import { attachParams, makeSpriteMaterial, spriteQuad } from './sprites'
+import { attachParams, disposeParams, makeSpriteMaterial, spriteQuad } from './sprites'
 import { useReducedMotion } from './useReducedMotion'
 import { useFlashSlot } from '../flashLights'
 
@@ -33,7 +33,8 @@ export function ImpactFlash({ position, normal = [0, 0, 1], scale = 1, onDone }:
     () => new THREE.MeshBasicMaterial({ color: '#ffc27a', transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
     [],
   )
-  useEffect(() => () => void (mat.dispose(), ringMat.dispose()), [mat, ringMat])
+  // layout cleanup: runs before React detaches the child refs, so the flash mesh (and its aParam geometry clone) is still reachable
+  useLayoutEffect(() => () => void (mat.dispose(), ringMat.dispose(), disposeParams(flash.current)), [mat, ringMat])
   const quat = useMemo(() => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...normal).normalize()), [normal])
   const dur = reduced ? 0.25 : RING_T
 
