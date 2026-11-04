@@ -14,7 +14,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { Cannon } from '../kit'
-import type { CannonRef, ShipDefinition, ShipModelProps } from '../types'
+import type { CannonRef, Lod, ShipDefinition, ShipModelProps } from '../types'
 import { SLOOP_ANCHORS } from './anchors'
 import { blockGeometry, mergeGeometries, placed } from './geometry'
 import { BOW_CHASER, CANNON_SCALE, clamp01, deckY, gunStation, SLOOP_DIMS } from './hull'
@@ -71,17 +71,18 @@ function Model({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sa
       <Bulwarks m={m} lod={L} lids={lids} />
       <Deck m={m} livery={livery} lod={L} />
       <Bowsprit m={m} lod={L} sink={sink} />
-      {L < 2 &&
-        SLOOP_ANCHORS.cannons.map((c) => (
-          <Cannon
-            key={`${c.cell}-${c.side}`}
-            position={gunStation(c.cell, c.side)}
-            rotationY={c.side === 'starboard' ? 0 : Math.PI}
-            livery={livery}
-            recoil={isFiring(c) ? 1 : 0}
-            scale={CANNON_SCALE}
-          />
-        ))}
+      {/* broadside guns at every lod: the player's gun stations stand at them (a ring without a cannon otherwise) */}
+      {SLOOP_ANCHORS.cannons.map((c) => (
+        <Cannon
+          key={`${c.cell}-${c.side}`}
+          position={gunStation(c.cell, c.side)}
+          rotationY={c.side === 'starboard' ? 0 : Math.PI}
+          livery={livery}
+          recoil={isFiring(c) ? 1 : 0}
+          scale={CANNON_SCALE}
+          lod={L as Lod}
+        />
+      ))}
       {L < 2 && <Cannon position={BOW_CHASER} rotationY={Math.PI / 2} livery={livery} scale={0.4} />}
       <Rig m={m} lod={L} set={set} torn={Math.max(torn, hitStern ? 0.2 : 0)} scorch={scorch} snapped={snapped} flagDrop={flagDrop} phase={phase} />
       <CellDamageFx damage={damage} m={m} lod={L} />

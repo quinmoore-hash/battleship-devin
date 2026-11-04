@@ -420,22 +420,23 @@ export function GunDecks({ m, livery, lod, firing }: PartProps & { firing?: read
           <InstancedPart geometry={frameGeo()} material={livery === 'navy' ? m.wale : m.trim} items={ports} />
           <InstancedPart geometry={lidGeo()} material={lidMaterials} items={lids} castShadow />
           <InstancedPart geometry={barrelGeo(String(lod))} material={m.iron} items={barrels} castShadow />
-          {carriages.map(({ slot, recoil }) => {
-            const s = sideSign(slot.side)
-            return (
-              <Cannon
-                key={`${slot.g.x}${slot.side}`}
-                position={[slot.g.x, DECK.main, s * (slot.skin + 0.14 - 0.2475)]}
-                rotationY={s > 0 ? 0 : Math.PI}
-                livery={livery}
-                recoil={recoil}
-                scale={0.55}
-                lod={lod}
-              />
-            )
-          })}
         </>
       )}
+      {/* weather-deck carriage guns at every lod: the player's gun stations stand at them (a ring without a cannon otherwise) */}
+      {carriages.map(({ slot, recoil }) => {
+        const s = sideSign(slot.side)
+        return (
+          <Cannon
+            key={`${slot.g.x}${slot.side}`}
+            position={[slot.g.x, DECK.main, s * (slot.skin + 0.14 - 0.2475)]}
+            rotationY={s > 0 ? 0 : Math.PI}
+            livery={livery}
+            recoil={recoil}
+            scale={0.55}
+            lod={lod}
+          />
+        )
+      })}
     </group>
   )
 }
