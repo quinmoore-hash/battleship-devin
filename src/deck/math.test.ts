@@ -921,3 +921,26 @@ describe('manned eye stays inboard with the barrel in frame (BUG-800)', () => {
     }
   })
 })
+
+describe('manned view cone (owner): no own-ship obstacle within 1.0 u in the ±25° cone around the view centre, horizon in the middle third', () => {
+  it('every on-deck station of every class', () => {
+    const CONE = (25 * Math.PI) / 180
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      for (const s of stationsOf(a, deck)) {
+        if (!s.onDeck) continue
+        const label = `${id} station ${s.index}`
+        const { position, yaw, pitch } = gunnerPose(s, deck.obstacles)
+        // horizon (pitch above/below the centre) inside the middle third of a 70° frame
+        expect(Math.abs(pitch), label).toBeLessThanOrEqual(DECK_FOV_RAD / 6 + 1e-9)
+        // deck obstacles (masts, capstan, posts, hatches) intersecting the cone within 1 u — the barrel itself is not an obstacle
+        for (let i = -5; i <= 5; i++) {
+          const y = yaw + (i / 5) * CONE
+          const d = clearAhead(deck, [position[0], position[2]], y, 1.0, 0, 99)
+          expect(d, `${label} ray ${i}`).toBeGreaterThanOrEqual(1.0 - 1e-9)
+        }
+      }
+    }
+  })
+})

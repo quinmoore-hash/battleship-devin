@@ -885,6 +885,10 @@ export const GUN_EYE_BACK = 0.1
 export const GUN_EYE_BEHIND_BREECH = 0.12
 /** The view centre passes at least this far above the rail where it crosses the bulwark (the muzzle plane). */
 export const GUN_RAY_OVER_RAIL = 0.02
+/** The cap rail is about this far inboard of the muzzle plane (muzzles poke 0.015–0.14 u out of the planking). */
+export const GUN_RAIL_INSET = 0.08
+/** The cap rail sits this far below the view centre while manning (just inside the bottom edge of the 70° fov). */
+export const GUN_RAIL_BELOW_CENTRE = 0.55
 /** Default pitch while manning: a little down, so the near water shows under the horizon (horizon ≈ 7° above centre). */
 export const GUN_PITCH = -0.12
 
@@ -895,15 +899,46 @@ export const GUN_PITCH = -0.12
  * which on the galleon and man-o'-war waists is below the rail and on the frigate inside the netting roll (BUG-770).
  * Without a rail (fallback deck) the muzzle-relative height is kept; the muzzle is the one anchor guaranteed outside the planking.
  */
-export function gunnerPose(s: Station): { position: Vec3; yaw: number; pitch: number } {
+/** The manned view cone (owner): no deck obstacle within GUN_CONE_CLEAR u inside ±GUN_CONE_HALF of the view centre. */
+export const GUN_CONE_HALF = (25 * Math.PI) / 180
+export const GUN_CONE_CLEAR = 1.0
+
+/** Smallest clear distance over 11 rays across the manned view cone from `p` looking `yaw` (deck obstacles only). */
+export function gunnerConeClear(obstacles: DeckAnchors['obstacles'], p: Pt, yaw: number): number {
+  const deck = { walk: [], obstacles } as unknown as DeckAnchors
+  let worst = GUN_CONE_CLEAR
+  for (let i = -5; i <= 5; i++) worst = Math.min(worst, clearAhead(deck, p, yaw + (i / 5) * GUN_CONE_HALF, GUN_CONE_CLEAR, 0, 99))
+  return worst
+}
+
+export function gunnerPose(s: Station, obstacles: DeckAnchors['obstacles'] = []): { position: Vec3; yaw: number; pitch: number } {
   const [dx, , dz] = s.direction
   const h = Math.hypot(dx, dz) || 1
   const fx = dx / h
   const fz = dz / h
   const yaw = yawToward(fx, fz)
   if (s.rail === undefined) return { position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06], yaw, pitch: -0.08 }
-  const y = Math.max(s.muzzle[1] + 0.11, s.rail + GUN_EYE_OVER_RAIL)
-  const [ex, ez] = gunnerEyeXZ(s)
+  let [ex, ez] = gunnerEyeXZ(s)
+  if (obstacles.length && gunnerConeClear(obstacles, [ex, ez], yaw) < GUN_CONE_CLEAR) {
+    // a mast / pin rail / post in the cone: slide the eye outboard along the barrel (never past GUN_EYE_BACK behind the muzzle)
+    const maxT = s.muzzle[0] * fx + s.muzzle[2] * fz - GUN_EYE_BACK
+    let best: Pt = [ex, ez]
+    let bestClear = gunnerConeClear(obstacles, best, yaw)
+    for (let t = 0.02; bestClear < GUN_CONE_CLEAR && ex * fx + ez * fz + t <= maxT + 1e-9; t += 0.02) {
+      const q: Pt = [ex + fx * t, ez + fz * t]
+      const c = gunnerConeClear(obstacles, q, yaw)
+      if (c > bestClear) {
+        best = q
+        bestClear = c
+      }
+    }
+    ;[ex, ez] = best
+  }
+  // the cap rail sits at the bottom edge of the frame, not mid-frame: the eye stands high enough over the rail for the
+  // rail (≈ GUN_RAIL_INSET inboard of the muzzle plane) to be GUN_RAIL_BELOW_CENTRE under the view centre at GUN_PITCH
+  const toRail = Math.max(0.15, Math.hypot(s.muzzle[0] - ex, s.muzzle[2] - ez) - GUN_RAIL_INSET)
+  const over = Math.max(GUN_EYE_OVER_RAIL, toRail * Math.tan(GUN_RAIL_BELOW_CENTRE + GUN_PITCH))
+  const y = Math.max(s.muzzle[1] + 0.11, s.rail + over)
   return { position: [ex, y, ez], yaw, pitch: gunnerPitch([ex, y, ez], s) }
 }
 
