@@ -158,3 +158,18 @@ describe('brigantine root fit (footprint inside its 3 cells)', () => {
     for (const p of BRIGANTINE_ANCHORS.impactPoints) expect(Math.abs(p[0])).toBeLessThan(HALF)
   })
 })
+
+describe('brigantine rig vs the walking eye (BUG-798)', () => {
+  it('the main boom and the mainsail foot clear the eye of a player walking the cabin roof', async () => {
+    const { MAIN_BOOM_Y } = await import('./rig')
+    const { CABIN_TOP_Y } = await import('./hull')
+    const { resolveDeckAnchors, stationsOf, walkEyeHeight } = await import('../../deck/math')
+    const { SHIPS } = await import('../index')
+    const deck = resolveDeckAnchors(SHIPS.brigantine.anchors, 'brigantine')
+    const eye = CABIN_TOP_Y + walkEyeHeight(deck, stationsOf(SHIPS.brigantine.anchors, deck))
+    const boomBottom = DECK_Y + MAIN_BOOM_Y - 0.022
+    expect(boomBottom).toBeGreaterThan(eye + 0.05)
+    // the old boom (DECK_Y + 0.3 = 0.65) sat right at the roof eye (≈ 0.68): the sail filled the view aft
+    expect(DECK_Y + 0.3).toBeLessThan(eye)
+  })
+})

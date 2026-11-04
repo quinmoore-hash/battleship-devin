@@ -8,6 +8,7 @@ import { OceanScene } from '../scene'
 import type { Weather } from '../scene/sun'
 import { BOARD_LAYOUT, type Vec3 } from '../scene/layout'
 import { sampleWaveHeight } from '../scene/waves'
+import { directionToWorld, localToWorld } from '../vfx/cannon/anchors'
 import { usePerf } from '../perf'
 import { Fleet, SHIPS, shipWorldTransform } from './index'
 import type { Livery } from './types'
@@ -60,11 +61,12 @@ function wreckFleet(count: number): PlacedShip[] {
 
 function EyeCamera({ ship, look, eye }: { ship: PlacedShip; look: Vec3; eye?: Vec3 }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
-  const dir = useMemo(() => new THREE.Vector3(...look).normalize(), [look])
+  const pose = shipWorldTransform(ship, BOARD_LAYOUT.player.origin, 1)
+  const dir = useMemo(() => new THREE.Vector3(...directionToWorld(look, pose.rotationY)).normalize(), [look, pose.rotationY])
   const tmp = useRef(new THREE.Vector3())
-  const { position } = shipWorldTransform(ship, BOARD_LAYOUT.player.origin, 1)
+  const { position } = pose
   const def = SHIPS[ship.spec.id]
-  const helm = eye ?? def.anchors.deck?.spawn ?? HELM_GUESS[ship.spec.id]
+  const helm = localToWorld(eye ?? def.anchors.deck?.spawn ?? HELM_GUESS[ship.spec.id], { position: [0, 0, 0], rotationY: pose.rotationY })
 
   useEffect(() => {
     applyDeckLens(camera)

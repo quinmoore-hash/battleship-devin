@@ -308,9 +308,12 @@ export function shipWorldPosition(ship: PlacedShip, owner: Player): Vec3 {
   return [pose.position[0], pose.position[1] + SHIPS[ship.spec.id].anchors.deckY, pose.position[2]]
 }
 
-/** Cell index along the ship for a ship-space x (bow +x = cell 0, matching the classes' `gunCell`); clamped to the hull. */
+/**
+ * Engine cell index (`ship.cells[i]`) under a ship-space x, clamped to the hull. `shipWorldTransform` puts the origin
+ * cell at the stern (−x) — the opposite of the classes' bow-indexed `gunCell` (see `cannonEngineCell`).
+ */
 export function cellAtLocalX(x: number, length: number): number {
-  return Math.min(length - 1, Math.max(0, Math.floor(length / 2 - x)))
+  return Math.min(length - 1, Math.max(0, Math.round(x + (length - 1) / 2)))
 }
 
 /** Ship-space x / z of a world point for a ship at `pose` (inverse of `localToWorld`). */
@@ -323,6 +326,9 @@ export function worldToLocal(point: Vec3, pose: ShipPose): [number, number] {
 }
 
 /** Which hull section (cell index) of `ship` a world point is over. */
+/** The classes index cannon cells from the bow (+x); the engine's `cells[]` run from the stern. */
+export const cannonEngineCell = (cell: number, length: number): number => length - 1 - cell
+
 export function standingCell(ship: PlacedShip, pose: ShipPose, point: Vec3): number {
   return cellAtLocalX(worldToLocal(point, pose)[0], ship.spec.length)
 }
@@ -333,7 +339,7 @@ export function standingCellFor(pov: PovContext, eye: Vec3 | null): number | nul
   const anchors = SHIPS[pov.standing.spec.id].anchors
   if (pov.deck.station !== null) {
     const c = anchors.cannons[pov.deck.station]
-    if (c) return c.cell
+    if (c) return cannonEngineCell(c.cell, pov.standing.spec.length)
   }
   if (!eye) return null
   return standingCell(pov.standing, shipWorldTransform(pov.standing, ownBoardOrigin(pov.perspective)), eye)
@@ -357,7 +363,7 @@ export function overboardFor(pov: PovContext, event: CinematicEvent, own: readon
   if (hitCell < 0 || mine === null || mine !== hitCell) return null
   const pose = shipWorldTransform(ship, ownBoardOrigin(pov.perspective))
   const anchors = SHIPS[ship.spec.id].anchors
-  const [lx, lz] = eye ? worldToLocal(eye, pose) : [ship.spec.length / 2 - (hitCell + 0.5), 0]
+  const [lx, lz] = eye ? worldToLocal(eye, pose) : [hitCell - (ship.spec.length - 1) / 2, 0]
   const side = lz < 0 ? -1 : 1
   const point: Vec3 = eye ?? localToWorld([lx, anchors.deckY + 0.17, 0], pose)
   const splash = localToWorld([lx, 0, side * (anchors.hull.beam / 2 + 0.6)], pose)

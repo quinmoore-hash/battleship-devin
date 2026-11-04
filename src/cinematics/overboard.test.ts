@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { deckBus, deckCameraLease, type DeckBusEvent, type DeckState } from '../deck/contract'
 import { FLEET, type PlacedShip } from '../engine'
-import { BOARD_LAYOUT } from '../scene/layout'
+import { BOARD_LAYOUT, cellToWorld } from '../scene/layout'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { createDirector } from './director'
-import { cellAtLocalX, deckEye, overboardFor, overboardNextUid, playerEye, povFor, standingCell, standingCellFor, worldToLocal } from './pov'
+import { cannonEngineCell, cellAtLocalX, deckEye, overboardFor, overboardNextUid, playerEye, povFor, standingCell, standingCellFor, worldToLocal } from './pov'
 import { playerDeck, setPlayerDeck } from '../crew/playerPose'
 import { OVERBOARD_SECONDS, buildSequence } from './sequence'
 import type { CinematicEvent } from './types'
@@ -35,13 +35,36 @@ afterEach(() => {
 })
 
 describe('which hull section am I standing on', () => {
-  it('cellAtLocalX: bow (+x) is cell 0, stern is the last cell, clamped past the ends', () => {
-    expect(cellAtLocalX(1.5, 4)).toBe(0)
-    expect(cellAtLocalX(0.5, 4)).toBe(1)
-    expect(cellAtLocalX(-0.5, 4)).toBe(2)
-    expect(cellAtLocalX(-1.5, 4)).toBe(3)
-    expect(cellAtLocalX(9, 4)).toBe(0)
-    expect(cellAtLocalX(-9, 4)).toBe(3)
+  it('cellAtLocalX: the stern (−x) is engine cell 0, the bow the last cell, clamped past the ends', () => {
+    expect(cellAtLocalX(-1.5, 4)).toBe(0)
+    expect(cellAtLocalX(-0.5, 4)).toBe(1)
+    expect(cellAtLocalX(0.5, 4)).toBe(2)
+    expect(cellAtLocalX(1.5, 4)).toBe(3)
+    expect(cellAtLocalX(-9, 4)).toBe(0)
+    expect(cellAtLocalX(9, 4)).toBe(3)
+    expect(cellAtLocalX(-1.3, 3)).toBe(0)
+    expect(cellAtLocalX(1.3, 3)).toBe(2)
+  })
+
+  it('standingCell agrees with where the engine draws each hit cell (cellToWorld), both placements, all classes', () => {
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      for (const orientation of ['horizontal', 'vertical'] as const) {
+        const ship = mk(id, 2, 1, orientation)
+        const sp = shipWorldTransform(ship, BOARD_LAYOUT.player.origin)
+        ship.cells.forEach((c, i) => {
+          const w = cellToWorld(c, BOARD_LAYOUT.player.origin)
+          expect(standingCell(ship, sp, [w[0], deckY + 0.3, w[2]])).toBe(i)
+        })
+        const anchors = SHIPS[id].anchors
+        anchors.cannons.forEach((g) => {
+          const n = ship.spec.length
+          const engineCell = cannonEngineCell(g.cell, n)
+          // a cannon's cell is where its breech sits; muzzles on a cell boundary may round either way
+          const fromBreech = Math.abs(g.muzzle[0] + (n - 1) / 2 - Math.round(g.muzzle[0] + (n - 1) / 2))
+          if (fromBreech < 0.25) expect(engineCell).toBe(standingCell(ship, sp, localToWorld([g.muzzle[0], anchors.deckY + 0.3, 0], sp)))
+        })
+      }
+    }
   })
 
   it('worldToLocal inverts localToWorld for a rotated ship', () => {
@@ -56,7 +79,7 @@ describe('which hull section am I standing on', () => {
     for (const ship of [frigate, mk('frigate', 7, 2, 'vertical')]) {
       const sp = shipWorldTransform(ship, BOARD_LAYOUT.player.origin)
       for (let i = 0; i < ship.spec.length; i++) {
-        const eye = localToWorld([ship.spec.length / 2 - (i + 0.5), deckY + 0.17, 0.1], sp)
+        const eye = localToWorld([i + 0.5 - ship.spec.length / 2, deckY + 0.17, 0.1], sp)
         expect(standingCell(ship, sp, eye)).toBe(i)
       }
     }
@@ -74,19 +97,19 @@ describe('which hull section am I standing on', () => {
     const eye = playerEye(pov)!
     expect(eye).toEqual(localToWorld([-1.2, deckY + 0.17, 0.1], pose))
     expect(worldToLocal(eye, pose)[0]).toBeCloseTo(-1.2, 5)
-    expect(standingCellFor(pov, eye)).toBe(frigate.spec.length - 1)
+    expect(standingCellFor(pov, eye)).toBe(0)
   })
 
   it('standingCellFor: the manned gun decides, else the eye; unknown without either', () => {
     const pov = povFor(hitAt(1), onDeck, fleets, 'human')!
     expect(standingCellFor(pov, null)).toBeNull()
-    expect(standingCellFor(pov, localToWorld([-1.2, deckY, 0], pose))).toBe(frigate.spec.length - 1)
+    expect(standingCellFor(pov, localToWorld([-1.2, deckY, 0], pose))).toBe(0)
     const manned = povFor(hitAt(1), { ...onDeck, station: 0 }, fleets, 'human')!
-    expect(standingCellFor(manned, null)).toBe(SHIPS.frigate.anchors.cannons[0].cell)
+    expect(standingCellFor(manned, null)).toBe(frigate.spec.length - 1 - SHIPS.frigate.anchors.cannons[0].cell)
   })
 
   it('overboardFor: only an incoming hit on the very section the player is on; never a miss, never outgoing', () => {
-    const eye = localToWorld([0.5, deckY + 0.17, -0.2], pose) // over cell 1, port side
+    const eye = localToWorld([0.2, deckY + 0.17, -0.2], pose) // over cell 1 (the middle of 3), port side
     const pov = povFor(hitAt(1), onDeck, fleets, 'human')!
     const ob = overboardFor(pov, hitAt(1), fleets.human, eye)!
     expect(ob).toMatchObject({ cell: 1, nextUid: 'sloop' })
@@ -147,7 +170,7 @@ describe('director: camera lease and the thrown-overboard beat', () => {
   it('the ball on my section: thrown-overboard is emitted at the overboard beat (once), with the next ship', () => {
     const { events, off } = record()
     unsub = off
-    deckEye.position = localToWorld([0.5, deckY + 0.17, 0.2], pose) // cell 1
+    deckEye.position = localToWorld([0.2, deckY + 0.17, 0.2], pose) // cell 1
     const d = make()
     void d.play(hitAt(1), 'full')
     expect(d.active?.pov?.overboard).toMatchObject({ cell: 1, nextUid: 'sloop' })
@@ -163,7 +186,7 @@ describe('director: camera lease and the thrown-overboard beat', () => {
   })
 
   it('the ball on another section, or with the eye unknown: a plain shot (no overboard beat)', () => {
-    deckEye.position = localToWorld([0.5, deckY + 0.17, 0.2], pose) // cell 1
+    deckEye.position = localToWorld([0.2, deckY + 0.17, 0.2], pose) // cell 1
     const d = make()
     void d.play(hitAt(2), 'fast')
     expect(d.active?.pov?.overboard).toBeUndefined()
@@ -178,7 +201,7 @@ describe('director: camera lease and the thrown-overboard beat', () => {
   it('cinematics off: the event still fires synchronously', () => {
     const { events, off } = record()
     unsub = off
-    deckEye.position = localToWorld([0.5, deckY + 0.17, 0.2], pose)
+    deckEye.position = localToWorld([0.2, deckY + 0.17, 0.2], pose)
     const d = make()
     void d.play(hitAt(1), 'off')
     expect(events.filter((e) => e.type === 'thrown-overboard')).toHaveLength(1)

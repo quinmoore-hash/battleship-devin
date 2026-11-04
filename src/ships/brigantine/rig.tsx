@@ -314,7 +314,7 @@ export function ForeMast({ base, height, sails, snapped, damaged, phase, lod, ma
 /** Where the main gaff sits for a given sail setting (jaws y, angle). */
 export function gaffPose(height: number, set: number) {
   const lowerH = height * 0.64
-  const jawsY = 0.42 + (lowerH - 0.06 - 0.42) * set
+  const jawsY = 0.5 + (lowerH - 0.06 - 0.5) * set
   const angle = 0.08 + 0.62 * set
   const length = 0.78
   const peak: Vec3 = [-Math.cos(angle) * length, jawsY + Math.sin(angle) * length, 0]
@@ -322,7 +322,7 @@ export function gaffPose(height: number, set: number) {
 }
 
 export const MAIN_BOOM_LENGTH = 1.06
-export const MAIN_BOOM_Y = 0.3
+export const MAIN_BOOM_Y = 0.42
 
 /** Gaff-rigged mainmast: boom, gaff, big fore-and-aft mainsail, gaff topsail. */
 export function MainMast({ base, height, sails, snapped, damaged, phase, lod, mats, motion, shadows }: MastProps) {
