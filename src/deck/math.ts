@@ -637,15 +637,15 @@ export function railAhead(deck: DeckAnchors, p: Pt, level: number, yaw: number):
 }
 
 /** How far along the deck (±x, in `SPAWN_SHIFT_STEP`s) the spawn stand may back off to find a clear view. */
-export const SPAWN_SHIFT_MAX = 0.3
+export const SPAWN_SHIFT_MAX = 0.5
 export const SPAWN_SHIFT_STEP = 0.05
 
 /**
  * The stand a boarding player takes from the chosen pose `p`: on the enemy's side of the deck (`side` = sign of z toward
  * the enemy) but at least `RAIL_INSET` (+ the player radius) from that rail, settled on the deck, out of obstacles and
- * blocked bands — and, when the view from there is boxed in (a mast trunk, a cabin fixture), backed off along the deck
- * up to `SPAWN_SHIFT_MAX` to the nearest stand whose look (`clearLookYaw` from `yaw`) is clear. A deck too narrow for the
- * inset stands on its centreline.
+ * blocked bands. When the view from there is boxed in (a mast trunk, a cabin front) the stand backs off along the deck,
+ * up to `SPAWN_SHIFT_MAX`, to the nearest stand that sees the enemy (`yaw`) clear, else one that sees the bow clear, else
+ * one with any clear look (`clearLookYaw`), else the best available. A deck too narrow for the inset stands on its centreline.
  */
 export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: number, inset = RAIL_INSET): WalkPose {
   const walk = deck.walk[p.level]?.points
@@ -660,24 +660,31 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
     }
     return stepOnDeck({ ...p, x: q[0], z: q[1] }, 0, 0, deck)
   }
-  let best: WalkPose | null = null
-  let bestScore = -Infinity
+  const bow = yawToward(1, 0)
+  const candidates: { st: WalkPose; insetOk: boolean; enemy: number; bow: number; any: number; k: number }[] = []
   for (let k = 0; k * SPAWN_SHIFT_STEP <= SPAWN_SHIFT_MAX + 1e-9; k++) {
     for (const dir of k === 0 ? [0] : [-1, 1]) {
       const st = standAt(p.x + dir * k * SPAWN_SHIFT_STEP)
       if (st.level !== p.level || deck.blocked?.some((b) => inBand(st.x, b))) continue
       const at: Pt = [st.x, st.z]
-      const insetOk = rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6
-      const view = clearAhead(deck, at, clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_CLEAR_AHEAD, st.level), SPAWN_CLEAR_AHEAD, PLAYER_RADIUS, st.level)
-      if (insetOk && view >= SPAWN_CLEAR_AHEAD) return st
-      const score = (insetOk ? 1 : 0) + view / SPAWN_CLEAR_AHEAD - k * 0.01
-      if (score > bestScore) {
-        bestScore = score
-        best = st
-      }
+      const see = (y: number) => clearAhead(deck, at, y, SPAWN_CLEAR_AHEAD, PLAYER_RADIUS, st.level)
+      candidates.push({ st, k, insetOk: rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6, enemy: see(yaw), bow: see(bow), any: see(clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_CLEAR_AHEAD, st.level)) })
     }
   }
-  return best ?? p
+  for (const view of ['enemy', 'bow', 'any'] as const) {
+    const hit = candidates.find((c) => c.insetOk && c[view] >= SPAWN_CLEAR_AHEAD)
+    if (hit) return hit.st
+  }
+  let best = p
+  let bestScore = -Infinity
+  for (const c of candidates) {
+    const score = (c.insetOk ? 1 : 0) + c.any / SPAWN_CLEAR_AHEAD - c.k * 0.01
+    if (score > bestScore) {
+      bestScore = score
+      best = c.st
+    }
+  }
+  return best
 }
 
 /**
