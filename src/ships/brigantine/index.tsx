@@ -57,7 +57,7 @@ import {
   SwivelGun,
   Windlass,
 } from './parts'
-import { rigCulled } from '../kit/rigCull'
+import { rigCulled, spanCulled } from '../kit/rigCull'
 import { Cloth, Ensign, ForeMast, MAIN_BOOM_LENGTH, MAIN_BOOM_Y, MainMast, Pennant, RopeSet, type RopeLine, gaffPose, shroudLines } from './rig'
 
 export { BRIGANTINE_ANCHORS } from './anchors'
@@ -324,10 +324,10 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
           <RopeCoil position={[MAINMAST_X - 0.14, DECK_Y, -0.1]} livery={livery} />
           <RopeCoil position={[1.0, DECK_Y, 0]} livery={livery} />
           <Cleats xs={[1.05, 0.45, -0.05, -0.75, -1.3]} mats={mats} />
-          <Netting x0={-1.0} x1={-0.65} side="port" height={0.07} mats={mats} />
-          <Netting x0={-1.0} x1={-0.65} side="starboard" height={0.07} mats={mats} />
-          <Netting x0={0.0} x1={0.5} side="port" height={0.07} mats={mats} />
-          <Netting x0={0.0} x1={0.5} side="starboard" height={0.07} mats={mats} />
+          {!spanCulled(-1.0, -0.65, rigCullX) && <Netting x0={-1.0} x1={-0.65} side="port" height={0.07} mats={mats} />}
+          {!spanCulled(-1.0, -0.65, rigCullX) && <Netting x0={-1.0} x1={-0.65} side="starboard" height={0.07} mats={mats} />}
+          {!spanCulled(0.0, 0.5, rigCullX) && <Netting x0={0.0} x1={0.5} side="port" height={0.07} mats={mats} />}
+          {!spanCulled(0.0, 0.5, rigCullX) && <Netting x0={0.0} x1={0.5} side="starboard" height={0.07} mats={mats} />}
           <BrigLantern position={[MAINMAST_X + 0.12, DECK_Y + 0.22, 0.02]} mats={mats} scale={0.7} />
         </>
       )}

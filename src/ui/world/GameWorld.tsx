@@ -7,6 +7,7 @@ import { usePerf } from '../../perf/store'
 import { BoardGrid } from '../../scene/BoardGrid'
 import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
 import { Fleet, SHIPS, Ship } from '../../ships'
+import { resolveDeckAnchors } from '../../deck/math'
 import { CrewLayer } from '../../crew'
 import { isHotSeat, other, placementBoard, useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
@@ -284,7 +285,12 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
   const onDeck = deck.on && !over
   const standing = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid === deck.shipUid) : []), [onDeck, own.ships, deck.shipUid])
-  const rigCullX = deck.station !== null && standing[0] ? (SHIPS[standing[0].spec.id].anchors.cannons[deck.station]?.muzzle[0] ?? null) : null
+  // rigging beside the player is hidden on deck: the manned cannon's x, else the spawn's (the first look after V / Tab / respawn)
+  const rigCullX = standing[0]
+    ? deck.station !== null
+      ? (SHIPS[standing[0].spec.id].anchors.cannons[deck.station]?.muzzle[0] ?? null)
+      : resolveDeckAnchors(SHIPS[standing[0].spec.id].anchors, standing[0].spec.id).spawn[0]
+    : null
   const ownRest = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid !== deck.shipUid) : own.ships), [onDeck, own.ships, deck.shipUid])
   // Medium budget (≤ 350 draws): a live lod-0 man-o'-war alone is ~420 draws, so only High stands on a live ship; Medium
   // rides the baked lod-1 copy. The neighbours never go live either (High would pick lod 0 for anything within 6 u).

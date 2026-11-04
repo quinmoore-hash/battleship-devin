@@ -136,12 +136,12 @@ function Afloat({ position, depth, rotationY, children }: { position: Vec3; dept
 }
 
 /**
- * Lod of a ship in a fixed-lod fleet. The dressed (standing) ship goes live (lod 0) while a cannon is manned: the
+ * Lod of a ship in a fixed-lod fleet. The dressed (standing) ship goes live (lod 0) whenever a rigging cull applies (on deck): the
  * Medium / Low tiers render the standing ship from the bake (one merged mesh per material), where neither the
  * rigging cull (`kit/rigCull`) nor per-mast hiding can apply — the gunner's view cone would keep its own shrouds.
  */
-export function standingShipLod(lod: Lod | 'auto', dressed: boolean, manning: boolean): Lod {
-  if (dressed && manning) return 0
+export function standingShipLod(lod: Lod | 'auto', dressed: boolean, cull: boolean): Lod {
+  if (dressed && cull) return 0
   return lod === 'auto' ? 2 : lod
 }
 
