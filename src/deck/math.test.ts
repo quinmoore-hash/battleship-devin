@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS } from '../ships'
+import { MASTS, mastBase, mastTop, riggingSegments } from '../ships/galleon/anchors'
+import { YARDS } from '../ships/galleon'
+import { GALLEON } from '../ships/galleon/hull'
+import type { Vec3 } from '../scene/layout'
 import { BOARD_LAYOUT, boardCenter, cellToWorld } from '../scene/layout'
 import { shipRotationY, shipWorldTransform } from '../ships'
 import { FLEET_BY_ID, type PlacedShip } from '../engine'
@@ -36,6 +40,9 @@ import {
   spawnLookYaw,
   gunnerEyeXZ,
   viewConeBlocked,
+  SPAWN_PITCH,
+  GUN_CONE_HALF,
+  GUN_CONE_CLEAR,
   GUN_EYE_BACK,
   GUN_EYE_BEHIND_BREECH,
   GUN_RAY_OVER_RAIL,
@@ -879,6 +886,39 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw)).toBe(SPAWN_CLEAR_AHEAD)
     const h = controllerSpawn('man-o-war', 'horizontal')
     expect(Math.abs(angleDelta(h.yaw, h.localYaw))).toBeLessThan(0.1) // the enemy beam (openView) ≈ the enemy bearing
+  })
+
+  describe('galleon spawn view cone (BUG-893): the waist stand looks over the cap rail, not into the shroud fans', () => {
+    /** Own-ship geometry that can cross a first look: shrouds + stays, mast trunks, yards, and the guns (breech → muzzle). */
+    const ownGeometry = () => {
+      const segs = [...riggingSegments()]
+      for (const m of MASTS) {
+        segs.push({ a: mastBase(m), b: mastTop(m) })
+        for (const y of YARDS[m.name]) segs.push({ a: [m.x, mastBase(m)[1] + y.y, -y.width / 2], b: [m.x, mastBase(m)[1] + y.y, y.width / 2] })
+      }
+      for (const c of SHIPS.galleon.anchors.cannons) segs.push({ a: [c.muzzle[0], c.muzzle[1], c.muzzle[2] * 0.4], b: c.muzzle })
+      return segs
+    }
+
+    it.each(['horizontal', 'vertical'] as const)('%s placement: stand on the waist at the enemy rail, nothing nearer than 1 u inside the central ±25° cone', (orientation) => {
+      const { deck, p, side, yaw } = controllerSpawn('galleon', orientation)
+      expect(p.y).toBeCloseTo(GALLEON.mainDeckY, 6)
+      expect(Math.sign(p.z)).toBe(side)
+      expect(Math.abs(lookForward(yaw, 0)[2])).toBeGreaterThan(0.95)
+      const eye: Vec3 = [p.x, p.y + walkEyeHeight(deck, stationsOf(SHIPS.galleon.anchors, deck)), p.z]
+      const segs = ownGeometry()
+      expect(segs.length).toBeGreaterThan(30)
+      expect(viewConeBlocked(segs, eye, yaw, SPAWN_PITCH)).toBe(false)
+      const f = lookForward(yaw, SPAWN_PITCH)
+      for (const seg of segs) {
+        for (let i = 0; i <= 16; i++) {
+          const t = i / 16
+          const d: Vec3 = [seg.a[0] + (seg.b[0] - seg.a[0]) * t - eye[0], seg.a[1] + (seg.b[1] - seg.a[1]) * t - eye[1], seg.a[2] + (seg.b[2] - seg.a[2]) * t - eye[2]]
+          const len = Math.hypot(d[0], d[1], d[2])
+          if ((d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len > Math.cos(GUN_CONE_HALF)) expect(len, `${JSON.stringify(seg)} inside the spawn cone`).toBeGreaterThanOrEqual(GUN_CONE_CLEAR)
+        }
+      }
+    })
   })
 })
 

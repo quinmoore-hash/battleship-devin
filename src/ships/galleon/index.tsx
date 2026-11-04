@@ -13,7 +13,7 @@ import { useGameStore } from '../../store/gameStore'
 import { Anchor, Barrel, Cannon, Crate, Flag, HullHole, Lantern, Railing, Ratlines, Rope, RopeCoil, SternLantern, Wheel } from '../kit'
 import { rigCulled } from '../kit/rigCull'
 import type { CannonRef, CellDamage, Livery, Lod, ShipDefinition, ShipModelProps } from '../types'
-import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, cannonPlacements, cellCenterX, cellOfX, mastBase, sideSign, type CannonPlacement, type MastSpec } from './anchors'
+import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, SHROUD_SPREAD, cannonPlacements, cellCenterX, cellOfX, mastBase, shroudRig, sideSign, staySpecs, type CannonPlacement, type MastSpec } from './anchors'
 import { GALLEON as G, crossPlane, deckStrip, deckY, halfWidth, keelLine, loftProfile, railY, stations, stemCurve, triangleCount, wale } from './hull'
 import { galleonMaterials, type GalleonMaterials } from './materials'
 import { Beam, ClothSail, Door, Ensign, FurledBundle, Grating, Instanced, Splinters, Stairs, Window } from './parts'
@@ -455,7 +455,7 @@ interface YardSpec {
   sailHeight: number
 }
 
-const YARDS: Record<MastSpec['name'], YardSpec[]> = {
+export const YARDS: Record<MastSpec['name'], YardSpec[]> = {
   fore: [
     { width: 1.25, y: 0.95, sailHeight: 0.5 },
     { width: 0.95, y: 1.55, sailHeight: 0.42 },
@@ -580,35 +580,22 @@ function Rig({ lod, m, livery, sails, sink, damage, phase, reducedMotion, rigCul
 }
 
 function StandingRigging({ lod, livery, sink, cullX = null }: { lod: Lod; livery: Livery; sink: number; cullX?: number | null }) {
-  const [fore, main, mizzen] = MASTS
-  const top = (s: MastSpec, k = 1): Vec3 => [s.x, deckY(s.x) + s.height * k, 0]
   const rungs = lod === 0 ? 9 : 4
+  const mastX = (name: MastSpec['name']) => MASTS.find((m) => m.name === name)!.x
   if (sink > 0.35) return null
   return (
     <group>
       {MASTS.map((s) => {
         if (rigCulled(s.x, cullX)) return null
-        const ry = railY(s.x) + 0.02
-        const hw = halfWidth(s.x, ry) - G.plank - 0.02
+        const { from, to } = shroudRig(s)
         return (
           <group key={s.name}>
-            <Ratlines from={[s.x, ry, hw]} to={[s.x, deckY(s.x) + s.height * 0.62, 0.03]} livery={livery} rungs={rungs} spread={0.3} lod={lod} />
+            <Ratlines from={from} to={[to[0], to[1], 0.03]} livery={livery} rungs={rungs} spread={SHROUD_SPREAD} lod={lod} />
           </group>
         )
       })}
       {/* stays and backstays: hidden with the mast they rise from while that mast's rigging is culled (first look / manning) */}
-      {!rigCulled(fore.x, cullX) && <Rope from={top(fore, 0.98)} to={[G.xBow + 0.95, 1.48, 0]} livery={livery} sag={0.03} lod={lod} />}
-      {!rigCulled(fore.x, cullX) && <Rope from={top(fore, 0.62)} to={[G.xBow + 0.3, 1.18, 0]} livery={livery} sag={0.03} lod={lod} />}
-      {!rigCulled(main.x, cullX) && <Rope from={top(main, 0.98)} to={top(fore, 0.62)} livery={livery} sag={0.03} lod={lod} />}
-      {!rigCulled(main.x, cullX) && <Rope from={top(main, 0.62)} to={[fore.x - 0.1, G.forecastleDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />}
-      {!rigCulled(mizzen.x, cullX) && <Rope from={top(mizzen, 0.98)} to={top(main, 0.62)} livery={livery} sag={0.03} lod={lod} />}
-      {!rigCulled(mizzen.x, cullX) && <Rope from={top(mizzen, 0.6)} to={[main.x - 0.12, G.mainDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />}
-      {[1, -1].map((s) => (
-        <group key={s}>
-          {!rigCulled(main.x, cullX) && <Rope from={top(main, 0.97)} to={[G.poopX + 0.05, G.quarterDeckY + 0.08, s * (halfWidth(G.poopX + 0.05, 1.05) - 0.08)]} livery={livery} lod={lod} />}
-          {!rigCulled(mizzen.x, cullX) && <Rope from={top(mizzen, 0.97)} to={[G.xStern + 0.1, G.poopDeckY + 0.08, s * (halfWidth(G.xStern + 0.1, 1.45) - 0.08)]} livery={livery} lod={lod} />}
-        </group>
-      ))}
+      {staySpecs().map((st, i) => !rigCulled(mastX(st.mast), cullX) && <Rope key={i} from={st.from} to={st.to} livery={livery} sag={st.sag} lod={lod} />)}
     </group>
   )
 }
