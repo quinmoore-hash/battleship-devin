@@ -164,6 +164,9 @@ export function BoardGrid({
   const floatMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.85), roughness: 0.9 }), 0.03), [color])
   const plateMat = useMemo(() => rideTheWaves(new THREE.MeshBasicMaterial({ color: highlightColor, transparent: true, opacity: 0.4, toneMapped: false, depthWrite: false })), [highlightColor])
   useEffect(() => () => void (ropeGeo.dispose(), floatGeo.dispose(), ropeTex.dispose()), [ropeGeo, floatGeo, ropeTex])
+  useEffect(() => () => ropeMat.dispose(), [ropeMat])
+  useEffect(() => () => floatMat.dispose(), [floatMat])
+  useEffect(() => () => plateMat.dispose(), [plateMat])
 
   const ropeCount = 2 * size * (size + 1)
   const floatCount = (size + 1) * (size + 1)

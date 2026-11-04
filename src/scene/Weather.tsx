@@ -110,6 +110,7 @@ export function Rain({ storm, quality }: { storm: number; quality: 'low' | 'high
       }),
     [],
   )
+  useEffect(() => () => material.dispose(), [material])
   useFrame((state) => {
     material.uniforms.uTime.value = state.clock.elapsedTime
     material.uniforms.uOpacity.value = storm
@@ -137,6 +138,7 @@ export function Gulls({ count = 7, storm = 0 }: { count?: number; storm?: number
   }, [count])
   const body = useMemo(() => new THREE.MeshStandardMaterial({ color: '#eef1f4', roughness: 0.8 }), [])
   const tip = useMemo(() => new THREE.MeshStandardMaterial({ color: '#222a33', roughness: 0.8 }), [])
+  useEffect(() => () => void (body.dispose(), tip.dispose()), [body, tip])
   useFrame((state) => {
     const g = group.current
     if (!g) return
@@ -207,6 +209,7 @@ export function Dolphins({ storm = 0 }: { storm?: number }) {
     g.computeVertexNormals()
     return g
   }, [])
+  useEffect(() => () => void (skin.dispose(), belly.dispose(), bodyGeo.dispose()), [skin, belly, bodyGeo])
   const PERIOD = 26
   useFrame((state) => {
     const g = group.current
