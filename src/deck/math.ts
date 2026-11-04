@@ -659,10 +659,10 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
   const standAt = (x: number): WalkPose => {
     const q: Pt = clampToPolygon([x, side * Math.abs(p.z)], walk)
     const toRail = rayToPolygonEdge(q, [0, side], walk)
-    if (toRail < keep) {
-      const toOther = rayToPolygonEdge(q, [0, -side], walk)
-      q[1] = toOther + toRail < 2 * keep ? q[1] - side * (toOther - toRail) * 0.5 : q[1] - side * (keep - toRail)
-    }
+    const toOther = rayToPolygonEdge(q, [0, -side], walk)
+    // stand `keep` off the enemy-side rail (the view over it is the point; the e2e runs along the rail from here)
+    if (toOther + toRail < 2 * keep) q[1] -= side * (toOther - toRail) * 0.5
+    else q[1] += side * (toRail - keep)
     return stepOnDeck({ ...p, x: q[0], z: q[1] }, 0, 0, deck)
   }
   const bow = yawToward(1, 0)
@@ -700,7 +700,12 @@ export const spawnLookYaw = (deck: DeckAnchors, p: WalkPose, localYaw: number, s
  * Yaws to try after the enemy-facing one: along the deck toward the bow (the waist and the ship in frame — the quarterdeck
  * beams are lined with shrouds), the enemy's beam (`side` = sign of z toward the enemy), the other beam, the stern.
  */
-export const spawnYawFallbacks = (side: 1 | -1): number[] => [yawToward(1, 0), yawToward(0, side), yawToward(0, -side), yawToward(-1, 0)]
+/**
+ * Facings tried when the exact enemy bearing is blocked: the enemy's beam first (the foe is a degree or two off the
+ * beam on a vertically placed ship, and a cleat or ladder on that bearing used to send the spawn facing along the deck,
+ * where a run along the rail walks into the bulwark — e2e footsteps), then the bow, the far beam and the stern.
+ */
+export const spawnYawFallbacks = (side: 1 | -1): number[] => [yawToward(0, side), yawToward(1, 0), yawToward(0, -side), yawToward(-1, 0)]
 
 
 /** Yaw (radians, 'YXZ' camera convention: yaw 0 looks down −z) that faces the horizontal direction (dx, dz). */
@@ -911,7 +916,27 @@ export function gunnerConeClear(obstacles: DeckAnchors['obstacles'], p: Pt, yaw:
   return worst
 }
 
-export function gunnerPose(s: Station, obstacles: DeckAnchors['obstacles'] = []): { position: Vec3; yaw: number; pitch: number } {
+/** True when a sample of `view` (breast rails …) lies within GUN_CONE_CLEAR of `eye` inside the ±GUN_CONE_HALF view cone. */
+export function viewConeBlocked(view: NonNullable<DeckAnchors['viewObstacles']>, eye: Vec3, yaw: number, pitch: number): boolean {
+  const f = lookForward(yaw, pitch)
+  const cosHalf = Math.cos(GUN_CONE_HALF)
+  for (const seg of view) {
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16
+      const dx = seg.a[0] + (seg.b[0] - seg.a[0]) * t - eye[0]
+      const dy = seg.a[1] + (seg.b[1] - seg.a[1]) * t - eye[1]
+      const dz = seg.a[2] + (seg.b[2] - seg.a[2]) * t - eye[2]
+      const d = Math.hypot(dx, dy, dz)
+      if (d < GUN_CONE_CLEAR && (dx * f[0] + dy * f[1] + dz * f[2]) / (d || 1) > cosHalf) return true
+    }
+  }
+  return false
+}
+
+/** The eye never rises more than this over its rail-based height to clear view obstacles. */
+export const GUN_EYE_RAISE_MAX = 0.5
+
+export function gunnerPose(s: Station, obstacles: DeckAnchors['obstacles'] = [], view: DeckAnchors['viewObstacles'] = []): { position: Vec3; yaw: number; pitch: number } {
   const [dx, , dz] = s.direction
   const h = Math.hypot(dx, dz) || 1
   const fx = dx / h
@@ -938,8 +963,14 @@ export function gunnerPose(s: Station, obstacles: DeckAnchors['obstacles'] = [])
   // rail (≈ GUN_RAIL_INSET inboard of the muzzle plane) to be GUN_RAIL_BELOW_CENTRE under the view centre at GUN_PITCH
   const toRail = Math.max(0.15, Math.hypot(s.muzzle[0] - ex, s.muzzle[2] - ez) - GUN_RAIL_INSET)
   const over = Math.max(GUN_EYE_OVER_RAIL, toRail * Math.tan(GUN_RAIL_BELOW_CENTRE + GUN_PITCH))
-  const y = Math.max(s.muzzle[1] + 0.11, s.rail + over)
-  return { position: [ex, y, ez], yaw, pitch: gunnerPitch([ex, y, ez], s) }
+  let y = Math.max(s.muzzle[1] + 0.11, s.rail + over)
+  let pitch = gunnerPitch([ex, y, ez], s)
+  // a breast rail / pin rail inside the cone: the eye rises until the rail drops out of it
+  for (let raised = 0; view.length && raised < GUN_EYE_RAISE_MAX && viewConeBlocked(view, [ex, y, ez], yaw, pitch); raised += 0.02) {
+    y += 0.02
+    pitch = gunnerPitch([ex, y, ez], s)
+  }
+  return { position: [ex, y, ez], yaw, pitch }
 }
 
 /** Horizontal eye while manning: GUN_EYE_BEHIND_BREECH behind the breech, on the barrel's axis (sighting along it). */

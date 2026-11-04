@@ -35,6 +35,7 @@ import {
   SPAWN_OPEN_VIEW,
   spawnLookYaw,
   gunnerEyeXZ,
+  viewConeBlocked,
   GUN_EYE_BACK,
   GUN_EYE_BEHIND_BREECH,
   GUN_RAY_OVER_RAIL,
@@ -810,7 +811,6 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
   it('vertical man-o-war (BUG-799): the spawn faces the enemy beam over the rail, not the mainmast 0.7 u ahead; horizontal keeps the enemy facing', () => {
     const v = controllerSpawn('man-o-war', 'vertical')
     const bow = yawToward(1, 0)
-    expect(clearAhead(v.deck, [v.p.x, v.p.z], bow, SPAWN_OPEN_VIEW, undefined, v.p.level)).toBeLessThan(1) // the mainmast trunk
     expect(Math.abs(Math.sin(v.yaw - bow))).toBeGreaterThan(0.9) // not along the deck
     expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw, SPAWN_OPEN_VIEW, undefined, v.p.level)).toBe(SPAWN_OPEN_VIEW)
     expect(lookForward(v.yaw, 0)[2] * v.side).toBeGreaterThan(0.9) // toward the enemy's side of the deck
@@ -834,8 +834,8 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(p.z).toBeCloseTo(0.5 - RAIL_INSET - PLAYER_RADIUS, 9)
     expect(p.x).toBe(0)
     expect(railAhead(d, [p.x, p.z], 0, toEnemy)).toBeCloseTo(RAIL_INSET + PLAYER_RADIUS, 9)
-    // already deep enough: only mirrored
-    expect(spawnStand(d, { x: 0.2, z: -0.1, y: 0, level: 0 }, -1, yawToward(0, -1)).z).toBeCloseTo(-0.1, 9)
+    // a spawn away from the rail walks to it (the view over the rail is the point; the e2e runs along it)
+    expect(spawnStand(d, { x: 0.2, z: -0.1, y: 0, level: 0 }, -1, yawToward(0, -1)).z).toBeCloseTo(-(0.5 - RAIL_INSET - PLAYER_RADIUS), 9)
     const narrow: DeckAnchors = { ...d, walk: [{ points: rectPolygon(4, 0.2, 0), y: 0 }] }
     expect(spawnStand(narrow, { x: 0, z: -0.09, y: 0, level: 0 }, 1, toEnemy).z).toBeCloseTo(0, 9)
     // boxed in at the spawn: backs off along the deck to the nearest stand with a clear view
@@ -876,7 +876,6 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
 
   it('the vertical man-o-war no longer stares into the mizzen', () => {
     const v = controllerSpawn('man-o-war', 'vertical')
-    expect(clearAhead(v.deck, [v.p.x, v.p.z], v.localYaw)).toBeLessThan(SPAWN_CLEAR_AHEAD)
     expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw)).toBe(SPAWN_CLEAR_AHEAD)
     const h = controllerSpawn('man-o-war', 'horizontal')
     expect(h.yaw).toBe(h.localYaw)
@@ -931,7 +930,10 @@ describe('manned view cone (owner): no own-ship obstacle within 1.0 u in the ±2
       for (const s of stationsOf(a, deck)) {
         if (!s.onDeck) continue
         const label = `${id} station ${s.index}`
-        const { position, yaw, pitch } = gunnerPose(s, deck.obstacles)
+        const { position, yaw, pitch } = gunnerPose(s, deck.obstacles, deck.viewObstacles)
+        // breast / pin rails (view obstacles) stay out of the cone; the man-o'-war's waist end guns sit beside the castle breast rails
+        expect(viewConeBlocked(deck.viewObstacles ?? [], position, yaw, pitch), label).toBe(false)
+        if (id === 'man-o-war') expect(deck.viewObstacles?.length, label).toBe(3)
         // horizon (pitch above/below the centre) inside the middle third of a 70° frame
         expect(Math.abs(pitch), label).toBeLessThanOrEqual(DECK_FOV_RAD / 6 + 1e-9)
         // deck obstacles (masts, capstan, posts, hatches) intersecting the cone within 1 u — the barrel itself is not an obstacle

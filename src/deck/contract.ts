@@ -70,6 +70,8 @@ export interface DeckAnchors {
   ramps: { from: number; to: number; a: [number, number]; b: [number, number] }[]
   /** Things you cannot walk through (masts, capstan, hatches): circles in x/z. */
   obstacles: { center: [number, number]; radius: number }[]
+  /** Thin ship-space segments above the deck (breast rails, pin rails) that must not cross the manned view cone (BUG-800). */
+  viewObstacles?: { a: Vec3; b: Vec3 }[]
   /**
    * One entry per `ShipAnchors.cannons[i]`: where the gunner stands and the yaw (radians, ship space) they face when
    * manning it. `breech` (optional, session C) is the inboard end of that gun's barrel on its deck — the spot to mark /

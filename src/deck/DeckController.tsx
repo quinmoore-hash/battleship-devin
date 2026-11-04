@@ -560,7 +560,7 @@ export function DeckController() {
       const wantYaw = worldYaw - (rotationY + sp.yaw)
       const f = 1 - Math.exp((-4 / la.seconds) * dt)
       if (stillManning) {
-        const baseYaw = manning ? gunnerPose(manning, geometry.deckA.obstacles).yaw : 0
+        const baseYaw = manning ? gunnerPose(manning, geometry.deckA.obstacles, geometry.deckA.viewObstacles).yaw : 0
         glance.current.yaw += (clamp(angleDelta(baseYaw, wantYaw), -GUN_GLANCE_YAW, GUN_GLANCE_YAW) - glance.current.yaw) * f
       } else {
         look.current.yaw += angleDelta(look.current.yaw, wantYaw) * f
@@ -572,7 +572,7 @@ export function DeckController() {
 
     // 5. the eye in ship space: the gunner's eye (+ glance) while manning, else `walkEyeHeight` over the feet looking along `look`
     if (manning) {
-      const gp = gunnerPose(manning, geometry.deckA.obstacles)
+      const gp = gunnerPose(manning, geometry.deckA.obstacles, geometry.deckA.viewObstacles)
       const dir = lookForward(gp.yaw + glance.current.yaw, clamp(gp.pitch + glance.current.pitch, -PITCH_LIMIT, PITCH_LIMIT))
       eye.position[0] = gp.position[0]
       eye.position[1] = gp.position[1]

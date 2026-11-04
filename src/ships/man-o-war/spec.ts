@@ -219,6 +219,11 @@ export function buildManOWarDeck(): DeckAnchors {
     walk,
     ramps: [breakRamp(0, 1, BREAK.quarter, 0.12, -0.34), breakRamp(0, 2, BREAK.fore, 0.1, 0.3), breakRamp(0, 2, BREAK.fore, 0.1, -0.3), breakRamp(1, 3, BREAK.poop, 0.1, 0.1)],
     obstacles,
+    // the castle breast rails (parts.tsx breakRail: bar at deck + 0.23) run across the deck beside the waist's end guns
+    viewObstacles: ([[BREAK.quarter + 0.02, DECK.castle], [BREAK.fore - 0.02, DECK.castle], [BREAK.poop + 0.02, DECK.poop]] as const).map(([x, deck]) => {
+      const w = hullHalfWidth(x, deck + 0.23) - 0.02
+      return { a: [x, deck + 0.23, -w] as Vec3, b: [x, deck + 0.23, w] as Vec3 }
+    }),
     stations: gunStations(MOW_CANNONS, walk, deckY, { barrel: 0.14 + 0.3, obstacles, railYAt: railY }),
   }
 }
