@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../../store/gameStore'
 import { scaleCount, useParticlesScale } from '../../perf/store'
-import { bubbleIntensity, bubbleState, type BubbleOptions } from './bubbles'
+import { bubbleIntensity, bubbleState, type BubbleOptions } from './bubbleModel'
 
 const tmp = new THREE.Object3D()
 

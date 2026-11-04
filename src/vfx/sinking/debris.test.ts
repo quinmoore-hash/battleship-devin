@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { bubbleIntensity, bubbleState, type BubbleOptions } from './bubbles'
-import { debrisPieces, debrisState, flotsamLayout, footprintCenters, type DebrisLaunch } from './debris'
+import { bubbleIntensity, bubbleState, type BubbleOptions } from './bubbleModel'
+import { debrisPieces, debrisState, flotsamLayout, footprintCenters, type DebrisLaunch } from './debrisModel'
 
 const centers = footprintCenters([0, 0.2, 0], 0, 3)
 const launch: DebrisLaunch = { position: [0, 0.2, 0], rotationY: 0, hull: { length: 3, beam: 0.9, height: 2.4, draft: 0.35 }, deckY: 0.4, side: 1 }

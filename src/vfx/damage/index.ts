@@ -7,7 +7,7 @@ export { DamageLayer, damageEntries, impactPointFor, type DamageLayerProps } fro
 export { FireLightBudget, defaultFireBudget, planFireLights, lightCountFor, FIRES_PER_LIGHT, MAX_FIRE_LIGHTS, type FireLight, type FireSource } from './fireBudget'
 export { makeSplinters, splinterAt, splinterDuration, type Splinter, type SplinterState } from './splinters'
 export { emberAt, emberSeeds, type EmberOptions } from './embers'
-export { smokePuffAt, smokeSeeds, type SmokePlumeOptions } from './smoke'
+export { smokePuffAt, smokeSeeds, type SmokePlumeOptions } from './smokeModel'
 export { makeSpriteMaterial, spriteQuad, attachParams, type SpriteKind } from './sprites'
 export { WIND } from './wind'
 export { useReducedMotion } from './useReducedMotion'

@@ -3,7 +3,7 @@ import type { Vec3 } from '../../scene/layout'
 import type { CellDamage } from '../../ships/types'
 import { useGameStore } from '../../store/gameStore'
 import { SmokeColumn } from '../ParticleFx'
-import { footprintCenters } from './debris'
+import { footprintCenters } from './debrisModel'
 import { cellX, sectionSurfaceY, type SinkPose } from './pose'
 
 export interface SteamProps {
