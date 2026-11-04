@@ -1,7 +1,7 @@
 /** 2-second startup FPS probe (requestAnimationFrame), reports the median per-window FPS. */
 import { fpsSamples, median } from './tier'
 
-export const PROBE_DURATION_MS = 2000
+const PROBE_DURATION_MS = 2000
 
 export function runFpsProbe(onDone: (medianFps: number) => void, durationMs = PROBE_DURATION_MS): () => void {
   if (typeof requestAnimationFrame === 'undefined') return () => {}

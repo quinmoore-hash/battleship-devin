@@ -94,7 +94,7 @@ export function guessTier(info: DeviceInfo): Tier {
 }
 
 /** FPS thresholds for the startup probe (`demoteBelow`) and the in-battle watchdog (`WATCHDOG.minFps`). */
-export const PROBE_FPS = { demoteBelow: 45, promoteAbove: 90 } as const
+const PROBE_FPS = { demoteBelow: 45, promoteAbove: 90 } as const
 
 /**
  * Final tier once the 2 s probe has a median FPS. Demotes one tier under 45 fps (two under 22.5);
@@ -120,7 +120,7 @@ export function lowerTier(tier: Tier): Tier {
  * after entering the battle is ignored so shader compilation and the opening cinematic do not count.
  */
 /** Physical pixels (screen.width × devicePixelRatio) above which Medium drops its DPR cap to 1.25 (Retina MacBooks). */
-export const WIDE_RETINA_PX = 2500
+const WIDE_RETINA_PX = 2500
 
 /**
  * DPR range for the Canvas. Medium is the "no-lag" tier: its cap drops from 1.5 to 1.25 on

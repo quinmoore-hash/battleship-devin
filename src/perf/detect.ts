@@ -1,7 +1,7 @@
 /** Browser-side device sniffing for `tier.ts`. Safe to call without a DOM (returns neutral values). */
 import type { DeviceInfo } from './tier'
 
-export function readRendererString(): string {
+function readRendererString(): string {
   if (typeof document === 'undefined') return ''
   try {
     const canvas = document.createElement('canvas')
