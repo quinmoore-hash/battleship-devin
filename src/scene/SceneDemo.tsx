@@ -7,7 +7,6 @@ import type { CameraView } from './CameraRig'
 import { OceanScene } from './index'
 import { BOARD_LAYOUT, type BoardKey } from './layout'
 import { GOLDEN_HOUR, type Weather } from './sun'
-import type { LightningStrike } from './Weather'
 import type { Quality } from './Water'
 
 const VIEWS: CameraView[] = ['menu', 'placement', 'battle', 'gameover']
@@ -63,7 +62,7 @@ export function SceneDemo() {
   const [strikes, setStrikes] = useState(0)
   const [tour, setTour] = useState(() => param('tour') !== null)
   const [fps, setFps] = useState(0)
-  const onLightning = useCallback((_: LightningStrike) => setStrikes((n) => n + 1), [])
+  const onLightning = useCallback(() => setStrikes((n) => n + 1), [])
 
   // guided tour: sweeps the clock, then switches to the storm and cycles the camera shots
   useEffect(() => {

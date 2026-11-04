@@ -194,7 +194,7 @@ export const tornSailTexture = () =>
         ctx.ellipse(40 + rnd() * 180, 120 + rnd() * 136, 8 + rnd() * 26, 5 + rnd() * 16, rnd() * 3, 0, Math.PI * 2)
         ctx.fill()
       }
-      ctx.fillRect(0, 232 - 20 * 0, 256, 24)
+      ctx.fillRect(0, 232, 256, 24)
     },
     false,
   )

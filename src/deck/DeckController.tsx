@@ -186,6 +186,7 @@ export function DeckController() {
   // --- camera lens + runtime flags while active ----------------------------------------------------------------
   useEffect(() => {
     if (!active) return
+    const pressed = keys.current
     camera.near = NEAR
     camera.fov = DECK_FOV
     camera.updateProjectionMatrix()
@@ -200,7 +201,7 @@ export function DeckController() {
       fade.current = null
       abandoning.current = false
       drag.current = null
-      keys.current.clear()
+      pressed.clear()
       air.current = GROUNDED
       vel.current = { x: 0, z: 0 }
       resetDeckRuntime()
@@ -275,6 +276,7 @@ export function DeckController() {
   useEffect(() => {
     if (!active) return
     const canvas = gl.domElement
+    const pressed = keys.current
     const game = () => useGameStore.getState()
     const runtime = () => useDeckStore.getState()
 
@@ -448,7 +450,7 @@ export function DeckController() {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerUp)
-      keys.current.clear()
+      pressed.clear()
     }
   }, [active, gl, camera])
 

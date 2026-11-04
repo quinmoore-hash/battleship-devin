@@ -322,6 +322,7 @@ export function Water({ quality, atmosphere, lightning, waves, segments: segment
 
   const vs = useMemo(() => vertexShader(wavesToGlsl(waveCount)), [waveCount])
   const farGeo = useMemo(() => farRingGeometry(SIZE / 2, FAR_SIZE / 2), [])
+  useEffect(() => () => farGeo.dispose(), [farGeo])
 
   return (
     <group>
