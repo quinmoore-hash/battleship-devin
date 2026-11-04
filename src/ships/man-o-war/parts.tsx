@@ -420,22 +420,23 @@ export function GunDecks({ m, livery, lod, firing }: PartProps & { firing?: read
           <InstancedPart geometry={frameGeo()} material={livery === 'navy' ? m.wale : m.trim} items={ports} />
           <InstancedPart geometry={lidGeo()} material={lidMaterials} items={lids} castShadow />
           <InstancedPart geometry={barrelGeo(String(lod))} material={m.iron} items={barrels} castShadow />
-          {carriages.map(({ slot, recoil }) => {
-            const s = sideSign(slot.side)
-            return (
-              <Cannon
-                key={`${slot.g.x}${slot.side}`}
-                position={[slot.g.x, DECK.main, s * (slot.skin + 0.14 - 0.2475)]}
-                rotationY={s > 0 ? 0 : Math.PI}
-                livery={livery}
-                recoil={recoil}
-                scale={0.55}
-                lod={lod}
-              />
-            )
-          })}
         </>
       )}
+      {/* weather-deck carriage guns at every lod: the player's gun stations stand at them (a ring without a cannon otherwise) */}
+      {carriages.map(({ slot, recoil }) => {
+        const s = sideSign(slot.side)
+        return (
+          <Cannon
+            key={`${slot.g.x}${slot.side}`}
+            position={[slot.g.x, DECK.main, s * (slot.skin + 0.14 - 0.2475)]}
+            rotationY={s > 0 ? 0 : Math.PI}
+            livery={livery}
+            recoil={recoil}
+            scale={0.55}
+            lod={lod}
+          />
+        )
+      })}
     </group>
   )
 }
@@ -890,10 +891,10 @@ const bowRiggingGeo = cached((lodKey: string) =>
   ),
 )
 
-export function Rigging({ m, lod, snaps }: PartProps & { snaps: number[] }) {
+export function Rigging({ m, lod, snaps, hide = [] }: PartProps & { snaps: number[]; hide?: boolean[] }) {
   return (
     <group>
-      {MASTS.map((_, i) => (snaps[i] > 0.05 ? null : <mesh key={i} geometry={riggingGeo(`${i},${lod}`)} material={m.rope} />))}
+      {MASTS.map((_, i) => (snaps[i] > 0.05 || hide[i] ? null : <mesh key={i} geometry={riggingGeo(`${i},${lod}`)} material={m.rope} />))}
       <mesh geometry={bowRiggingGeo(String(lod))} material={m.rope} />
       <Channels m={m} lod={lod} />
     </group>

@@ -11,8 +11,9 @@ import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { useGameStore } from '../../store/gameStore'
 import { Anchor, Barrel, Cannon, Crate, Flag, HullHole, Lantern, Railing, Ratlines, Rope, RopeCoil, SternLantern, Wheel } from '../kit'
+import { rigCulled } from '../kit/rigCull'
 import type { CannonRef, CellDamage, Livery, Lod, ShipDefinition, ShipModelProps } from '../types'
-import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, cannonPlacements, cellCenterX, cellOfX, mastBase, sideSign, type CannonPlacement, type MastSpec } from './anchors'
+import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, PIN_HEIGHT, SHROUD_SPREAD, cannonPlacements, cellCenterX, cellOfX, mastBase, shroudRig, sideSign, staySpecs, waistPins, type CannonPlacement, type MastSpec } from './anchors'
 import { GALLEON as G, crossPlane, deckStrip, deckY, halfWidth, keelLine, loftProfile, railY, stations, stemCurve, triangleCount, wale } from './hull'
 import { galleonMaterials, type GalleonMaterials } from './materials'
 import { Beam, ClothSail, Door, Ensign, FurledBundle, Grating, Instanced, Splinters, Stairs, Window } from './parts'
@@ -454,7 +455,7 @@ interface YardSpec {
   sailHeight: number
 }
 
-const YARDS: Record<MastSpec['name'], YardSpec[]> = {
+export const YARDS: Record<MastSpec['name'], YardSpec[]> = {
   fore: [
     { width: 1.25, y: 0.95, sailHeight: 0.5 },
     { width: 0.95, y: 1.55, sailHeight: 0.42 },
@@ -546,7 +547,7 @@ function GalleonMast({ spec, lod, m, livery, sails, torn, scorched, snapped, pha
   )
 }
 
-function Rig({ lod, m, livery, sails, sink, damage, phase, reducedMotion }: { lod: Lod; m: GalleonMaterials; livery: Livery; sails: number; sink: number; damage: readonly CellDamage[]; phase: number; reducedMotion: boolean }) {
+function Rig({ lod, m, livery, sails, sink, damage, phase, reducedMotion, rigCullX = null }: { lod: Lod; m: GalleonMaterials; livery: Livery; sails: number; sink: number; damage: readonly CellDamage[]; phase: number; reducedMotion: boolean; rigCullX?: number | null }) {
   const tornAll = Math.max(0, Math.min(1, sink * 1.6 - 0.1))
   const flagGone = sink > 0.55
   return (
@@ -573,40 +574,28 @@ function Rig({ lod, m, livery, sails, sink, damage, phase, reducedMotion }: { lo
           />
         )
       })}
-      {lod < 2 && <StandingRigging lod={lod} livery={livery} sink={sink} />}
+      {lod < 2 && <StandingRigging lod={lod} livery={livery} sink={sink} cullX={rigCullX} />}
     </group>
   )
 }
 
-function StandingRigging({ lod, livery, sink }: { lod: Lod; livery: Livery; sink: number }) {
-  const [fore, main, mizzen] = MASTS
-  const top = (s: MastSpec, k = 1): Vec3 => [s.x, deckY(s.x) + s.height * k, 0]
+function StandingRigging({ lod, livery, sink, cullX = null }: { lod: Lod; livery: Livery; sink: number; cullX?: number | null }) {
   const rungs = lod === 0 ? 9 : 4
+  const mastX = (name: MastSpec['name']) => MASTS.find((m) => m.name === name)!.x
   if (sink > 0.35) return null
   return (
     <group>
       {MASTS.map((s) => {
-        const ry = railY(s.x) + 0.02
-        const hw = halfWidth(s.x, ry) - G.plank - 0.02
+        if (rigCulled(s.x, cullX)) return null
+        const { from, to } = shroudRig(s)
         return (
           <group key={s.name}>
-            <Ratlines from={[s.x, ry, hw]} to={[s.x, deckY(s.x) + s.height * 0.62, 0.03]} livery={livery} rungs={rungs} spread={0.3} lod={lod} />
+            <Ratlines from={from} to={[to[0], to[1], 0.03]} livery={livery} rungs={rungs} spread={SHROUD_SPREAD} lod={lod} />
           </group>
         )
       })}
-      {/* stays and backstays */}
-      <Rope from={top(fore, 0.98)} to={[G.xBow + 0.95, 1.48, 0]} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(fore, 0.62)} to={[G.xBow + 0.3, 1.18, 0]} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(main, 0.98)} to={top(fore, 0.62)} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(main, 0.62)} to={[fore.x - 0.1, G.forecastleDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(mizzen, 0.98)} to={top(main, 0.62)} livery={livery} sag={0.03} lod={lod} />
-      <Rope from={top(mizzen, 0.6)} to={[main.x - 0.12, G.mainDeckY + 0.05, 0]} livery={livery} sag={0.03} lod={lod} />
-      {[1, -1].map((s) => (
-        <group key={s}>
-          <Rope from={top(main, 0.97)} to={[G.poopX + 0.05, G.quarterDeckY + 0.08, s * (halfWidth(G.poopX + 0.05, 1.05) - 0.08)]} livery={livery} lod={lod} />
-          <Rope from={top(mizzen, 0.97)} to={[G.xStern + 0.1, G.poopDeckY + 0.08, s * (halfWidth(G.xStern + 0.1, 1.45) - 0.08)]} livery={livery} lod={lod} />
-        </group>
-      ))}
+      {/* stays and backstays: hidden with the mast they rise from while that mast's rigging is culled (first look / manning) */}
+      {staySpecs().map((st, i) => !rigCulled(mastX(st.mast), cullX) && <Rope key={i} from={st.from} to={st.to} livery={livery} sag={st.sag} lod={lod} />)}
     </group>
   )
 }
@@ -614,13 +603,9 @@ function StandingRigging({ lod, livery, sink }: { lod: Lod; livery: Livery; sink
 /* ---------------------------------------------------------------------------------------------- deck fittings */
 
 function DeckFittings({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; livery: Livery }) {
-  const pinGeom = useMemo(() => new THREE.CylinderGeometry(0.006, 0.006, 0.07, 5), [])
+  const pinGeom = useMemo(() => new THREE.CylinderGeometry(0.006, 0.006, PIN_HEIGHT, 5), [])
   const cleatGeom = useMemo(() => new THREE.BoxGeometry(0.06, 0.018, 0.02), [])
-  const pins = useMemo(() => {
-    const out: { position: Vec3 }[] = []
-    for (let x = -0.35; x <= 0.85; x += 0.1) for (const s of [1, -1]) out.push({ position: [x, G.waistRailY + 0.04, s * (halfWidth(x, G.waistRailY) - G.plank - 0.035)] })
-    return out
-  }, [])
+  const pins = useMemo(() => waistPins().map((position) => ({ position })), [])
   const cleats = useMemo(() => {
     const out: { position: Vec3 }[] = []
     for (const x of [-1.7, -1.4, -0.9, -0.6, 1.1, 1.4]) for (const s of [1, -1]) out.push({ position: [x, railY(x) + 0.04, s * (halfWidth(x, railY(x)) - G.plank - 0.02)] })
@@ -716,7 +701,7 @@ function DamageLayer({ damage, lod, m }: { damage: readonly CellDamage[]; lod: L
 
 /* ------------------------------------------------------------------------------------------------------ model */
 
-function GalleonModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [] }: ShipModelProps) {
+function GalleonModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [], rigCullX = null }: ShipModelProps) {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const m = galleonMaterials(livery)
   const effLod: Lod = quality === 'low' ? (Math.max(lod, 1) as Lod) : lod
@@ -730,7 +715,7 @@ function GalleonModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 'hi
       <SternWorks lod={effLod} m={m} livery={livery} sink={sink} />
       <BowWorks lod={effLod} m={m} livery={livery} sails={setSails} sink={sink} torn={torn} phase={phase} reducedMotion={reducedMotion} />
       <Guns lod={effLod} m={m} livery={livery} firing={firing} damage={damage} />
-      <Rig lod={effLod} m={m} livery={livery} sails={setSails} sink={sink} damage={damage} phase={phase} reducedMotion={reducedMotion} />
+      <Rig lod={effLod} m={m} livery={livery} sails={setSails} sink={sink} damage={damage} phase={phase} reducedMotion={reducedMotion} rigCullX={rigCullX} />
       {effLod < 2 && <DeckFittings lod={effLod} m={m} livery={livery} />}
       <DamageLayer damage={damage} lod={effLod} m={m} />
     </group>

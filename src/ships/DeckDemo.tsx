@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FLEET, createBoard, placeShip, type Board, type PlacedShip, type ShipId } from '../engine'
-import { DECK_FOV, DECK_NEAR, EYE_HEIGHT } from '../deck/contract'
+import { EYE_HEIGHT } from '../deck/contract'
+import { applyDeckLens } from '../deck/lens'
 import { OceanScene } from '../scene'
 import type { Weather } from '../scene/sun'
 import { BOARD_LAYOUT, type Vec3 } from '../scene/layout'
 import { sampleWaveHeight } from '../scene/waves'
+import { directionToWorld, localToWorld } from '../vfx/cannon/anchors'
 import { usePerf } from '../perf'
 import { Fleet, SHIPS, shipWorldTransform } from './index'
 import type { Livery } from './types'
@@ -20,7 +22,7 @@ import type { Livery } from './types'
  * (`anchors.deck.spawn`, else a quarterdeck guess) at `deckY + EYE_HEIGHT`, near `DECK_NEAR`, fov `DECK_FOV`, and
  * rides the hull on the waves. `look`: `fwd` down the deck toward the bow, `rail` across the port rail toward
  * the enemy board, `aft` toward the stern, `port` = `rail` pitched up to the horizon, `down` from `eye=x,y,z` (ship frame,
- * overrides the spawn; no eye-height offset) for a top-down check of the deck.
+ * overrides the spawn; no eye-height offset) for a top-down check of the deck, or any `look=x,y,z` direction (ship frame).
  */
 const LOOKS: Record<string, Vec3> = {
   fwd: [1, -0.08, 0],
@@ -59,16 +61,15 @@ function wreckFleet(count: number): PlacedShip[] {
 
 function EyeCamera({ ship, look, eye }: { ship: PlacedShip; look: Vec3; eye?: Vec3 }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
-  const dir = useMemo(() => new THREE.Vector3(...look).normalize(), [look])
+  const pose = shipWorldTransform(ship, BOARD_LAYOUT.player.origin, 1)
+  const dir = useMemo(() => new THREE.Vector3(...directionToWorld(look, pose.rotationY)).normalize(), [look, pose.rotationY])
   const tmp = useRef(new THREE.Vector3())
-  const { position } = shipWorldTransform(ship, BOARD_LAYOUT.player.origin, 1)
+  const { position } = pose
   const def = SHIPS[ship.spec.id]
-  const helm = eye ?? def.anchors.deck?.spawn ?? HELM_GUESS[ship.spec.id]
+  const helm = localToWorld(eye ?? def.anchors.deck?.spawn ?? HELM_GUESS[ship.spec.id], { position: [0, 0, 0], rotationY: pose.rotationY })
 
   useEffect(() => {
-    camera.near = DECK_NEAR
-    camera.fov = DECK_FOV
-    camera.updateProjectionMatrix()
+    applyDeckLens(camera)
   }, [camera])
 
   useFrame(({ clock }) => {
@@ -84,7 +85,8 @@ export function DeckDemo() {
   const q = new URLSearchParams(window.location.search)
   const id = (q.get('ship') as ShipId | null) ?? 'man-o-war'
   const shipId: ShipId = SHIPS[id] ? id : 'man-o-war'
-  const look = LOOKS[q.get('look') ?? 'fwd'] ?? LOOKS.fwd
+  const lookParam = q.get('look')?.split(',').map(Number)
+  const look = lookParam?.length === 3 && lookParam.every(Number.isFinite) ? (lookParam as Vec3) : (LOOKS[q.get('look') ?? 'fwd'] ?? LOOKS.fwd)
   // same tiering as GameWorld on deck: the standing ship at the tier's lod (Medium = baked lod 1, High = live lod 0),
   // the rest of the own fleet one step coarser, the enemy wrecks by distance
   const tierLod = usePerf().lod

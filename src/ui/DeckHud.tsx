@@ -1,6 +1,8 @@
 import { useCallback, useEffect } from 'react'
 import { playSfx } from '../audio'
+import { director } from '../cinematics'
 import { isAudioDebug, useDeckAudioStore, useDeckStore } from '../deck'
+import { releaseCannon } from '../deck/deckStore'
 import { coordLabel, FLEET_BY_ID, type PlacedShip } from '../engine'
 import { is3dDisabled } from '../scene/flags'
 import { SHIPS } from '../ships'
@@ -44,7 +46,11 @@ export function DeckToggle() {
   )
 }
 
-/** Prompt line, floating gun label, compass arrow, the ship you stand on with its damage pips, Tab / Salvo counters and the fade curtain. */
+/** Esc belongs to whatever dialog / overlay is open (settings, quit, hand-off curtain, photo mode, replay) — the cannon stays manned. */
+const ESC_OWNERS = '[role="dialog"], .xt-overlay'
+const LEAVE_HINT = 'Esc — Leave the cannon'
+
+/** Prompt line, floating cannon label, compass arrow, the ship you stand on with its damage pips, Tab / Salvo counters and the fade curtain. */
 export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn: boolean }) {
   const deck = useGameStore((s) => s.deck)
   const salvo = useGameStore((s) => s.modes.salvo)
@@ -58,46 +64,61 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
   const nudge = useDeckStore((s) => s.nudge)
   const setLabelEl = useDeckStore((s) => s.setLabelEl)
   const setCompassEl = useDeckStore((s) => s.setCompassEl)
-  const manStation = useGameStore((s) => s.manStation)
   const touch = isCoarsePointer()
   const labelRef = useCallback((el: HTMLElement | null) => setLabelEl(el), [setLabelEl])
   const compassRef = useCallback((el: HTMLElement | null) => setCompassEl(el), [setCompassEl])
+  const manning = deck.on && deck.station !== null
+  // Esc leaves the manned cannon (same as E / the HUD button). While a cinematic runs Esc skips it instead (Letterbox) and
+  // the seat is kept; a dialog or overlay that owns Esc keeps it too. Esc never leaves deck mode.
+  useEffect(() => {
+    if (!manning) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.repeat || e.altKey || e.ctrlKey || e.metaKey) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]')) return
+      if (director.busy || document.querySelector(ESC_OWNERS)) return
+      e.preventDefault()
+      releaseCannon()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [manning])
   if (!deck.on || !ship) return null
 
   const def = SHIPS[ship.spec.id]
   const spec = FLEET_BY_ID[ship.spec.id]
-  const manning = deck.station !== null
   const gun = manning ? def.anchors.cannons[deck.station!] : null
   const hovered = hover?.side === 'enemy' ? hover.coord : null
   const click = touch ? 'Tap' : 'Click'
+  // the way out of the seat stays on screen the whole time you are manning (touch has the HUD button)
+  const leave = touch ? '' : ` · ${LEAVE_HINT}`
   const prompt = nudge
     ? nudge
     : manning
-      ? yourTurn
-        ? armed === 'spyglass'
-          ? `Spyglass raised — ${click.toLowerCase()} a square on the chart to look`
-          : armed === 'broadside'
-            ? `Broadside — ${click.toLowerCase()} the centre square on the chart (R rotates)`
-            : hovered
-              ? `Fire at ${coordLabel(hovered)} — ${click.toLowerCase()}`
-              : `${click} a square on the chart to fire`
-        : 'Gun manned — waiting for your turn'
+      ? (yourTurn
+          ? armed === 'spyglass'
+            ? `Spyglass raised — ${click.toLowerCase()} a square on the chart to look`
+            : armed === 'broadside'
+              ? `Broadside — ${click.toLowerCase()} the centre square on the chart (R rotates)`
+              : hovered
+                ? `Fire at ${coordLabel(hovered)} — ${click.toLowerCase()}`
+                : `${click} a square on the chart to fire`
+          : 'Cannon manned — waiting for your turn') + leave
       : near
         ? near.usable
           ? touch
-            ? 'Tap the gun to man it'
-            : 'E — Man the gun'
+            ? 'Tap the cannon to man it'
+            : 'E — Man the cannon'
           : 'No target that side'
         : touch
-          ? 'Drag to look · tap a glowing gun to man it'
+          ? 'Drag to look · tap a glowing cannon to man it'
           : approach !== null
-            ? 'Walk to the glowing gun · E mans it'
-            : 'WASD walk · Space jump · Shift run · drag to look · E at a glowing gun · Tab next ship'
+            ? 'Walk to the glowing cannon · E mans it'
+            : 'WASD walk · Space jump · Shift run · drag to look · E at a glowing cannon · Tab next ship'
   return (
     <>
       <div className="deck-fade" data-testid="deck-fade" style={{ opacity: fade }} aria-hidden={fade === 0} />
       <div className="deck-gun-label" data-testid="deck-gun-label" data-station={approach ?? undefined} ref={labelRef} aria-hidden>
-        {touch ? 'Tap — Man the gun' : 'E — Man the gun'}
+        {touch ? 'Tap — Man the cannon' : 'E — Man the cannon'}
       </div>
       {isAudioDebug() && <DeckAudioLog />}
       <div className="deck-prompt" data-testid="deck-prompt" role="status" aria-live="polite">
@@ -113,7 +134,7 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
           </span>
         </div>
         <div className="deck-lines">
-          <span data-testid="deck-station">{manning && gun ? `Manning the ${gun.side} gun ${gun.cell + 1}` : 'Walking the deck'}</span>
+          <span data-testid="deck-station">{manning && gun ? `Manning the ${gun.side} cannon ${gun.cell + 1}` : 'Walking the deck'}</span>
           {salvo && yourTurn && (
             <span data-testid="deck-salvo">
               shot {Math.min(pending + 1, size)} of {size}
@@ -123,18 +144,18 @@ export function DeckHud({ ship, yourTurn }: { ship: PlacedShip | null; yourTurn:
         <div className="deck-actions">
           {!manning && (
             <button type="button" className={`btn ${near?.usable ? 'btn-brass' : 'btn-ghost'}`} data-testid="deck-man" title="E" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:deck-man')))}>
-              {near?.usable ? 'Man the gun' : 'Man nearest gun'} <kbd aria-hidden>E</kbd>
+              {near?.usable ? 'Man the cannon' : 'Man nearest cannon'} <kbd aria-hidden>E</kbd>
             </button>
           )}
           {manning && (
-            <button type="button" className="btn btn-ghost" data-testid="deck-step-away" title="E" onClick={() => (playSfx('ui-click'), manStation(null))}>
-              Step away <kbd aria-hidden>E</kbd>
+            <button type="button" className="btn btn-ghost" data-testid="deck-step-away" title="Esc (or E)" onClick={() => (playSfx('ui-click'), releaseCannon())}>
+              Leave the cannon <kbd aria-hidden>Esc</kbd>
             </button>
           )}
           <button type="button" className="btn btn-ghost" data-testid="deck-next-ship" title="Tab" onClick={() => (playSfx('ui-click'), window.dispatchEvent(new CustomEvent('battleship:deck-next')))}>
             Next ship <kbd aria-hidden>Tab</kbd>
           </button>
-          <span className="deck-compass" data-testid="deck-compass" title="Nearest gun that bears" aria-hidden>
+          <span className="deck-compass" data-testid="deck-compass" title="Nearest cannon that bears" aria-hidden>
             <i ref={compassRef} />
           </span>
         </div>

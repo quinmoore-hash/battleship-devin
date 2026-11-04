@@ -24,12 +24,14 @@ import { SHIPS, damageOf, shipWorldTransform } from '../ships'
 import { ownBoardKey, useGameStore } from '../store/gameStore'
 import { useUiStore } from '../ui/uiStore'
 import { lastHitIndex, placedShipSeed, sinkPose } from '../vfx/sinking'
-import { DECK_FOV, EYE_HEIGHT, deckBus, deckCameraLease, type DeckBusEvent } from './contract'
-import { resetDeckRuntime, useDeckStore } from './deckStore'
+import { DECK_FOV, deckBus, deckCameraLease, type DeckBusEvent } from './contract'
+import { applyDeckLens, applyOverviewLens, hasDeckLens } from './lens'
+import { releaseCannon, resetDeckRuntime, useDeckStore } from './deckStore'
 import { GunMarkers } from './GunMarkers'
 import {
   ACCEL_TIME,
   GROUNDED,
+  NO_PICK,
   PITCH_LIMIT,
   RUN_SPEED,
   STATION_APPROACH,
@@ -42,22 +44,28 @@ import {
   gunnerPose,
   lookForward,
   nearestStation,
+  pickStation,
   resolveDeckAnchors,
   sinkProgressFor,
-  spawnPose,
+  blockedBands,
+  spawnLookYaw,
+  hitSections,
+  SPAWN_PITCH,
+  spawnPoseAvoiding,
+  spawnStand,
+  withBlocked,
   startJump,
   stationUsable,
   stationsOf,
   stepJump,
   stepOnDeck,
+  walkEyeHeight,
   type AirPose,
   type Station,
+  type StationPick,
   type WalkPose,
 } from './math'
 
-const DEFAULT_NEAR = 0.5
-/** Near plane on deck (the default 0.5 would clip the pirate and the rail). */
-const NEAR = 0.02
 /** Seconds of the Tab fade-out, the abandon-ship fade-out and the overboard fade-out. */
 const SWITCH_FADE = 0.3
 const ABANDON_FADE = 1.2
@@ -77,7 +85,7 @@ const TOUCH_PER_PIXEL = 0.006
 const GUN_GLANCE_YAW = 0.7
 const GUN_GLANCE_PITCH = 0.35
 /** First-entry hint. */
-const HINT = 'Walk to a glowing gun and press E'
+const HINT = 'Walk to a glowing cannon and press E'
 const HINT_MS = 3000
 
 const tmp = {
@@ -123,10 +131,13 @@ export function DeckController() {
   const geometry = useMemo(() => {
     if (!ship) return null
     const anchors = SHIPS[ship.spec.id].anchors
-    const deckA = resolveDeckAnchors(anchors, ship.spec.id)
+    // hit hull sections (breach + fire) are no-walk bands of this ship instance's deck
+    const hit = hitSections(ship)
+    const sections = ship.cells.length
+    const deckA = withBlocked(resolveDeckAnchors(anchors, ship.spec.id), blockedBands(hit, sections))
     const transform = shipWorldTransform(ship, ownOrigin)
     const stations: UsableStation[] = stationsOf(anchors, deckA).map((s) => ({ ...s, usable: stationUsable(s, transform.rotationY, transform.position, foeCenter) }))
-    return { anchors, deckA, transform, stations, hull: anchors.hull, seed: placedShipSeed(ship) }
+    return { anchors, deckA, transform, stations, hull: anchors.hull, seed: placedShipSeed(ship), eyeHeight: walkEyeHeight(deckA, stations), hit, sections }
   }, [ship, ownOrigin, foeCenter])
 
   // --- mutable per-frame state -------------------------------------------------------------------------------
@@ -146,6 +157,8 @@ export function DeckController() {
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean; touch: boolean } | null>(null)
   const tumble = useRef(0)
   const nearIndex = useRef(-1)
+  const mannedIndex = useRef(-1)
+  const pick = useRef<StationPick>(NO_PICK)
   const shipGroup = useRef<THREE.Group>(null)
 
   const activeRef = useRef(active)
@@ -161,13 +174,15 @@ export function DeckController() {
     const { rotationY, position } = geometry.transform
     const worldYaw = Math.atan2(-(foeCenter[0] - position[0]), -(foeCenter[2] - position[2]))
     const localYaw = worldYaw - rotationY
-    let p = spawnPose(geometry.deckA)
-    const side = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
-    p = stepOnDeck({ ...p, z: side * Math.abs(p.z) }, 0, 0, geometry.deckA)
+    // an intact, unburning section (farthest from the fire), never a breach
+    let p = spawnPoseAvoiding(geometry.deckA, geometry.hit, geometry.sections)
+    const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
+    p = spawnStand(geometry.deckA, p, side, localYaw) // their side of the deck, RAIL_INSET back from the rail, view clear
     pose.current = p
     vel.current = { x: 0, z: 0 }
     air.current = GROUNDED
-    look.current = { yaw: localYaw, pitch: 0 }
+    // a vertical ship faces the enemy along its own deck — into a mast trunk; look where the near view is clear
+    look.current = { yaw: spawnLookYaw(geometry.deckA, p, localYaw, side), pitch: SPAWN_PITCH }
     glance.current = { yaw: 0, pitch: 0 }
     tumble.current = 0
   }, [foeCenter])
@@ -187,15 +202,12 @@ export function DeckController() {
   useEffect(() => {
     if (!active) return
     const pressed = keys.current
-    camera.near = NEAR
-    camera.fov = DECK_FOV
-    camera.updateProjectionMatrix()
+    applyDeckLens(camera)
     useDeckStore.getState().setActive(true)
     const canvas = gl.domElement
     canvas.style.cursor = 'grab'
     return () => {
-      camera.near = DEFAULT_NEAR
-      camera.updateProjectionMatrix()
+      applyOverviewLens(camera)
       canvas.style.cursor = ''
       standUid.current = null
       fade.current = null
@@ -300,11 +312,11 @@ export function DeckController() {
 
     const toggleStation = () => {
       const g = game()
-      if (g.deck.station !== null) return g.manStation(null)
+      if (g.deck.station !== null) return releaseCannon()
       const geom = geomRef.current
       if (!geom) return
       const near = nearestStation(geom.stations, pose.current.x, pose.current.z)
-      if (!near) return runtime().showNudge('Walk to a glowing gun and press E')
+      if (!near) return runtime().showNudge(HINT)
       const st = geom.stations[near.index]
       if (!st.usable) return runtime().showNudge('No target that side')
       man(st)
@@ -406,7 +418,7 @@ export function DeckController() {
         if (game().deck.station !== st.index) man(st)
         return
       }
-      if (d.touch && game().deck.station === null) runtime().showNudge('Tap a glowing gun to man it, then tap the chart to fire')
+      if (d.touch && game().deck.station === null) runtime().showNudge('Tap a glowing cannon to man it, then tap the chart to fire')
     }
 
     const onNextEvent = () => nextShip()
@@ -427,7 +439,7 @@ export function DeckController() {
         }
       }
       if (best) man(best)
-      else runtime().showNudge('No gun on this ship bears on the enemy waters')
+      else runtime().showNudge('No cannon on this ship bears on the enemy waters')
     }
     window.addEventListener('battleship:deck-man', onManEvent)
     window.addEventListener('battleship:deck-next', onNextEvent)
@@ -517,10 +529,12 @@ export function DeckController() {
     // the crew keeps clear of the player (src/crew)
     setPlayerDeck(ship.uid, pose.current.x, pose.current.z, g.deck.station ?? -1)
 
-    // 3. station proximity → markers + HUD prompt
-    const nearSt = stillManning ? null : nearestStation(geometry.stations, pose.current.x, pose.current.z)
-    runtime.setNear(nearSt ? { index: nearSt.index, usable: geometry.stations[nearSt.index].usable } : null)
-    nearIndex.current = nearSt && geometry.stations[nearSt.index].usable ? nearSt.index : -1
+    // 3. station proximity → markers + HUD prompt (a hysteresis pick: two equidistant stands used to flip it every frame)
+    pick.current = stillManning ? NO_PICK : pickStation(geometry.stations, pose.current.x, pose.current.z, pick.current, t)
+    const nearSt = pick.current.index >= 0 ? geometry.stations[pick.current.index] : null
+    runtime.setNear(nearSt ? { index: nearSt.index, usable: nearSt.usable } : null)
+    nearIndex.current = nearSt?.usable ? nearSt.index : -1
+    mannedIndex.current = g.deck.station ?? -1
     let approachSt: UsableStation | null = null
     if (!stillManning) {
       let bestD = STATION_APPROACH
@@ -546,7 +560,7 @@ export function DeckController() {
       const wantYaw = worldYaw - (rotationY + sp.yaw)
       const f = 1 - Math.exp((-4 / la.seconds) * dt)
       if (stillManning) {
-        const baseYaw = manning ? gunnerPose(manning).yaw : 0
+        const baseYaw = manning ? gunnerPose(manning, geometry.deckA.obstacles, geometry.deckA.viewObstacles).yaw : 0
         glance.current.yaw += (clamp(angleDelta(baseYaw, wantYaw), -GUN_GLANCE_YAW, GUN_GLANCE_YAW) - glance.current.yaw) * f
       } else {
         look.current.yaw += angleDelta(look.current.yaw, wantYaw) * f
@@ -556,9 +570,9 @@ export function DeckController() {
       if (la.t >= la.seconds) lookAt.current = null
     }
 
-    // 5. the eye in ship space: the gunner's eye (+ glance) while manning, else EYE_HEIGHT over the feet looking along `look`
+    // 5. the eye in ship space: the gunner's eye (+ glance) while manning, else `walkEyeHeight` over the feet looking along `look`
     if (manning) {
-      const gp = gunnerPose(manning)
+      const gp = gunnerPose(manning, geometry.deckA.obstacles, geometry.deckA.viewObstacles)
       const dir = lookForward(gp.yaw + glance.current.yaw, clamp(gp.pitch + glance.current.pitch, -PITCH_LIMIT, PITCH_LIMIT))
       eye.position[0] = gp.position[0]
       eye.position[1] = gp.position[1]
@@ -569,7 +583,7 @@ export function DeckController() {
     } else {
       const dir = lookForward(look.current.yaw, look.current.pitch)
       eye.position[0] = pose.current.x
-      eye.position[1] = pose.current.y + air.current.height + EYE_HEIGHT
+      eye.position[1] = pose.current.y + air.current.height + geometry.eyeHeight
       eye.position[2] = pose.current.z
       eye.target[0] = eye.position[0] + dir[0]
       eye.target[1] = eye.position[1] + dir[1]
@@ -590,11 +604,8 @@ export function DeckController() {
     // 7. to world: the same ship matrix the hull uses this frame. Skipped while the director has borrowed the camera
     // for a follow-cam / overboard beat (session B, `deckCameraLease`): the walk state keeps updating underneath.
     if (deckCameraLease.owner !== 'director') {
-      if (camera.fov !== DECK_FOV) {
-        // a borrowed sequence that ended before its return beat finished (skip, slow frame) can leave its lens behind
-        camera.fov = DECK_FOV
-        camera.updateProjectionMatrix()
-      }
+      // a borrowed sequence that ended before its return beat finished (skip, slow frame) can leave its lens behind
+      if (camera.fov !== DECK_FOV || !hasDeckLens(camera)) applyDeckLens(camera)
       tmp.v.set(eye.position[0] + Math.sin(st * 37.1) * amp, eye.position[1] + Math.sin(st * 51.7 + 1.3) * amp * 0.8, eye.position[2] + Math.sin(st * 43.3 + 2.1) * amp * 0.6).applyMatrix4(tmp.m)
       tmp.w.set(eye.target[0], eye.target[1], eye.target[2]).applyMatrix4(tmp.m)
       camera.position.copy(tmp.v)
@@ -676,7 +687,7 @@ export function DeckController() {
   if (!active || !geometry) return null
   return (
     <group ref={shipGroup} matrixAutoUpdate={false}>
-      <GunMarkers stations={geometry.stations} near={nearIndex} />
+      <GunMarkers stations={geometry.stations} near={nearIndex} manned={mannedIndex} eye={eye} />
     </group>
   )
 }

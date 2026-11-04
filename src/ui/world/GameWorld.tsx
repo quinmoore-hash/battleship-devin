@@ -6,7 +6,11 @@ import { useDirector } from '../../cinematics'
 import { usePerf } from '../../perf/store'
 import { BoardGrid } from '../../scene/BoardGrid'
 import { BOARD_LAYOUT, cellToWorld } from '../../scene/layout'
-import { Fleet, Ship } from '../../ships'
+import { Fleet, SHIPS, Ship } from '../../ships'
+import { resolveDeckAnchors } from '../../deck/math'
+
+/** How long after V / Tab / respawn the rigging beside the spawn stays hidden (the first look). */
+export const FIRST_LOOK_SECONDS = 2.5
 import { CrewLayer } from '../../crew'
 import { isHotSeat, other, placementBoard, useGameStore } from '../../store/gameStore'
 import { DamageLayer } from '../../vfx/damage'
@@ -284,6 +288,23 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const target = pending ?? (hover?.side === 'enemy' ? hover.coord : null)
   const onDeck = deck.on && !over
   const standing = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid === deck.shipUid) : []), [onDeck, own.ships, deck.shipUid])
+  // rigging beside the player is hidden on deck: the manned cannon's x, else the spawn's (the first look after V / Tab / respawn)
+  // (the walking cull lasts FIRST_LOOK_SECONDS after boarding, then the standing ship drops back to the baked lod: a live
+  // Man-o'-War while walking measured up to 349 draws at Medium)
+  const [firstLook, setFirstLook] = useState(false)
+  useEffect(() => {
+    if (!onDeck || !deck.shipUid) return
+    setFirstLook(true)
+    const t = window.setTimeout(() => setFirstLook(false), FIRST_LOOK_SECONDS * 1000)
+    return () => window.clearTimeout(t)
+  }, [onDeck, deck.shipUid])
+  const rigCullX = standing[0]
+    ? deck.station !== null
+      ? (SHIPS[standing[0].spec.id].anchors.cannons[deck.station]?.muzzle[0] ?? null)
+      : firstLook
+        ? resolveDeckAnchors(SHIPS[standing[0].spec.id].anchors, standing[0].spec.id).spawn[0]
+        : null
+    : null
   const ownRest = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid !== deck.shipUid) : own.ships), [onDeck, own.ships, deck.shipUid])
   // Medium budget (≤ 350 draws): a live lod-0 man-o'-war alone is ~420 draws, so only High stands on a live ship; Medium
   // rides the baked lod-1 copy. The neighbours never go live either (High would pick lod 0 for anything within 6 u).
@@ -315,7 +336,7 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
         }}
       />
       <Fleet ships={ownRest} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={restLod} firing={firing} sinkProgress={own.sink} />
-      {standing.length > 0 && <Fleet ships={standing} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={standingLod} firing={firing} sinkProgress={own.sink} dressedUid={deck.shipUid} />}
+      {standing.length > 0 && <Fleet ships={standing} livery={own.livery} boardOrigin={own.origin} quality={quality} lod={standingLod} firing={firing} sinkProgress={own.sink} dressedUid={deck.shipUid} rigCullX={rigCullX} />}
       <Fleet ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} quality={quality} lod={lod} firing={firing} sinkProgress={foe.sink} />
       {crewOn && <CrewLayer ships={own.ships} livery={own.livery} boardOrigin={own.origin} sinkProgress={own.sink} low={perf.lod === 2} reducedMotion={reducedMotion} />}
       {crewOn && <CrewLayer ships={foe.ships} livery={foe.livery} revealed={over} boardOrigin={foe.origin} sinkProgress={foe.sink} low={perf.lod === 2} reducedMotion={reducedMotion} />}

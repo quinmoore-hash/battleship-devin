@@ -1,12 +1,15 @@
 import type { PlacedShip, Player } from '../engine'
 import { playerDeck } from '../crew/playerPose'
 import { DEFAULT_DECK, type DeckBusEvent, type DeckState } from '../deck/contract'
-import { deckGun, resolveDeckAnchors, stationsOf } from '../deck/math'
+import { angleDelta, deckGun, gunnerPose, resolveDeckAnchors, stationsOf } from '../deck/math'
 import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
-import { SHIPS, shipWorldTransform } from '../ships'
+import { SHIPS, damageOf, shipWorldTransform } from '../ships'
 import { directionToWorld, localToWorld, type ShipPose, type WorldMuzzle } from '../vfx/cannon/anchors'
+import { lastHitIndex, placedShipSeed, sectionSurfaceY, sinkPose } from '../vfx/sinking/pose'
+import { sinkTimeAt } from '../vfx/sinking/timeline'
 import { useGameStore } from '../store/gameStore'
 import { isAfloat, ownBoardOrigin } from './battery'
+import { beatEnd, type Sequence } from './sequence'
 import type { Battery, CinematicEvent } from './types'
 
 /**
@@ -31,7 +34,19 @@ export interface PovContext {
   overboard?: OverboardBeat
   /** The director borrowed the camera for this sequence (follow-cam): the chase shows the impact, so no `look-at` nudges are emitted. */
   cameraBorrowed?: boolean
+  /**
+   * Another own ship sinks: how the player on deck gets to see it — a held `look-at` for the whole sink (`look`), or the
+   * director borrows the camera because the wreck is hidden behind the standing ship's own masts / sails or beyond a
+   * gunner's glance (`borrow`). See `sinkViewFor`.
+   */
+  sinkView?: SinkView
+  /** World point the held look / borrowed camera is about (the sinking ship). */
+  sinkTarget?: Vec3 | null
+  /** Standing-ship sink: seconds into the sequence at which `abandon-ship` is emitted (`abandonAtFor`); `POV.abandonAt` until computed. */
+  abandonAt?: number
 }
+
+export type SinkView = 'look' | 'borrow'
 
 /** The thrown-overboard beat of one incoming hit. */
 export interface OverboardBeat {
@@ -76,9 +91,24 @@ export const POV = {
   /** `shake` when your own ball lands. */
   farShake: 0.08,
   lookSeconds: 0.6,
+  /** The swing toward a sinking ship; an own ship's sink re-issues it every tick so the look holds for the whole sink beat. */
   sinkLookSeconds: 1.2,
-  /** Seconds into the sink of the standing ship before `abandon-ship` is emitted. */
+  /**
+   * Earliest seconds into the sink of the standing ship at which `abandon-ship` is emitted. The real cue is the deck under the
+   * player going awash (`abandonAtFor`), never earlier than this (skips / `off` emit it at once as before).
+   */
   abandonAt: 1.5,
+  /** The deck must be at most this far above the surface (ship units) under the player before the abandon fade may start. */
+  awashY: 0.02,
+  /** The deck stays visibly awash this long before the abandon-ship fade starts (eye at / below the waterline). */
+  awashHold: 0.5,
+  /**
+   * An own ship sinking within this half-angle (radians) of the standing ship's long axis is hidden behind its own masts, sails
+   * and castles from anywhere on deck, so the director borrows the camera instead of nudging the look.
+   */
+  sinkOccludedHalfAngle: 0.5,
+  /** How far a gunner may glance off the barrel (mirrors the deck controller's gun glance), beyond which a held look cannot reach. */
+  gunGlanceYaw: 0.7,
   /** Fractions of the overboard beat: tumbling off the deck until `tumble`, in the water until the fade (the rest). */
   overboardTumble: 0.35,
 } as const
@@ -212,15 +242,80 @@ export function povBeatEvents(
   return out
 }
 
+/**
+ * The held look at another own ship going down: the director emits this every tick of the `sink` beat (the deck controller
+ * restarts its swing timer on each one), so the look settles on the wreck in `sinkLookSeconds` and stays there — slow-mo,
+ * water and sounds included — until the `return` beat frees the player. Null off the sink beat, for enemy sinks (the usual
+ * one-off nudge), the standing ship (the deck itself goes under), reduced motion, or a borrowed camera (BUG-716).
+ */
+export function sinkHoldLook(event: CinematicEvent, pov: PovContext, beat: string | null, target: Vec3 | null, reducedMotion: boolean): DeckBusEvent | null {
+  if (event.type !== 'sink' || beat !== 'sink' || !pov.ownSide || pov.standingHit || pov.cameraBorrowed || reducedMotion || !target) return null
+  return { type: 'look-at', point: target, seconds: POV.sinkLookSeconds }
+}
+
+/**
+ * How the player on deck gets to see another own ship sink, decided once per sequence without raycasts: `borrow` when the
+ * wreck lies within `sinkOccludedHalfAngle` of the standing ship's long axis (own masts, sails and castles in the way), or
+ * while manning a gun whose barrel points more than `gunGlanceYaw` away from it; otherwise a held `look-at` is enough.
+ * Unknown eye position → `look`.
+ */
+export function sinkViewFor(pov: PovContext, target: Vec3, eye: Vec3 | null): SinkView {
+  const ship = pov.standing
+  if (!ship || !eye) return 'look'
+  const pose = shipWorldTransform(ship, ownBoardOrigin(pov.perspective))
+  const [ex, ez] = worldToLocal(eye, pose)
+  const [tx, tz] = worldToLocal(target, pose)
+  const dx = tx - ex
+  const dz = tz - ez
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-6) return 'look'
+  if (Math.abs(dz) / len < Math.sin(POV.sinkOccludedHalfAngle)) return 'borrow'
+  if (pov.deck.station !== null) {
+    const anchors = SHIPS[ship.spec.id].anchors
+    const st = stationsOf(anchors, resolveDeckAnchors(anchors, ship.spec.id))[pov.deck.station]
+    if (st && Math.abs(angleDelta(gunnerPose(st).yaw, Math.atan2(-dx, -dz))) > POV.gunGlanceYaw) return 'borrow'
+  }
+  return 'look'
+}
+
+/**
+ * Seconds into the standing ship's sink at which the deck under the player's feet goes awash (`sinkPose` is the very pose the
+ * controller follows per frame), so the abandon-ship fade starts after the player has watched the deck tilt and go under.
+ * Clamped to [`POV.abandonAt`, end of the sink beat]; `POV.abandonAt` when the sequence has no sink timeline.
+ */
+export function abandonAtFor(pov: PovContext, seq: Sequence): number {
+  const ship = pov.standing
+  if (!ship || !seq.sink) return POV.abandonAt
+  const anchors = SHIPS[ship.spec.id].anchors
+  const onIt = playerDeck.uid === ship.uid
+  const x = onIt ? playerDeck.x : 0
+  const z = onIt ? playerDeck.z : 0
+  const input = { seed: placedShipSeed(ship), hull: anchors.hull, damage: damageOf(ship), lastHit: lastHitIndex(ship) }
+  const above = (p: number) => sectionSurfaceY(sinkPose(p, input), x, anchors.deckY, z) > POV.awashY
+  // depth is monotonic in progress: bisect for the first awash progress
+  let lo = 0
+  let hi = 1
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2
+    if (above(mid)) lo = mid
+    else hi = mid
+  }
+  const end = beatEnd(seq, 'sink') || seq.duration
+  return Math.min(end, Math.max(POV.abandonAt, sinkTimeAt(hi, seq.sink) + POV.awashHold))
+}
+
 /** World position of a ship (sink / victory look-at targets). */
 export function shipWorldPosition(ship: PlacedShip, owner: Player): Vec3 {
   const pose = shipWorldTransform(ship, ownBoardOrigin(owner))
   return [pose.position[0], pose.position[1] + SHIPS[ship.spec.id].anchors.deckY, pose.position[2]]
 }
 
-/** Cell index along the ship for a ship-space x (bow +x = cell 0, matching the classes' `gunCell`); clamped to the hull. */
+/**
+ * Engine cell index (`ship.cells[i]`) under a ship-space x, clamped to the hull. `shipWorldTransform` puts the origin
+ * cell at the stern (−x) — the opposite of the classes' bow-indexed `gunCell` (see `cannonEngineCell`).
+ */
 export function cellAtLocalX(x: number, length: number): number {
-  return Math.min(length - 1, Math.max(0, Math.floor(length / 2 - x)))
+  return Math.min(length - 1, Math.max(0, Math.round(x + (length - 1) / 2)))
 }
 
 /** Ship-space x / z of a world point for a ship at `pose` (inverse of `localToWorld`). */
@@ -233,6 +328,9 @@ export function worldToLocal(point: Vec3, pose: ShipPose): [number, number] {
 }
 
 /** Which hull section (cell index) of `ship` a world point is over. */
+/** The classes index cannon cells from the bow (+x); the engine's `cells[]` run from the stern. */
+export const cannonEngineCell = (cell: number, length: number): number => length - 1 - cell
+
 export function standingCell(ship: PlacedShip, pose: ShipPose, point: Vec3): number {
   return cellAtLocalX(worldToLocal(point, pose)[0], ship.spec.length)
 }
@@ -243,7 +341,7 @@ export function standingCellFor(pov: PovContext, eye: Vec3 | null): number | nul
   const anchors = SHIPS[pov.standing.spec.id].anchors
   if (pov.deck.station !== null) {
     const c = anchors.cannons[pov.deck.station]
-    if (c) return c.cell
+    if (c) return cannonEngineCell(c.cell, pov.standing.spec.length)
   }
   if (!eye) return null
   return standingCell(pov.standing, shipWorldTransform(pov.standing, ownBoardOrigin(pov.perspective)), eye)
@@ -267,7 +365,7 @@ export function overboardFor(pov: PovContext, event: CinematicEvent, own: readon
   if (hitCell < 0 || mine === null || mine !== hitCell) return null
   const pose = shipWorldTransform(ship, ownBoardOrigin(pov.perspective))
   const anchors = SHIPS[ship.spec.id].anchors
-  const [lx, lz] = eye ? worldToLocal(eye, pose) : [ship.spec.length / 2 - (hitCell + 0.5), 0]
+  const [lx, lz] = eye ? worldToLocal(eye, pose) : [hitCell - (ship.spec.length - 1) / 2, 0]
   const side = lz < 0 ? -1 : 1
   const point: Vec3 = eye ?? localToWorld([lx, anchors.deckY + 0.17, 0], pose)
   const splash = localToWorld([lx, 0, side * (anchors.hull.beam / 2 + 0.6)], pose)

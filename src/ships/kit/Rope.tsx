@@ -82,21 +82,24 @@ const _a = new THREE.Vector3()
 const _b = new THREE.Vector3()
 const _up = new THREE.Vector3(0, 1, 0)
 
+/** The shroud lines of one `Ratlines` fan (pure): chain plates `spread` apart at `from`, converging at `to`; mirrored across z. */
+export function shroudLines(from: Vec3, to: Vec3, shrouds = 3, spread = 0.35, mirror = true): { a: Vec3; b: Vec3 }[] {
+  const out: { a: Vec3; b: Vec3 }[] = []
+  for (const side of mirror ? [1, -1] : [1]) {
+    for (let i = 0; i < shrouds; i++) {
+      const k = shrouds === 1 ? 0 : i / (shrouds - 1) - 0.5
+      out.push({ a: [from[0] + k * spread, from[1], from[2] * side], b: [to[0] + k * spread * 0.12, to[1], to[2] * side] })
+    }
+  }
+  return out
+}
+
 /** Shrouds fanning from the chain plates to the top with instanced rung lines. */
 export function Ratlines({ from, to, livery, rungs = 10, shrouds = 3, spread = 0.35, mirror = true, lod = 0 }: RatlinesProps) {
   const m = shipMaterials(livery)
   const sides = mirror ? [1, -1] : [1]
   const rungCount = lod === 0 ? rungs : lod === 1 ? Math.ceil(rungs / 2) : 0 // lod 1 keeps every other rung at the thickened radius (BUG-706)
-  const lines = useMemo(() => {
-    const out: { a: Vec3; b: Vec3 }[] = []
-    for (const side of sides) {
-      for (let i = 0; i < shrouds; i++) {
-        const k = shrouds === 1 ? 0 : i / (shrouds - 1) - 0.5
-        out.push({ a: [from[0] + k * spread, from[1], from[2] * side], b: [to[0] + k * spread * 0.12, to[1], to[2] * side] })
-      }
-    }
-    return out
-  }, [from, to, shrouds, spread, mirror]) // eslint-disable-line react-hooks/exhaustive-deps
+  const lines = useMemo(() => shroudLines(from, to, shrouds, spread, mirror), [from, to, shrouds, spread, mirror]) // eslint-disable-line react-hooks/exhaustive-deps
   const geom = useMemo(() => {
     const r = lod === 0 ? 5 : 3
     const geos = lines.map((l) => ropeGeometry([new THREE.Vector3(...l.a), new THREE.Vector3(...l.b)], ropeRadiusAtLod(0.012, lod), r, 1))

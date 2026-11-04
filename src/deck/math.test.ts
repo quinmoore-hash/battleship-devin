@@ -1,13 +1,63 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS } from '../ships'
-import { BOARD_LAYOUT, boardCenter } from '../scene/layout'
-import { DECK_FOV, type DeckAnchors } from './contract'
+import { MASTS, bulwarkSegments, mastBase, mastTop, riggingSegments } from '../ships/galleon/anchors'
+import { YARDS } from '../ships/galleon'
+import { GALLEON } from '../ships/galleon/hull'
+import type { Vec3 } from '../scene/layout'
+import { BOARD_LAYOUT, boardCenter, cellToWorld } from '../scene/layout'
+import { shipRotationY, shipWorldTransform } from '../ships'
+import { FLEET_BY_ID, type PlacedShip } from '../engine'
+import { DECK_FOV, DECK_NEAR, EYE_HEIGHT, type DeckAnchors } from './contract'
+const DECK_FOV_RAD = (DECK_FOV * Math.PI) / 180
 import {
+  EYE_CLEARANCE,
+  FALLBACK_EYE,
   GROUNDED,
+  MARKER_FADE_FAR,
+  MARKER_FADE_NEAR,
+  NO_PICK,
+  PICK_MIN_INTERVAL,
   PLAYER_RADIUS,
+  STATION_REACH,
+  WALK_EYE_MAX,
+  WALK_EYE_OVER_RAIL,
+  WALK_SPEED,
+  glowScaleCap,
+  markerFade,
+  pickStation,
+  spawnPose,
+  stationsOf,
+  stepOnDeck,
+  walkEyeHeight,
+  type Station,
   JUMP_APEX,
   JUMP_TIME,
   afloatUids,
+  blockedBands,
+  clearAhead,
+  clearLookYaw,
+  SPAWN_CLEAR_AHEAD,
+  SPAWN_OPEN_VIEW,
+  spawnLookYaw,
+  gunnerEyeXZ,
+  viewConeBlocked,
+  SPAWN_PITCH,
+  GUN_CONE_CLEAR,
+  GUN_EYE_BACK,
+  GUN_EYE_BEHIND_BREECH,
+  GUN_RAY_OVER_RAIL,
+  RAIL_INSET,
+  railAhead,
+  rayToPolygonEdge,
+  spawnStand,
+  spawnYawFallbacks,
+  hitSections,
+  inBand,
+  sectionAtX,
+  sectionX,
+  spawnPoseAvoiding,
+  withBlocked,
+  type WalkableDeck,
   approach,
   startJump,
   stepJump,
@@ -19,7 +69,6 @@ import {
   type WalkPose,
   isFallbackDeck,
   gunnerPose,
-  GUN_EYE_BACK,
   GUN_EYE_OVER_RAIL,
   lookForward,
   nearestStation,
@@ -29,11 +78,10 @@ import {
   rectPolygon,
   resolveDeckAnchors,
   sinkProgressFor,
-  spawnPose,
-  stationsOf,
   stationUsable,
-  stepOnDeck,
   yawToward,
+  levelAt,
+  angleDelta,
 } from './math'
 
 const rect = rectPolygon(4, 1, 0)
@@ -216,7 +264,7 @@ describe('stations', () => {
   it('gunnerPose on the authored deck sights from just inside the planking, above the rail', () => {
     const s = stationsOf(manOWar, resolveDeckAnchors(manOWar)).find((x) => x.onDeck && x.side === 'port')!
     const pose = gunnerPose(s)
-    expect(pose.position[2]).toBeCloseTo(s.muzzle[2] + 0.1) // port muzzle is at −z; the eye is 0.1 inboard of it
+    expect(pose.position[2]).toBeCloseTo(s.breech[2] + GUN_EYE_BEHIND_BREECH) // port breech is at −z; the eye stands inboard of it
     expect(pose.position[1]).toBeGreaterThan(s.rail!)
     expect(lookForward(pose.yaw, 0)[2]).toBeLessThan(-0.99)
   })
@@ -254,10 +302,9 @@ describe('manned gun eye looks out of the boat (BUG-770)', () => {
       const along = (v: readonly number[]) => v[0] * fx + v[2] * fz
       // above whatever the gunner must see over
       expect(p.position[1], `station ${s.index} eye over rail`).toBeGreaterThanOrEqual(rail + GUN_EYE_OVER_RAIL - 1e-9)
-      // just inside the planking: behind the muzzle, but outboard of the breech and of the stand (crew figure, shrouds, sails)
-      expect(along(s.muzzle) - along(p.position)).toBeCloseTo(GUN_EYE_BACK)
-      expect(along(p.position)).toBeGreaterThan(along(s.breech))
-      expect(along(p.position)).toBeGreaterThan(along(s.stand))
+      // inboard: GUN_EYE_BEHIND_BREECH behind the breech (BUG-800), well behind the muzzle
+      expect(along(s.breech) - along(p.position)).toBeCloseTo(GUN_EYE_BEHIND_BREECH)
+      expect(along(s.muzzle) - along(p.position)).toBeGreaterThan(GUN_EYE_BACK)
       // the forward ray is still above the rail where it crosses the bulwark (the muzzle plane): it clears the hull
       const look = lookForward(p.yaw, p.pitch)
       const flat = Math.hypot(look[0], look[2])
@@ -433,5 +480,533 @@ describe('walk acceleration and jump', () => {
     expect(inside(pose)).toBe(true)
     for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0.1, 0, d)
     expect(inside(pose)).toBe(true)
+  })
+})
+
+describe('station pick hysteresis + marker fade (BUG-7xx)', () => {
+  const st = (index: number, x: number, z: number, onDeck = true): Station => ({ index, cell: 0, side: 'port', muzzle: [x, 0, z - 0.1], direction: [0, 0, -1], stand: [x, 0, z], yaw: 0, breech: [x, 0, z - 0.05], onDeck })
+  const two = [st(0, 0, 0), st(1, 0.2, 0)]
+  it('between two equidistant stands the pick stays put (the hot marker used to flip every frame)', () => {
+    let p = pickStation(two, 0.0, 0, NO_PICK, 0)
+    expect(p.index).toBe(0)
+    // walk to the midpoint and a hair past it, frame by frame: still station 0
+    for (let i = 1; i <= 20; i++) p = pickStation(two, 0.09 + i * 0.001, 0, p, i / 60)
+    expect(p.index).toBe(0)
+    // jitter around the midpoint at 60 Hz: never flips
+    for (let i = 0; i < 120; i++) p = pickStation(two, 0.1 + (i % 2 ? 0.01 : -0.01), 0, p, 1 + i / 60)
+    expect(p.index).toBe(0)
+  })
+  it('switches once the other stand is clearly closer (15 % / 0.05 u) and never more than 4 times a second', () => {
+    let p = pickStation(two, 0.0, 0, NO_PICK, 0)
+    p = pickStation(two, 0.14, 0, p, 1) // 0.14 vs 0.06: 0.06 < 0.14 - 0.05 → switch
+    expect(p).toEqual({ index: 1, since: 1 })
+    p = pickStation(two, 0.05, 0, p, 1.1) // clearly station 0 again, but only 0.1 s later
+    expect(p.index).toBe(1)
+    p = pickStation(two, 0.05, 0, p, 1.25)
+    expect(p).toEqual({ index: 0, since: 1.25 })
+    expect(PICK_MIN_INTERVAL).toBe(0.25)
+  })
+  it('leaving is sticky too: the pick is held until `reach` + 0.03 and dropped at most 4×/s; a fresh pick is immediate', () => {
+    let p = pickStation(two, 0, 0, NO_PICK, 0)
+    p = pickStation(two, 0, STATION_REACH + 0.02, p, 1)
+    expect(p.index).toBe(0)
+    p = pickStation(two, 0, STATION_REACH + 0.04, p, 1.1)
+    expect(p).toEqual({ index: -1, since: 1.1 }) // beyond the margin: dropped
+    p = pickStation(two, 0, 0, p, 1.2)
+    expect(p.index).toBe(-1) // back within reach 0.1 s later: not yet (4×/s)
+    p = pickStation(two, 0, 0, p, 1.35)
+    expect(p).toEqual({ index: 0, since: 1.35 })
+    expect(pickStation(two, 0.2, 0, NO_PICK, 0)).toEqual({ index: 1, since: 0 }) // a fresh pick is immediate
+    // below-deck guns are never picked, and a stale pick of one is dropped
+    expect(pickStation([st(0, 0, 0, false)], 0, 0, NO_PICK, 0).index).toBe(-1)
+    expect(pickStation([st(0, 0, 0, false)], 0, 0, { index: 0, since: -1 }, 0).index).toBe(-1)
+  })
+  it('the real decks: walking the length of every ship at 60 Hz changes the pick at most 4 times a second', () => {
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      const stations = stationsOf(a, deck)
+      const level = deck.walk[0]
+      const xs = level.points.map((p) => p[0])
+      const z = Math.max(...level.points.map((p) => Math.abs(p[1]))) * 0.7
+      let p = NO_PICK
+      const changes: number[] = []
+      let pose: WalkPose = stepOnDeck({ x: Math.min(...xs) + 0.05, z, y: level.y, level: 0 }, 0, 0, deck)
+      for (let f = 0; f < 600; f++) {
+        pose = stepOnDeck(pose, (WALK_SPEED * 0.6) / 60, 0, deck)
+        const next = pickStation(stations, pose.x, pose.z, p, f / 60)
+        if (next.index !== p.index) changes.push(f / 60)
+        p = next
+      }
+      for (let i = 1; i < changes.length; i++) expect(changes[i] - changes[i - 1], `${id}: pick changes too fast`).toBeGreaterThanOrEqual(PICK_MIN_INTERVAL - 1e-9)
+    }
+  })
+  it('markerFade: 1 beyond 0.6 u, 0 inside 0.25 u, smooth and monotonic between', () => {
+    expect(markerFade(1)).toBe(1)
+    expect(markerFade(MARKER_FADE_FAR)).toBe(1)
+    expect(markerFade(MARKER_FADE_NEAR)).toBe(0)
+    expect(markerFade(0.1)).toBe(0)
+    expect(markerFade(0.425)).toBeCloseTo(0.5, 6)
+    let last = 0
+    for (let d = 0.25; d <= 0.6; d += 0.01) {
+      const f = markerFade(d)
+      expect(f).toBeGreaterThanOrEqual(last)
+      last = f
+    }
+  })
+  it('glowScaleCap keeps the glow under 3° of view: 1.45× at 1 u, 0.73× at 0.5 u, 0 at the eye', () => {
+    expect(glowScaleCap(1)).toBeCloseTo(1.455, 2)
+    expect(glowScaleCap(0.5)).toBeCloseTo(0.727, 2)
+    expect(glowScaleCap(0)).toBe(0)
+    // the hot pulse peaks at 1.65×: capped from 1.13 u inward
+    expect(glowScaleCap(1.13)).toBeLessThan(1.65)
+    expect(glowScaleCap(1.14)).toBeGreaterThan(1.65)
+  })
+})
+
+describe('eye outside the geometry (BUG-7xx, owner clips a + b)', () => {
+  it('the walking eye sees over the lowest reachable cap rail on every class (0.17 u was under the bulwark on three of five)', () => {
+    const want: Record<string, number> = { 'man-o-war': 0.31, galleon: 0.46, frigate: 0.275, brigantine: 0.183, sloop: 0.18 }
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      const stations = stationsOf(a, deck)
+      const eye = walkEyeHeight(deck, stations)
+      expect(eye, id).toBeGreaterThanOrEqual(EYE_HEIGHT)
+      expect(eye, id).toBeLessThanOrEqual(WALK_EYE_MAX)
+      expect(eye, id).toBeCloseTo(want[id], 2)
+      // the lowest rail of the main deck (level 0) is cleared; a higher castle gun's rail (man-o'-war 0.40) is not chased
+      const lowest = Math.min(...stations.filter((s) => s.onDeck && s.rail !== undefined && Math.abs(s.stand[1] - deck.walk[0].y) < 1e-3).map((s) => s.rail! - s.stand[1]))
+      expect(eye - lowest, id).toBeGreaterThanOrEqual(WALK_EYE_OVER_RAIL - 1e-9)
+    }
+    // no authored rails → the deck's own eye height (contract 0.17; the marked fallback rectangle keeps its 0.3)
+    expect(walkEyeHeight(fallbackDeckAnchors(SHIPS.sloop.anchors), [])).toBe(EYE_HEIGHT)
+    const fallback = resolveDeckAnchors({ ...SHIPS.sloop.anchors, deck: undefined }, 'sloop')
+    expect(isFallbackDeck(fallback) ? walkEyeHeight(fallback, []) : FALLBACK_EYE).toBe(FALLBACK_EYE)
+  })
+  it('after spawn (either side, as the controller mirrors it) and after any step the feet keep PLAYER_RADIUS from every obstacle and stay inside the plan — on every class', () => {
+    expect(PLAYER_RADIUS).toBeGreaterThanOrEqual(DECK_NEAR + EYE_CLEARANCE)
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      for (const side of [1, -1]) {
+        const p0 = spawnPose(deck)
+        const p = stepOnDeck({ ...p0, z: side * Math.abs(p0.z) }, 0, 0, deck)
+        expect(pointInPolygon([p.x, p.z], deck.walk[p.level].points), `${id} spawn side ${side} inside the plan`).toBe(true)
+        for (const o of deck.obstacles) expect(Math.hypot(p.x - o.center[0], p.z - o.center[1]), `${id} spawn side ${side} clear of obstacle at ${o.center}`).toBeGreaterThanOrEqual(o.radius + PLAYER_RADIUS - 1e-6)
+        // walk a figure-eight across the deck: never inside an obstacle unless the rail already pins you there
+        let q = p
+        for (let f = 0; f < 400; f++) {
+          const ang = f * 0.11
+          q = stepOnDeck(q, Math.cos(ang) * 0.02, Math.sin(ang * 0.5) * 0.02, deck)
+          expect(pointInPolygon([q.x, q.z], deck.walk[q.level].points), `${id} step ${f} inside the plan`).toBe(true)
+        }
+      }
+    }
+  })
+})
+
+describe('damage-aware spawn and no-walk bands (BUG-7xx: Tab onto a burning ship)', () => {
+  const ids = Object.keys(SHIPS) as (keyof typeof SHIPS)[]
+  /** Every 1–2 hit-section combination that leaves the ship afloat (all sections hit = sunk, never boarded). */
+  const combos = (n: number): number[][] => {
+    const out: number[][] = []
+    for (let i = 0; i < n; i++) {
+      out.push([i])
+      for (let j = i + 1; j < n; j++) if (n > 2) out.push([i, j])
+    }
+    return out
+  }
+  const inObstacle = (d: DeckAnchors, p: WalkPose) => d.obstacles.some((o) => Math.hypot(p.x - o.center[0], p.z - o.center[1]) < o.radius + PLAYER_RADIUS - 1e-6)
+  const placed = (id: string, orientation: PlacedShip['orientation'], hitIdx: number[]): PlacedShip => {
+    const spec = FLEET_BY_ID[id]
+    const cells = Array.from({ length: spec.length }, (_, i) => (orientation === 'horizontal' ? { x: 2 + i, y: 4 } : { x: 4, y: 2 + i }))
+    return { spec, uid: id, origin: cells[0], orientation, cells, hits: hitIdx.map((i) => cells[i]) }
+  }
+
+  it('sectionX is where the ship transform puts the cell: the origin cell is the stern (−x), both orientations', () => {
+    for (const orientation of ['horizontal', 'vertical'] as const) {
+      const ship = placed('galleon', orientation, [])
+      const { position, rotationY } = shipWorldTransform(ship)
+      expect(rotationY).toBe(shipRotationY(orientation))
+      ship.cells.forEach((c, i) => {
+        const w = cellToWorld(c, BOARD_LAYOUT.player.origin)
+        const dx = w[0] - position[0]
+        const dz = w[2] - position[2]
+        // world → ship space (inverse rotation about y)
+        const localX = dx * Math.cos(rotationY) - dz * Math.sin(rotationY)
+        expect(localX).toBeCloseTo(sectionX(i, ship.cells.length), 6)
+        expect(sectionAtX(localX, ship.cells.length)).toBe(i)
+      })
+    }
+  })
+
+  it('hitSections / blockedBands: one hull-cell band per hit, in cell order', () => {
+    const ship = placed('frigate', 'horizontal', [2, 0])
+    expect(hitSections(ship)).toEqual([0, 2])
+    expect(blockedBands([0, 2], 3)).toEqual([
+      { x0: -1.5, x1: -0.5 },
+      { x0: 0.5, x1: 1.5 },
+    ])
+    expect(blockedBands([], 3)).toEqual([])
+    expect(inBand(-0.5 + PLAYER_RADIUS, { x0: -1.5, x1: -0.5 })).toBe(false)
+    expect(inBand(-0.5 + PLAYER_RADIUS / 2, { x0: -1.5, x1: -0.5 })).toBe(true)
+  })
+
+  it('withBlocked keeps the deck identity when nothing is hit (fallback-deck flag survives either way)', () => {
+    const d = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    expect(withBlocked(d, [])).toBe(d)
+    const fb = resolveDeckAnchors({ ...SHIPS.frigate.anchors, deck: undefined })
+    expect(isFallbackDeck(withBlocked(fb, blockedBands([0], 3)))).toBe(true)
+    expect(isFallbackDeck(withBlocked(d, blockedBands([0], 3)))).toBe(false)
+  })
+
+  it('every ship, every 1–2 hit sections: the spawn is on an intact section, on the deck, outside every obstacle', () => {
+    for (const id of ids) {
+      const n = FLEET_BY_ID[id].length
+      const deck = resolveDeckAnchors(SHIPS[id].anchors, id)
+      for (const hit of combos(n)) {
+        const d = withBlocked(deck, blockedBands(hit, n))
+        const p = spawnPoseAvoiding(d, hit, n)
+        const label = `${id} hit ${hit.join(',')}`
+        expect(hit, label).not.toContain(sectionAtX(p.x, n))
+        expect(d.blocked!.some((b) => inBand(p.x, b)), label).toBe(false)
+        expect(pointInPolygon([p.x, p.z], d.walk[p.level].points), label).toBe(true)
+        expect(inObstacle(d, p), label).toBe(false)
+        // the authored spawn itself was the problem on these decks: it sits on the stern section
+        if (hit.includes(sectionAtX(deck.spawn[0], n))) expect(sectionAtX(p.x, n), label).not.toBe(sectionAtX(deck.spawn[0], n))
+      }
+    }
+  })
+
+  it('picks the intact section farthest from the fire, and the authored spawn when it is intact', () => {
+    const frigate = resolveDeckAnchors(SHIPS.frigate.anchors, 'frigate')
+    expect(sectionAtX(spawnPoseAvoiding(frigate, [0, 1], 3).x, 3)).toBe(2)
+    expect(sectionAtX(spawnPoseAvoiding(frigate, [1, 2], 3).x, 3)).toBe(0)
+    const mow = resolveDeckAnchors(SHIPS['man-o-war'].anchors, 'man-o-war')
+    expect(sectionAtX(spawnPoseAvoiding(mow, [0], 5).x, 5)).toBe(4)
+    expect(sectionAtX(spawnPoseAvoiding(mow, [4], 5).x, 5)).toBe(0)
+    // nothing hit → exactly the old spawn
+    for (const id of ids) {
+      const d = resolveDeckAnchors(SHIPS[id].anchors, id)
+      expect(spawnPoseAvoiding(d, [], FLEET_BY_ID[id].length)).toEqual(spawnPose(d))
+    }
+  })
+
+  it('the controller mirror step (same z side as the enemy) stays off the hit section', () => {
+    for (const id of ids) {
+      const n = FLEET_BY_ID[id].length
+      const deck = resolveDeckAnchors(SHIPS[id].anchors, id)
+      for (const hit of combos(n)) {
+        const d = withBlocked(deck, blockedBands(hit, n))
+        const p = spawnPoseAvoiding(d, hit, n)
+        for (const side of [1, -1]) {
+          const q = stepOnDeck({ ...p, z: side * Math.abs(p.z) }, 0, 0, d)
+          expect(hit, `${id} hit ${hit.join(',')} side ${side}`).not.toContain(sectionAtX(q.x, n))
+          expect(inObstacle(d, q)).toBe(false)
+        }
+      }
+    }
+  })
+
+  describe('stepOnDeck with blocked bands', () => {
+    // a 4-section rectangular deck (x ∈ [-2, 2]), section 2 (x ∈ [0, 1]) hit
+    const d: WalkableDeck = withBlocked({ spawn: [-1, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [], stations: [] }, blockedBands([2], 4))
+    expect(d.blocked).toEqual([{ x0: 0, x1: 1 }])
+    const at = (x: number, z = 0): WalkPose => ({ x, z, y: 0, level: 0 })
+
+    it('a walk toward the breach stops at its edge and never enters it', () => {
+      let p = at(-0.5)
+      for (let i = 0; i < 40; i++) p = stepOnDeck(p, 0.05, 0, d)
+      expect(p.x).toBeCloseTo(-PLAYER_RADIUS, 6)
+      expect(inBand(p.x, d.blocked![0])).toBe(false)
+      // and from the bow side it stops on the far edge
+      p = at(1.9)
+      for (let i = 0; i < 40; i++) p = stepOnDeck(p, -0.05, 0, d)
+      expect(p.x).toBeCloseTo(1 + PLAYER_RADIUS, 6)
+    })
+
+    it('sliding along the breach edge (z) is free', () => {
+      const p = stepOnDeck(at(-PLAYER_RADIUS, 0), 0, 0.1, d)
+      expect(p.z).toBeCloseTo(0.1, 6)
+      expect(p.x).toBeCloseTo(-PLAYER_RADIUS, 6)
+    })
+
+    it('a player standing where the ball struck is pushed out, not pinned', () => {
+      const p = stepOnDeck(at(0.7), 0.02, 0, d)
+      expect(inBand(p.x, d.blocked![0])).toBe(false)
+      expect(p.x).toBeCloseTo(1 + PLAYER_RADIUS, 6)
+      const q = stepOnDeck(at(0.3), -0.02, 0, d)
+      expect(q.x).toBeCloseTo(-PLAYER_RADIUS, 6)
+    })
+
+    it('a level the breach swallows whole never traps a player already on it (they keep walking)', () => {
+      const dd: WalkableDeck = withBlocked({ spawn: [-1, 0, 0], walk: [{ points: rectPolygon(1, 1, 0), y: 0 }], ramps: [], obstacles: [], stations: [] }, [{ x0: -1, x1: 1 }])
+      expect(stepOnDeck(at(-0.4), 0.1, 0, dd).x).toBeCloseTo(-0.3, 6)
+      expect(stepOnDeck(at(0.1), 0.1, 0, dd).x).toBeCloseTo(0.2, 6)
+    })
+
+    it('spawnPose itself lands clear of the bands', () => {
+      const p = spawnPose(withBlocked({ spawn: [0.5, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [], stations: [] }, blockedBands([2], 4)))
+      expect(inBand(p.x, { x0: 0, x1: 1 })).toBe(false)
+    })
+  })
+})
+
+describe('spawn facing is clear of obstacles (vertical man-o-war looked into the mizzen)', () => {
+  const ids = Object.keys(SHIPS) as (keyof typeof SHIPS)[]
+  const foe = boardCenter(BOARD_LAYOUT.enemy)
+  /** What `spawn()` in DeckController does for a whole ship placed `orientation` on the player board. */
+  const controllerSpawn = (id: keyof typeof SHIPS, orientation: PlacedShip['orientation']) => {
+    const n = FLEET_BY_ID[id].length
+    const cells = Array.from({ length: n }, (_, i) => (orientation === 'horizontal' ? { x: 2 + i, y: 4 } : { x: 4, y: 2 + i }))
+    const ship: PlacedShip = { spec: FLEET_BY_ID[id], uid: id, origin: cells[0], orientation, cells, hits: [] }
+    const deck = resolveDeckAnchors(SHIPS[id].anchors, id)
+    const { rotationY, position } = shipWorldTransform(ship)
+    const localYaw = Math.atan2(-(foe[0] - position[0]), -(foe[2] - position[2])) - rotationY
+    let p = spawnPoseAvoiding(deck, [], n)
+    const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
+    p = spawnStand(deck, p, side, localYaw)
+    return { deck, p, localYaw, side, yaw: spawnLookYaw(deck, p, localYaw, side) }
+  }
+
+  it('clearAhead: ray–circle distance, player radius wide', () => {
+    const d: DeckAnchors = { spawn: [0, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [{ center: [0.5, 0], radius: 0.1 }], stations: [] }
+    expect(clearAhead(d, [0, 0], yawToward(1, 0))).toBeCloseTo(0.5 - 0.1 - PLAYER_RADIUS, 6) // looking +x into it
+    expect(clearAhead(d, [0, 0], yawToward(-1, 0))).toBe(SPAWN_CLEAR_AHEAD) // away from it
+    expect(clearAhead(d, [0, 0], yawToward(0, 1))).toBe(SPAWN_CLEAR_AHEAD) // across
+    expect(clearAhead(d, [0.45, 0], yawToward(1, 0))).toBe(0) // standing inside it, looking into it
+    expect(clearAhead(d, [0.5 - 0.1 - PLAYER_RADIUS, 0], yawToward(-1, 0))).toBe(SPAWN_CLEAR_AHEAD) // on its clearance ring, looking away
+    expect(clearAhead(d, [0, 0], yawToward(1, 0), 0.3)).toBe(0.3) // shorter reach: clear
+  })
+
+  it('clearAhead: the front of a higher level is a wall, a break down to a lower deck or a rail is not', () => {
+    const quarter = rectPolygon(1, 1, 0).map(([x, z]): [number, number] => [x + 0.5, z]) // x ∈ [0, 1]
+    const waist = rectPolygon(1, 1, 0).map(([x, z]): [number, number] => [x - 0.5, z]) // x ∈ [-1, 0]
+    const d: DeckAnchors = { spawn: [0, 0, 0], walk: [{ points: waist, y: 0 }, { points: quarter, y: 0.1 }], ramps: [], obstacles: [], stations: [] }
+    expect(clearAhead(d, [-0.3, 0], yawToward(1, 0), undefined, undefined, 0)).toBeCloseTo(0.3, 9) // waist → quarterdeck front: wall
+    expect(clearAhead(d, [0.3, 0], yawToward(-1, 0), undefined, undefined, 1)).toBe(SPAWN_CLEAR_AHEAD) // quarterdeck → down to the waist: clear
+    expect(clearAhead(d, [-0.3, 0], yawToward(-1, 0), undefined, undefined, 0)).toBe(SPAWN_CLEAR_AHEAD) // over the stern rail: clear
+    expect(clearAhead(d, [-0.3, 0.3], yawToward(0, 1), undefined, undefined, 0)).toBe(SPAWN_CLEAR_AHEAD) // over the beam rail: clear
+  })
+
+  it('clearLookYaw keeps the enemy facing when clear, else the first clear fallback, else the farthest view', () => {
+    const d: DeckAnchors = { spawn: [0, 0, 0], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [{ center: [0.3, 0], radius: 0.1 }], stations: [] }
+    const ahead = yawToward(1, 0)
+    expect(clearLookYaw(d, [0, 0], yawToward(0, 1), spawnYawFallbacks(1))).toBe(yawToward(0, 1))
+    expect(clearLookYaw(d, [0, 0], ahead, spawnYawFallbacks(-1))).toBe(yawToward(0, -1))
+    const boxed: DeckAnchors = { ...d, obstacles: [{ center: [0.3, 0], radius: 0.1 }, { center: [0, 0.2], radius: 0.1 }, { center: [0, -0.4], radius: 0.1 }, { center: [-0.5, 0], radius: 0.1 }] }
+    const pick = clearLookYaw(boxed, [0, 0], ahead, spawnYawFallbacks(1))
+    const seen = clearAhead(boxed, [0, 0], pick)
+    for (const y of [ahead, ...spawnYawFallbacks(1)]) expect(seen).toBeGreaterThanOrEqual(clearAhead(boxed, [0, 0], y))
+    expect(seen).toBeGreaterThan(clearAhead(boxed, [0, 0], yawToward(-1, 0))) // the sweep found a better diagonal
+  })
+
+  it('every class, horizontal and vertical: the spawn view is open for SPAWN_OPEN_VIEW (or as open as the deck allows)', () => {
+    for (const id of ids) {
+      for (const orientation of ['horizontal', 'vertical'] as const) {
+        const { deck, p, localYaw, side, yaw } = controllerSpawn(id, orientation)
+        const label = `${id} ${orientation}`
+        const d = clearAhead(deck, [p.x, p.z], yaw, SPAWN_OPEN_VIEW, undefined, p.level)
+        const alternatives = [localYaw, ...spawnYawFallbacks(side), ...Array.from({ length: 16 }, (_, i) => localYaw + (i * Math.PI) / 8)].map((y) => clearAhead(deck, [p.x, p.z], y, SPAWN_OPEN_VIEW, undefined, p.level))
+        expect(d, label).toBeGreaterThanOrEqual(Math.min(SPAWN_OPEN_VIEW, Math.max(...alternatives)) - 1e-9)
+        expect(d, label).toBeGreaterThanOrEqual(SPAWN_CLEAR_AHEAD)
+      }
+    }
+  })
+
+  it('vertical man-o-war (BUG-799): the spawn faces the enemy beam over the rail, not the mainmast 0.7 u ahead; horizontal keeps the enemy facing', () => {
+    const v = controllerSpawn('man-o-war', 'vertical')
+    const bow = yawToward(1, 0)
+    expect(Math.abs(Math.sin(v.yaw - bow))).toBeGreaterThan(0.9) // not along the deck
+    expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw, SPAWN_OPEN_VIEW, undefined, v.p.level)).toBe(SPAWN_OPEN_VIEW)
+    expect(lookForward(v.yaw, 0)[2] * v.side).toBeGreaterThan(0.9) // toward the enemy's side of the deck
+    const h = controllerSpawn('man-o-war', 'horizontal')
+    expect(Math.abs(angleDelta(h.yaw, h.localYaw))).toBeLessThan(0.1) // the enemy beam (openView) ≈ the enemy bearing
+    expect(clearAhead(h.deck, [h.p.x, h.p.z], h.yaw, SPAWN_OPEN_VIEW, undefined, h.p.level)).toBe(SPAWN_OPEN_VIEW)
+  })
+
+  it('rayToPolygonEdge: distance to the rail along a direction', () => {
+    expect(rayToPolygonEdge([0, 0], [0, 1], rect)).toBeCloseTo(0.5, 9)
+    expect(rayToPolygonEdge([0, 0.3], [0, -1], rect)).toBeCloseTo(0.8, 9)
+    expect(rayToPolygonEdge([1, 0], [1, 0], rect)).toBeCloseTo(1, 9)
+    expect(rayToPolygonEdge([0, 0.5], [0, 1], rect)).toBeCloseTo(0, 9)
+    expect(rayToPolygonEdge([0, 0], [1, 0], [[-1, -1], [-1, 1]])).toBe(Infinity)
+  })
+
+  it('spawnStand keeps RAIL_INSET of deck before the facing rail, or the centreline on a narrow deck', () => {
+    const d: DeckAnchors = { spawn: [0, 0, -0.45], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [], stations: [] }
+    const toEnemy = yawToward(0, 1)
+    const p = spawnStand(d, { x: 0, z: -0.45, y: 0, level: 0 }, 1, toEnemy)
+    expect(p.z).toBeCloseTo(0.5 - RAIL_INSET - PLAYER_RADIUS, 9)
+    expect(p.x).toBe(0)
+    expect(railAhead(d, [p.x, p.z], 0, toEnemy)).toBeCloseTo(RAIL_INSET + PLAYER_RADIUS, 9)
+    // a spawn away from the rail walks to it (the view over the rail is the point; the e2e runs along it)
+    expect(spawnStand(d, { x: 0.2, z: -0.1, y: 0, level: 0 }, -1, yawToward(0, -1)).z).toBeCloseTo(-(0.5 - RAIL_INSET - PLAYER_RADIUS), 9)
+    const narrow: DeckAnchors = { ...d, walk: [{ points: rectPolygon(4, 0.2, 0), y: 0 }] }
+    expect(spawnStand(narrow, { x: 0, z: -0.09, y: 0, level: 0 }, 1, toEnemy).z).toBeCloseTo(0, 9)
+    // boxed in at the spawn: backs off along the deck to the nearest stand with a clear view
+    const trunk: DeckAnchors = { ...d, obstacles: [{ center: [0, 0.3], radius: 0.1 }, { center: [0.2, 0.2], radius: 0.1 }, { center: [-0.2, 0.2], radius: 0.1 }] }
+    const off = spawnStand(trunk, { x: 0, z: -0.45, y: 0, level: 0 }, 1, toEnemy)
+    expect(Math.abs(off.x)).toBeGreaterThan(0.1)
+    expect(clearAhead(trunk, [off.x, off.z], clearLookYaw(trunk, [off.x, off.z], toEnemy, spawnYawFallbacks(1)))).toBe(SPAWN_CLEAR_AHEAD)
+  })
+
+  it('every class, horizontal and vertical: the spawn stand has ≥ RAIL_INSET of deck ahead before the rail', () => {
+    for (const id of ids) {
+      for (const orientation of ['horizontal', 'vertical'] as const) {
+        const { deck, p, side, yaw } = controllerSpawn(id, orientation)
+        const label = `${id} ${orientation}`
+        expect(pointInPolygon([p.x, p.z], deck.walk[p.level].points), label).toBe(true)
+        // the beam-wise inset the stand guarantees — unless a centreline fixture (the frigate's wheel) leaves no room:
+        // then it stands as far from the rail as the fixture allows
+        const toRail = rayToPolygonEdge([p.x, p.z], [0, side], deck.walk[p.level].points)
+        const closer: [number, number] = [p.x, p.z - side * 0.02]
+        const fixtureBehind = deck.obstacles.some((o) => Math.hypot(closer[0] - o.center[0], closer[1] - o.center[1]) < o.radius + PLAYER_RADIUS)
+        expect(toRail >= RAIL_INSET + PLAYER_RADIUS - 1e-6 || fixtureBehind, `${label}: ${toRail.toFixed(3)} to the rail`).toBe(true)
+        expect(toRail, label).toBeGreaterThan(0.1)
+        // and along the look: either ≥ RAIL_INSET of deck before the edge, or that edge is a deck break (another level continues)
+        const ahead = railAhead(deck, [p.x, p.z], p.level, yaw)
+        if (ahead < RAIL_INSET) {
+          const f = lookForward(yaw, 0)
+          const len = Math.hypot(f[0], f[2])
+          // (the authored levels leave a gap at a break: probe a little past the edge, or accept a ramp end nearby)
+          const hit: [number, number] = [p.x + (f[0] / len) * ahead, p.z + (f[2] / len) * ahead]
+          const beyond = [0.03, 0.08, 0.15].map((d): [number, number] => [hit[0] + (f[0] / len) * d, hit[1] + (f[2] / len) * d])
+          const otherLevel = beyond.some((b) => deck.walk.some((w, i) => i !== p.level && pointInPolygon(b, w.points)))
+          const rampNear = deck.ramps.some((r) => Math.min(Math.hypot(hit[0] - r.a[0], hit[1] - r.a[1]), Math.hypot(hit[0] - r.b[0], hit[1] - r.b[1])) < 0.3)
+          expect(otherLevel || rampNear, `${label}: edge ${ahead.toFixed(3)} ahead is a rail`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('the vertical man-o-war no longer stares into the mizzen', () => {
+    const v = controllerSpawn('man-o-war', 'vertical')
+    expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw)).toBe(SPAWN_CLEAR_AHEAD)
+    const h = controllerSpawn('man-o-war', 'horizontal')
+    expect(Math.abs(angleDelta(h.yaw, h.localYaw))).toBeLessThan(0.1) // the enemy beam (openView) ≈ the enemy bearing
+  })
+
+  describe('galleon spawn first frame (BUG-893): 1440×900 central box clear of own-ship lines, cap rail in the bottom fifth', () => {
+    /** Own-ship lines a first look can cross: shrouds + stays, mast trunks, yards, guns (breech → muzzle), cap rail + pins, and a crew figure at every on-deck gun stand. */
+    const ownLines = (stations: readonly Station[]) => {
+      const segs = [...riggingSegments(), ...bulwarkSegments()]
+      for (const m of MASTS) {
+        segs.push({ a: mastBase(m), b: mastTop(m) })
+        for (const y of YARDS[m.name]) segs.push({ a: [m.x, mastBase(m)[1] + y.y, -y.width / 2], b: [m.x, mastBase(m)[1] + y.y, y.width / 2] })
+      }
+      for (const c of SHIPS.galleon.anchors.cannons) segs.push({ a: [c.muzzle[0], c.muzzle[1], c.muzzle[2] * 0.4], b: c.muzzle })
+      for (const s of stations) if (s.onDeck) segs.push({ a: s.stand, b: [s.stand[0], s.stand[1] + CREW_FIGURE_HEIGHT, s.stand[2]] })
+      return segs
+    }
+    const CREW_FIGURE_HEIGHT = 0.3
+    const W = 1440
+    const H = 900
+    const BOX = { x0: 480, x1: 960, y0: 180, y1: 720 }
+    /** Pixel position of ship-space point `q` for an eye at `eye` looking (`yaw`, `pitch`) through the deck camera (vertical fov DECK_FOV). */
+    const project = (eye: Vec3, yaw: number, pitch: number, q: Vec3) => {
+      const f = lookForward(yaw, pitch)
+      const r: Vec3 = [-f[2], 0, f[0]]
+      const rl = Math.hypot(r[0], r[2])
+      r[0] /= rl
+      r[2] /= rl
+      const u: Vec3 = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]]
+      const d: Vec3 = [q[0] - eye[0], q[1] - eye[1], q[2] - eye[2]]
+      const z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2]
+      const x = d[0] * r[0] + d[1] * r[1] + d[2] * r[2]
+      const y = d[0] * u[0] + d[1] * u[1] + d[2] * u[2]
+      const t = Math.tan(DECK_FOV_RAD / 2)
+      return { z, px: W / 2 + ((x / z) * (W / 2)) / (t * (W / H)), py: H / 2 - ((y / z) * (H / 2)) / t, dist: Math.hypot(d[0], d[1], d[2]) }
+    }
+
+    it.each(['horizontal', 'vertical'] as const)('%s placement', (orientation) => {
+      const { deck, p, side, yaw } = controllerSpawn('galleon', orientation)
+      const stations = stationsOf(SHIPS.galleon.anchors, deck)
+      expect(p.y).toBeCloseTo(GALLEON.mainDeckY, 6)
+      expect(Math.sign(p.z)).toBe(side)
+      expect(Math.abs(lookForward(yaw, 0)[2])).toBeGreaterThan(0.95)
+      const eye: Vec3 = [p.x, p.y + walkEyeHeight(deck, stations), p.z]
+      const segs = ownLines(stations)
+      expect(segs.length).toBeGreaterThan(60)
+      let railTop = Infinity
+      for (const seg of segs) {
+        for (let i = 0; i <= 16; i++) {
+          const t = i / 16
+          const q: Vec3 = [seg.a[0] + (seg.b[0] - seg.a[0]) * t, seg.a[1] + (seg.b[1] - seg.a[1]) * t, seg.a[2] + (seg.b[2] - seg.a[2]) * t]
+          const { z, px, py, dist } = project(eye, yaw, SPAWN_PITCH, q)
+          if (z <= 0 || px < BOX.x0 || px > BOX.x1) continue
+          if (dist <= 1.5) railTop = Math.min(railTop, py)
+          // (b) nothing of the own ship nearer than 1 u inside the central box
+          if (dist <= GUN_CONE_CLEAR) expect(py, `${JSON.stringify(seg)} at ${px.toFixed(0)},${py.toFixed(0)} (${dist.toFixed(2)} u) inside the central box`).toBeGreaterThan(BOX.y1)
+        }
+      }
+      // (a) the nearest own-ship line across the box columns (the cap rail) starts in the bottom fifth of the frame
+      expect(railTop).toBeGreaterThanOrEqual(BOX.y1)
+    })
+  })
+})
+
+
+describe('manned eye stays inboard with the barrel in frame (BUG-800)', () => {
+  it('every on-deck station of every class: eye GUN_EYE_BEHIND_BREECH behind the breech on the barrel axis, inside the bulwark, muzzle in the lower half of the frame', () => {
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      for (const s of stationsOf(a, deck)) {
+        if (!s.onDeck) continue
+        const label = `${id} station ${s.index}`
+        const h = Math.hypot(s.direction[0], s.direction[2]) || 1
+        const f: [number, number] = [s.direction[0] / h, s.direction[2] / h]
+        const along = (x: number, z: number) => x * f[0] + z * f[1]
+        const { position, pitch, yaw } = gunnerPose(s)
+        const [ex, ez] = gunnerEyeXZ(s)
+        expect(position[0], label).toBeCloseTo(ex, 9)
+        expect(position[2], label).toBeCloseTo(ez, 9)
+        expect(along(ex, ez), label).toBeCloseTo(along(s.breech[0], s.breech[2]) - GUN_EYE_BEHIND_BREECH, 9)
+        expect(along(ex, ez), label).toBeLessThan(along(s.muzzle[0], s.muzzle[2]) - GUN_EYE_BACK)
+        // inside the bulwark: behind the deck's walkable edge along the barrel, and inside the hull's beam
+        const level = Math.max(0, levelAt([s.stand[0], s.stand[2]], deck))
+        const toEdge = rayToPolygonEdge([ex, ez], f, deck.walk[level].points)
+        expect(toEdge, label).toBeGreaterThan(0)
+        expect(Math.abs(ez), label).toBeLessThan(a.hull.beam / 2)
+        // the view centre clears the rail where it crosses the bulwark; the breech / carriage is below the centre (lower frame)
+        if (s.rail !== undefined) {
+          const dist = Math.hypot(s.muzzle[0] - ex, s.muzzle[2] - ez)
+          expect(position[1] + Math.tan(pitch) * dist, label).toBeGreaterThanOrEqual(s.rail + GUN_RAY_OVER_RAIL - 1e-9)
+        }
+        const toBreech = Math.atan2(s.breech[1] - position[1], Math.hypot(s.breech[0] - ex, s.breech[2] - ez))
+        expect(pitch - toBreech, label).toBeGreaterThan(0)
+        expect(pitch, label).toBeLessThanOrEqual(-0.02)
+        expect(pitch, label).toBeGreaterThan(-DECK_FOV_RAD / 2)
+        expect(Math.abs(angleDelta(yaw, yawToward(f[0], f[1]))), label).toBeLessThan(1e-9)
+      }
+    }
+  })
+})
+
+describe('manned view cone (owner): no own-ship obstacle within 1.0 u in the ±25° cone around the view centre, horizon in the middle third', () => {
+  it('every on-deck station of every class', () => {
+    const CONE = (25 * Math.PI) / 180
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      for (const s of stationsOf(a, deck)) {
+        if (!s.onDeck) continue
+        const label = `${id} station ${s.index}`
+        const { position, yaw, pitch } = gunnerPose(s, deck.obstacles, deck.viewObstacles)
+        // breast / pin rails (view obstacles) stay out of the cone; the man-o'-war's waist end guns sit beside the castle breast rails
+        expect(viewConeBlocked(deck.viewObstacles ?? [], position, yaw, pitch), label).toBe(false)
+        if (id === 'man-o-war') expect(deck.viewObstacles?.length, label).toBe(3)
+        // horizon (pitch above/below the centre) inside the middle third of a 70° frame
+        expect(Math.abs(pitch), label).toBeLessThanOrEqual(DECK_FOV_RAD / 6 + 1e-9)
+        // deck obstacles (masts, capstan, posts, hatches) intersecting the cone within 1 u — the barrel itself is not an obstacle
+        for (let i = -5; i <= 5; i++) {
+          const y = yaw + (i / 5) * CONE
+          const d = clearAhead(deck, [position[0], position[2]], y, 1.0, 0, 99)
+          expect(d, `${label} ray ${i}`).toBeGreaterThanOrEqual(1.0 - 1e-9)
+        }
+      }
+    }
   })
 })

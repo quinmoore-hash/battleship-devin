@@ -7,6 +7,7 @@ import type { CannonRef, ShipAnchors, Side } from '../types'
 import { GALLEON, deckY, halfWidth, railY } from './hull'
 import type { DeckAnchors } from '../../deck/contract'
 import { breakRamp, deckPolygon, gunStations, mastObstacles } from '../kit/deck'
+import { shroudLines } from '../kit/Rope'
 
 /** Kit `Cannon` scale used on the galleon; its muzzle sits at local z = 0.45 × scale. */
 export const CANNON_SCALE = 0.5
@@ -67,6 +68,73 @@ export const MASTS: readonly MastSpec[] = [
 ]
 
 export const mastBase = (m: MastSpec): Vec3 => [m.x, deckY(m.x), 0]
+/** A point `k` of the way up mast `m`. */
+export const mastTop = (m: MastSpec, k = 1): Vec3 => [m.x, deckY(m.x) + m.height * k, 0]
+
+/** Fore-and-aft spread of each mast's chain plates (the lower shroud fan reaches ±0.15 u from the mast along the rail). */
+export const SHROUD_SPREAD = 0.3
+/** The lower shroud fan of mast `m`: chain plates at the rail, converging at the top (shared by the renderer and the spawn-view test). */
+export function shroudRig(m: MastSpec): { from: Vec3; to: Vec3 } {
+  const ry = railY(m.x) + 0.02
+  return { from: [m.x, ry, halfWidth(m.x, ry) - GALLEON.plank - 0.02], to: mastTop(m, 0.62) }
+}
+
+export interface StaySpec {
+  /** The mast the stay rises from; hidden with that mast's rigging while it is culled. */
+  mast: MastSpec['name']
+  from: Vec3
+  to: Vec3
+  sag?: number
+}
+
+/** Stays run forward and down from each top; the main and mizzen backstays land on the quarterdeck / poop rails. */
+export function staySpecs(): StaySpec[] {
+  const [fore, main, mizzen] = MASTS
+  const G = GALLEON
+  const out: StaySpec[] = [
+    { mast: 'fore', from: mastTop(fore, 0.98), to: [G.xBow + 0.95, 1.48, 0], sag: 0.03 },
+    { mast: 'fore', from: mastTop(fore, 0.62), to: [G.xBow + 0.3, 1.18, 0], sag: 0.03 },
+    { mast: 'main', from: mastTop(main, 0.98), to: mastTop(fore, 0.62), sag: 0.03 },
+    { mast: 'main', from: mastTop(main, 0.62), to: [fore.x - 0.1, G.forecastleDeckY + 0.05, 0], sag: 0.03 },
+    { mast: 'mizzen', from: mastTop(mizzen, 0.98), to: mastTop(main, 0.62), sag: 0.03 },
+    { mast: 'mizzen', from: mastTop(mizzen, 0.6), to: [main.x - 0.12, G.mainDeckY + 0.05, 0], sag: 0.03 },
+  ]
+  for (const s of [1, -1]) {
+    out.push({ mast: 'main', from: mastTop(main, 0.97), to: [G.poopX + 0.05, G.quarterDeckY + 0.08, s * (halfWidth(G.poopX + 0.05, 1.05) - 0.08)] })
+    out.push({ mast: 'mizzen', from: mastTop(mizzen, 0.97), to: [G.xStern + 0.1, G.poopDeckY + 0.08, s * (halfWidth(G.xStern + 0.1, 1.45) - 0.08)] })
+  }
+  return out
+}
+
+/** Belaying pins along the waist cap rail: a pin every 0.1 u from x −0.35 to 0.85, both sides (DeckFittings). */
+export const PIN_HEIGHT = 0.07
+export function waistPins(): Vec3[] {
+  const G = GALLEON
+  const out: Vec3[] = []
+  for (let x = -0.35; x <= 0.85; x += 0.1) for (const s of [1, -1]) out.push([x, G.waistRailY + 0.04, s * (halfWidth(x, G.waistRailY) - G.plank - 0.035)])
+  return out
+}
+
+/** Height of the cap rail's top face above the deck plane at `x` (hull `railCap` loft: railY + 0.03). */
+export const capRailTop = (x: number): number => railY(x) + 0.03
+
+/**
+ * The bulwark as seen from the waist, as thin segments (BUG-893): the cap rail's inboard top edge along the waist, and the
+ * belaying pins standing on it. Together with `riggingSegments()` this is every own-ship line a first look can cross.
+ */
+export function bulwarkSegments(): { a: Vec3; b: Vec3 }[] {
+  const G = GALLEON
+  const out: { a: Vec3; b: Vec3 }[] = []
+  const edge = (x: number, s: number): Vec3 => [x, capRailTop(x), s * (halfWidth(x, capRailTop(x)) - G.plank - 0.012)]
+  for (const s of [1, -1]) for (let x = G.quarterX; x < G.forecastleX - 1e-9; x += 0.05) out.push({ a: edge(x, s), b: edge(Math.min(x + 0.05, G.forecastleX), s) })
+  for (const p of waistPins()) out.push({ a: [p[0], p[1] - PIN_HEIGHT / 2, p[2]], b: [p[0], p[1] + PIN_HEIGHT / 2, p[2]] })
+  return out
+}
+
+/** Every standing-rigging line (shrouds of all three masts, stays, backstays) as ship-space segments, for view-cone tests. */
+export function riggingSegments(): { a: Vec3; b: Vec3 }[] {
+  return [...MASTS.flatMap((m) => shroudLines(shroudRig(m).from, shroudRig(m).to, 3, SHROUD_SPREAD)), ...staySpecs().map(({ from, to }) => ({ a: from, b: to }))]
+}
 
 /** Cannonballs hit the side just above the wales, at the cell's centre. Port side; mirror z for starboard. */
 export const IMPACT_Y = 0.32
@@ -74,7 +142,10 @@ export const IMPACT_Y = 0.32
 /**
  * Walkable decks: waist (main deck) between the castles, quarterdeck and poop aft, forecastle forward, each
  * joined by a central stair at its break. Guns under the castles are served from the deck above them.
- * Obstacles: masts, the waist grating, wheel + binnacle, the belfry; the helmsman spawns aft of the wheel.
+ * Obstacles: masts, the waist grating, wheel + binnacle, the belfry. The spawn stands in the waist between the two forward
+ * waist guns (BUG-893): the quarterdeck stand sat inside the mizzen shroud fan and under the main backstays, so the first
+ * look after V / Tab / respawn was a wall of ratline planes; from here the main fan (chain plates x −0.17 … 0.13) and the
+ * fore fan (1.03 … 1.33) are both outside the ±25° view cone over the rail.
  */
 export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnchors['masts']): DeckAnchors {
   const G = GALLEON
@@ -94,7 +165,8 @@ export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
       { center: [1.4, 0], radius: 0.1 },
     ]
   return {
-    spawn: [-0.9, G.quarterDeckY, 0.28],
+    spawn: [0.55, G.mainDeckY, 0.25],
+    eyeHeight: 0.46,
     walk,
     ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1, 0.15), breakRamp(0, 3, G.forecastleX, 0.12)],
     obstacles,

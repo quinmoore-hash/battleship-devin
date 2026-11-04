@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { DEFAULT_DECK, deckBus, type DeckBusEvent, type DeckState } from '../deck/contract'
+import { setPlayerDeck } from '../crew/playerPose'
+import { DEFAULT_DECK, deckBus, deckCameraLease, type DeckBusEvent, type DeckState } from '../deck/contract'
 import { FLEET, type PlacedShip } from '../engine'
-import { SHIPS } from '../ships'
+import { SHIPS, damageOf, shipWorldTransform } from '../ships'
+import { lastHitIndex, placedShipSeed, sectionSurfaceY, sinkPose } from '../vfx/sinking/pose'
+import { sinkProgressAt } from '../vfx/sinking/timeline'
+import { resolveDeckAnchors, stationsOf } from '../deck/math'
 import { createDirector } from './director'
-import { POV, nextAfloatUid, povFor, stationBattery } from './pov'
-import { buildSequence } from './sequence'
+import { POV, abandonAtFor, nextAfloatUid, povFor, sinkViewFor, stationBattery } from './pov'
+import { beatEnd, beatStart, buildSequence } from './sequence'
 import type { CinematicEvent } from './types'
 
 const mk = (id: PlacedShip['spec']['id'], x: number, y: number, hits: { x: number; y: number }[] = [], uid: string = id): PlacedShip => {
@@ -34,7 +38,11 @@ const run = (d: ReturnType<typeof make>, seconds: number) => {
   for (let t = 0; t < seconds; t += 0.05) d.tick(0.05)
 }
 let unsub: (() => void) | null = null
-afterEach(() => unsub?.())
+afterEach(() => {
+  unsub?.()
+  setPlayerDeck(null)
+  deckCameraLease.owner = 'deck'
+})
 
 describe('on-deck POV branch', () => {
   it('is off by default: no pov on the sequence, no deck-bus traffic, camera shake as today', () => {
@@ -128,12 +136,26 @@ describe('on-deck POV branch', () => {
     expect(events.every((e) => e.type === 'shake' && e.intensity === 0)).toBe(true)
   })
 
-  it('sinking the standing ship emits abandon-ship with the next afloat own ship at 1.5 s (once), skip emits it too', () => {
+  it('sinking the standing ship emits abandon-ship (once) when the deck under the player goes awash, never before 1.5 s; skip / off emit it at once', () => {
     const { events, off } = record()
     unsub = off
+    setPlayerDeck('frigate', 0.3, 0.1)
     const d = make()
     void d.play(sinkStanding, 'full')
-    run(d, 1.4)
+    const seq = d.active!.seq
+    const at = d.active!.pov!.abandonAt!
+    expect(at).toBeCloseTo(abandonAtFor(d.active!.pov!, seq))
+    expect(at).toBeGreaterThanOrEqual(POV.abandonAt)
+    expect(at).toBeLessThanOrEqual(beatEnd(seq, 'sink'))
+    // the cue: the deck at the player's feet (the pose the controller follows) is awash at `at`, still dry a moment before
+    const ship = fleets.human[0]
+    const anchors = SHIPS.frigate.anchors
+    const input = { seed: placedShipSeed(ship), hull: anchors.hull, damage: damageOf(ship), lastHit: lastHitIndex(ship) }
+    const deckAt = (t: number) => sectionSurfaceY(sinkPose(sinkProgressAt(t, seq.sink!), input), 0.3, anchors.deckY, 0.1)
+    expect(deckAt(at + 0.1)).toBeLessThanOrEqual(POV.awashY + 0.05)
+    expect(deckAt(at - 0.6)).toBeGreaterThan(POV.awashY)
+    expect(deckAt(POV.abandonAt)).toBeGreaterThan(0.1)
+    run(d, at - 0.1)
     expect(events).toEqual([])
     run(d, 0.2)
     expect(events).toEqual([{ type: 'abandon-ship', nextUid: 'sloop' }])
@@ -148,15 +170,111 @@ describe('on-deck POV branch', () => {
     const d3 = make()
     void d3.play(sinkStanding, 'off')
     expect(events).toEqual([{ type: 'abandon-ship', nextUid: 'sloop' }])
+    // fast (2 s, no slow-mo): the deck is awash early, the floor keeps the beat readable
+    const d4 = make()
+    void d4.play(sinkStanding, 'fast')
+    expect(d4.active!.pov!.abandonAt).toBeGreaterThanOrEqual(POV.abandonAt)
+    expect(d4.active!.pov!.abandonAt).toBeLessThanOrEqual(beatEnd(d4.active!.seq, 'sink'))
+    // no sink timeline (not a sink sequence): the floor
+    expect(abandonAtFor(d4.active!.pov!, buildSequence(incomingHit, 'full'))).toBe(POV.abandonAt)
   })
 
-  it('sinking another ship: look-at it, no abandon-ship', () => {
+  it('sinking another own ship in view: the look swings to it and holds for the whole sink beat, frees on return, camera stays with the deck', () => {
     const { events, off } = record()
     unsub = off
+    const camera: DeckBusEvent[] = []
+    const offCam = deckBus.on((e) => (e.type === 'camera' ? camera.push(e) : undefined))
     const d = make()
     void d.play(sinkOther, 'full')
+    const seq = d.active!.seq
+    expect(d.active!.pov).toMatchObject({ sinkView: 'look' })
+    expect(d.active!.pov!.cameraBorrowed).toBeFalsy()
+    expect(d.store.getState().letterbox).toBe(false)
+    expect(deckCameraLease.owner).toBe('deck')
+    const sinkEnd = beatEnd(seq, 'sink')
+    run(d, sinkEnd - 0.2)
+    const looks = events.filter((e) => e.type === 'look-at')
+    expect(looks.length).toBeGreaterThan(20)
+    expect(events.length).toBe(looks.length)
+    expect(new Set(looks.map((e) => JSON.stringify(e))).size).toBe(1)
+    expect(looks[0]).toMatchObject({ seconds: POV.sinkLookSeconds })
+    expect(events.find((e) => e.type === 'abandon-ship')).toBeUndefined()
+    // the last look-at comes with the end of the sink beat: the return beat emits nothing, the player may look away
+    run(d, 0.4)
+    const n = events.length
+    expect(d.active?.beat).toBe('return')
     while (d.active) d.tick(0.1)
+    expect(events.length).toBe(n)
+    expect(camera).toEqual([])
+    offCam()
+  })
+
+  it('sinking another own ship hidden fore / aft behind the standing ship: the director borrows the camera for the sink and hands it back; no look-at (BUG-716)', () => {
+    const astern = { ...fleets, human: [...fleets.human, mk('brigantine', 7, 1)] }
+    const sinkAstern: CinematicEvent = { type: 'sink', owner: 'human', shipId: 'brigantine' }
+    setPlayerDeck('frigate', 0, 0)
+    const { events, off } = record()
+    unsub = off
+    const camera: DeckBusEvent[] = []
+    const offCam = deckBus.on((e) => (e.type === 'camera' ? camera.push(e) : undefined))
+    const d = createDirector({ autoTick: false, audio: false, fleets: () => astern, deck: () => onDeck })
+    void d.play(sinkAstern, 'full')
+    expect(d.active!.pov).toMatchObject({ sinkView: 'borrow', cameraBorrowed: true, standingHit: false })
+    expect(camera).toEqual([{ type: 'camera', owner: 'director' }])
+    expect(deckCameraLease.owner).toBe('director')
+    expect(d.store.getState().letterbox).toBe(true)
+    while (d.active) d.tick(0.1)
+    expect(events.find((e) => e.type === 'look-at')).toBeUndefined()
+    expect(events.find((e) => e.type === 'abandon-ship')).toBeUndefined()
+    expect(camera.at(-1)).toEqual({ type: 'camera', owner: 'deck' })
+    expect(deckCameraLease.owner).toBe('deck')
+    // skip hands the camera back too
+    camera.length = 0
+    void d.play(sinkAstern, 'full')
+    d.skip()
+    expect(camera).toEqual([{ type: 'camera', owner: 'director' }, { type: 'camera', owner: 'deck' }])
+    offCam()
+  })
+
+  it('sinkViewFor: abeam → look; along the standing ship\'s axis → borrow; a manned gun pointing the other way → borrow; unknown eye → look', () => {
+    const astern = { ...fleets, human: [...fleets.human, mk('brigantine', 7, 1)] }
+    const pov = povFor(sinkOther, onDeck, astern, 'human')!
+    const eye: [number, number, number] = [0, 0, 0]
+    const frigate = astern.human[0]
+    const pose = shipWorldTransform(frigate)
+    eye[0] = pose.position[0]
+    eye[1] = pose.position[1] + 0.5
+    eye[2] = pose.position[2]
+    const sloopAt = shipWorldTransform(astern.human[1]).position
+    const brigAt = shipWorldTransform(astern.human[2]).position
+    expect(sinkViewFor(pov, sloopAt, eye)).toBe('look')
+    expect(sinkViewFor(pov, brigAt, eye)).toBe('borrow')
+    expect(sinkViewFor(pov, brigAt, null)).toBe('look')
+    // manning: the frigate's guns face port or starboard; the sloop lies to one side, so a gun on the other side cannot glance at it
+    const anchors = SHIPS.frigate.anchors
+    const stations = stationsOf(anchors, resolveDeckAnchors(anchors, 'frigate'))
+    const sideOf = Math.sign(sloopAt[2] - pose.position[2])
+    const towards = stations.findIndex((st) => st.onDeck && Math.sign(st.direction[2]) === sideOf)
+    const away = stations.findIndex((st) => st.onDeck && Math.sign(st.direction[2]) === -sideOf)
+    expect(towards).toBeGreaterThanOrEqual(0)
+    expect(away).toBeGreaterThanOrEqual(0)
+    expect(sinkViewFor({ ...pov, deck: { ...onDeck, station: away } }, sloopAt, eye)).toBe('borrow')
+    expect(sinkViewFor({ ...pov, deck: { ...onDeck, station: towards } }, sloopAt, eye)).toBe('look')
+  })
+
+  it('reduced motion: an own ship sinking in view emits no look-at at all; an enemy sink keeps its single nudge', () => {
+    const { events, off } = record()
+    unsub = off
+    const d = make(onDeck, true)
+    void d.play(sinkOther, 'full')
+    while (d.active) d.tick(0.1)
+    expect(events).toEqual([])
+    const d2 = make()
+    void d2.play({ type: 'sink', owner: 'enemy', shipId: 'galleon' }, 'full')
+    while (d2.active) d2.tick(0.1)
     expect(events.map((e) => e.type)).toEqual(['look-at'])
+    expect(events[0]).toMatchObject({ seconds: POV.sinkLookSeconds })
+    expect(beatStart(buildSequence(sinkOther, 'full'), 'sink')).toBe(0)
   })
 
   it('nextAfloatUid walks the fleet in order, skipping sunk ships, null when none left', () => {
@@ -176,7 +294,7 @@ describe('on-deck POV branch', () => {
     const d = createDirector({ autoTick: false, audio: false, fleets: () => sunkFrigate, deck: () => onDeck })
     void d.play(sinkStanding, 'full')
     expect(d.store.getState().letterbox).toBe(false)
-    run(d, 1.6)
+    run(d, d.active!.pov!.abandonAt! + 0.1)
     expect(events).toEqual([{ type: 'abandon-ship', nextUid: 'sloop' }])
     const overview = createDirector({ autoTick: false, audio: false, fleets: () => fleets })
     void overview.play(sinkStanding, 'full')

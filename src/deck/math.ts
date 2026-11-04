@@ -21,8 +21,12 @@ export const JUMP_APEX = 0.12
 export const JUMP_TIME = 0.5
 export const JUMP_GRAVITY = (8 * JUMP_APEX) / (JUMP_TIME * JUMP_TIME)
 export const JUMP_SPEED = (4 * JUMP_APEX) / JUMP_TIME
-/** The player's collision radius against obstacles (the pirate figure is ~0.06 u wide). */
-export const PLAYER_RADIUS = 0.035
+/**
+ * The player's collision radius against obstacles (the pirate figure is ~0.06 u wide). Also the eye's clearance: it must
+ * stay ≥ `DECK_NEAR` + `EYE_CLEARANCE` so the near plane can never cut into a mast or a bulwark (BUG-7xx).
+ */
+export const PLAYER_RADIUS = 0.045
+export const EYE_CLEARANCE = 0.01
 /** How close (u) to a station's stand the player must be to man the gun. */
 export const STATION_REACH = 0.22
 /** Within this distance of a usable gun the floating "E — Man the gun" label shows. */
@@ -346,7 +350,7 @@ function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
   return Math.hypot(p[0] - (a[0] + vx * t), p[1] - (a[1] + vz * t))
 }
 
-export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnchors): WalkPose {
+export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: WalkableDeck): WalkPose {
   const levelOk = deck.walk[from.level] ? from.level : 0
   const start: Pt = [from.x, from.z]
   let level = levelOk
@@ -388,7 +392,22 @@ export function stepOnDeck(from: WalkPose, dx: number, dz: number, deck: DeckAnc
       ? deck.obstacles.filter((o) => inside(o, start) && inside(o, q) && !pointInPolygon(pushOutOfObstacles(start, [o]), walk))
       : []
   if (pinned.length) q = settle(deck.obstacles.filter((o) => !pinned.includes(o)))
+  q = keepOutOfBands(start, q, deck, walk)
   return { x: q[0], z: q[1], y: deckHeightAt(q, level, deck), level }
+}
+
+/**
+ * The step landed on a hit hull section (`deck.blocked`): leave the band on the side the player came from, settled on
+ * the polygon and clear of obstacles. A level the breach swallows whole cannot be left along x — then the step is
+ * refused from outside, but a player already standing in the band when the ball struck keeps walking (never pinned).
+ */
+function keepOutOfBands(start: Pt, q: Pt, deck: WalkableDeck, walk: readonly Pt[]): Pt {
+  const band = deck.blocked?.find((b) => inBand(q[0], b))
+  if (!band) return q
+  let s: Pt = [start[0] <= (band.x0 + band.x1) / 2 ? band.x0 - PLAYER_RADIUS : band.x1 + PLAYER_RADIUS, q[1]]
+  for (let pass = 0; pass < 3; pass++) s = clampToPolygon(pushOutOfObstacles(s, deck.obstacles), walk)
+  if (!deck.blocked!.some((b) => inBand(s[0], b))) return s
+  return deck.blocked!.some((b) => inBand(start[0], b)) ? q : start
 }
 
 
@@ -424,14 +443,279 @@ export function stepJump(air: AirPose, dt: number, deckBefore: number, deckAfter
   return { height: Math.max(0, height), vy, airborne: true }
 }
 
-/** Where boarding puts the player: the spawn, snapped onto the deck. */
-export function spawnPose(deck: DeckAnchors): WalkPose {
+/** Where boarding puts the player: the spawn, snapped onto the deck (and out of any blocked band). */
+export function spawnPose(deck: WalkableDeck): WalkPose {
   const p: Pt = [deck.spawn[0], deck.spawn[2]]
   const level = Math.max(0, levelAt(p, deck))
   return stepOnDeck({ x: p[0], z: p[1], y: deck.walk[level]?.y ?? deck.spawn[1], level }, 0, 0, deck)
 }
 
+// ---- damage: hit hull sections are no-walk bands ---------------------------------------------------------------
+
+/** A band of ship-space x the player may not stand in (a hit hull section: breach + fire). */
+export interface XBand {
+  x0: number
+  x1: number
+}
+/** Resolved deck anchors of one ship instance: the authored deck plus its hit sections as no-walk bands. */
+export type WalkableDeck = DeckAnchors & { blocked?: readonly XBand[] }
+
+/** Hull cells are one ship unit long, so a section is the ±0.5 band around `sectionX`. */
+export const SECTION_HALF = 0.5
+
+/** Ship-space x of hull cell `i` of an `n`-cell ship: the origin cell is the stern (−x), as the breach / fire placement (`impactPointFor`) and `shipWorldTransform` lay the cells out. */
+export const sectionX = (i: number, n: number): number => i - (n - 1) / 2
+
+/** Index of the hull section under ship-space `x` (clamped to the hull). */
+export const sectionAtX = (x: number, n: number): number => clamp(Math.round(x + (n - 1) / 2), 0, n - 1)
+
+/** Indices of the ship's hit hull cells (the engine's hit list → cell order). */
+export const hitSections = (ship: { cells: readonly Coord[]; hits: readonly Coord[] }): number[] =>
+  ship.cells.map((c, i) => (ship.hits.some((h) => h.x === c.x && h.y === c.y) ? i : -1)).filter((i) => i >= 0)
+
+/** No-walk bands for the hit sections `hit` of an `n`-cell ship, one hull cell wide each. */
+export const blockedBands = (hit: readonly number[], n: number): XBand[] =>
+  hit.filter((i) => i >= 0 && i < n).map((i) => ({ x0: sectionX(i, n) - SECTION_HALF, x1: sectionX(i, n) + SECTION_HALF }))
+
+/** Is a player of radius `r` standing at `x` overlapping the band? */
+export const inBand = (x: number, b: XBand, r = PLAYER_RADIUS): boolean => x > b.x0 - r && x < b.x1 + r
+
+/** `deck` with `blocked` attached; the same object when nothing is blocked (the fallback-deck identity is kept). */
+export function withBlocked(deck: DeckAnchors, blocked: readonly XBand[]): WalkableDeck {
+  if (!blocked.length) return deck
+  const d: WalkableDeck = { ...deck, blocked }
+  if (fallbackDecks.has(deck)) fallbackDecks.add(d)
+  return d
+}
+
+/**
+ * Where boarding a damaged ship puts the player: on the intact section farthest from the fire (nearest the authored
+ * spawn among equals), at the walkable point of that section closest to the authored spawn — never on a hit section,
+ * never inside an obstacle. Falls back to `spawnPose` when the ship is whole (or nothing intact is walkable).
+ */
+export function spawnPoseAvoiding(deck: WalkableDeck, hit: readonly number[], n: number): WalkPose {
+  const bands = deck.blocked ?? blockedBands(hit, n)
+  const d = deck.blocked ? deck : withBlocked(deck, bands)
+  const hits = hit.filter((i) => i >= 0 && i < n)
+  if (!hits.length) return spawnPose(d)
+  const home: Pt = [deck.spawn[0], deck.spawn[2]]
+  const intact = Array.from({ length: n }, (_, i) => i).filter((i) => !hits.includes(i))
+  const fireDistance = (i: number) => Math.min(...hits.map((h) => Math.abs(h - i)))
+  intact.sort((a, b) => fireDistance(b) - fireDistance(a) || Math.abs(sectionX(a, n) - home[0]) - Math.abs(sectionX(b, n) - home[0]))
+  const step = 0.05
+  for (const i of intact) {
+    const cx = sectionX(i, n)
+    let best: { p: Pt; level: number; d: number } | null = null
+    d.walk.forEach((w, level) => {
+      const zs = w.points.map((p) => p[1])
+      const z0 = Math.min(...zs)
+      const z1 = Math.max(...zs)
+      for (let x = cx - SECTION_HALF + PLAYER_RADIUS; x <= cx + SECTION_HALF - PLAYER_RADIUS + 1e-9; x += step) {
+        if (bands.some((b) => inBand(x, b))) continue
+        for (let z = z0; z <= z1 + 1e-9; z += step) {
+          const p: Pt = [x, z]
+          if (!pointInPolygon(p, w.points)) continue
+          if (d.obstacles.some((o) => dist(p, o.center) < o.radius + PLAYER_RADIUS)) continue
+          const dd = dist(p, home)
+          if (!best || dd < best.d) best = { p, level, d: dd }
+        }
+      }
+    })
+    if (best) {
+      const { p, level } = best as { p: Pt; level: number }
+      return stepOnDeck({ x: p[0], z: p[1], y: d.walk[level].y, level }, 0, 0, d)
+    }
+  }
+  return spawnPose(d)
+}
+
 // ---- look -----------------------------------------------------------------------------------------------------
+
+/** How far ahead of a freshly spawned player the view must be clear of obstacles (a mast trunk 0.2 u ahead fills the screen). */
+export const SPAWN_CLEAR_AHEAD = 0.6
+/**
+ * How far the spawn *facing* must see before it counts as an open view (BUG-799: a mast trunk 0.7 u ahead was "clear"
+ * for SPAWN_CLEAR_AHEAD and filled the frame). Rails do not block, so the beam over the sea always qualifies.
+ */
+export const SPAWN_OPEN_VIEW = 1.5
+
+/** A deck level this much higher than the one ahead of the player is a wall in the view (a cabin front, a poop break). */
+export const WALL_STEP = 0.02
+
+/**
+ * Distance along the look direction `yaw` from `p` before the ray (a player-radius wide) meets an obstacle or the front of
+ * a higher deck level; ≥ `reach` when clear. Rails and breaks down to a lower deck do not block (looking over them is the
+ * point). `level` is the walk level `p` stands on (found from `p` when omitted).
+ */
+export function clearAhead(deck: DeckAnchors, p: Pt, yaw: number, reach = SPAWN_CLEAR_AHEAD, radius = PLAYER_RADIUS, level?: number): number {
+  const f = lookForward(yaw, 0)
+  let best = reach
+  const lv = level ?? Math.max(0, levelAt(p, deck))
+  const walk = deck.walk[lv]
+  if (walk) {
+    const len = Math.hypot(f[0], f[2]) || 1
+    const dir: Pt = [f[0] / len, f[2] / len]
+    const edge = rayToPolygonEdge(p, dir, walk.points)
+    if (edge < best) {
+      for (const probe of [0.03, 0.1, 0.2]) {
+        const q: Pt = [p[0] + dir[0] * (edge + probe), p[1] + dir[1] * (edge + probe)]
+        if (deck.walk.some((w, i) => i !== lv && w.y > walk.y + WALL_STEP && pointInPolygon(q, w.points))) {
+          best = edge
+          break
+        }
+      }
+    }
+  }
+  for (const o of deck.obstacles) {
+    // ray–circle: |p + t·f − c| = r + radius, smallest t ≥ 0
+    const r = o.radius + radius
+    const ox = p[0] - o.center[0]
+    const oz = p[1] - o.center[1]
+    const b = ox * f[0] + oz * f[2]
+    const c = ox * ox + oz * oz - r * r
+    if (c <= 1e-9) {
+      // inside or touching (a clamp leaves the player exactly on the clearance ring): blocked only when looking into it
+      if (b < 0) return 0
+      continue
+    }
+    const disc = b * b - c
+    if (disc < 0 || b >= 0) continue
+    const t = -b - Math.sqrt(disc)
+    if (t < best) best = t
+  }
+  return best
+}
+
+/**
+ * The spawn facing: `yaw` (toward the enemy waters) when the first `reach` ahead is free of obstacles, else the first
+ * of `fallbacks` that is (`spawnYawFallbacks`: bow, the enemy's beam, the other beam, stern), else the yaw that sees
+ * farthest (fallbacks, then a 16-point sweep).
+ */
+export function clearLookYaw(deck: DeckAnchors, p: Pt, yaw: number, fallbacks: readonly number[], reach = SPAWN_CLEAR_AHEAD, level?: number): number {
+  let best = yaw
+  let bestD = clearAhead(deck, p, yaw, reach, PLAYER_RADIUS, level)
+  if (bestD >= reach) return yaw
+  const consider = (y: number) => {
+    const d = clearAhead(deck, p, y, reach, PLAYER_RADIUS, level)
+    if (d > bestD + 1e-9) {
+      best = y
+      bestD = d
+    }
+    return d >= reach
+  }
+  for (const y of fallbacks) if (consider(y)) return y
+  // boxed in on every preferred side (a cramped cabin roof): sweep the compass for the farthest view
+  for (let i = 0; i < 16; i++) consider(yaw + (i * Math.PI) / 8)
+  return best
+}
+
+/** Distance from `p` along the unit xz direction `dir` to the first edge of `poly` (Infinity when the ray meets none). */
+export function rayToPolygonEdge(p: Pt, dir: Pt, poly: readonly Pt[]): number {
+  let best = Infinity
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]
+    const b = poly[(i + 1) % poly.length]
+    const ex = b[0] - a[0]
+    const ez = b[1] - a[1]
+    const den = dir[0] * ez - dir[1] * ex
+    if (Math.abs(den) < 1e-12) continue
+    const wx = a[0] - p[0]
+    const wz = a[1] - p[1]
+    const t = (wx * ez - wz * ex) / den
+    const u = (wx * dir[1] - wz * dir[0]) / den
+    if (t >= -1e-9 && u >= -1e-9 && u <= 1 + 1e-9 && t < best) best = Math.max(0, t)
+  }
+  return best
+}
+
+/** Deck the spawn keeps between the stand and the rail it faces (the eye over the rail would otherwise see only water). */
+export const RAIL_INSET = 0.12
+/** The spawn look starts a touch downward so rail and planks are in frame. */
+export const SPAWN_PITCH = -0.12
+
+/** Deck ahead of `p` along `yaw` on `level` before the rail (the walk polygon's edge). */
+export function railAhead(deck: DeckAnchors, p: Pt, level: number, yaw: number): number {
+  const f = lookForward(yaw, 0)
+  const len = Math.hypot(f[0], f[2]) || 1
+  const walk = deck.walk[level]?.points
+  return walk ? rayToPolygonEdge(p, [f[0] / len, f[2] / len], walk) : Infinity
+}
+
+/** How far along the deck (±x, in `SPAWN_SHIFT_STEP`s) the spawn stand may back off to find a clear view. */
+export const SPAWN_SHIFT_MAX = 0.5
+export const SPAWN_SHIFT_STEP = 0.05
+
+/**
+ * The stand a boarding player takes from the chosen pose `p`: on the enemy's side of the deck (`side` = sign of z toward
+ * the enemy) but at least `RAIL_INSET` (+ the player radius) from that rail, settled on the deck, out of obstacles and
+ * blocked bands. When the view from there is boxed in (a mast trunk, a cabin front) the stand backs off along the deck,
+ * up to `SPAWN_SHIFT_MAX`, to the nearest stand that sees the enemy (`yaw`) clear, else one that sees the bow clear, else
+ * one with any clear look (`clearLookYaw`), else the best available. A deck too narrow for the inset stands on its centreline.
+ */
+export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: number, inset = RAIL_INSET): WalkPose {
+  const walk = deck.walk[p.level]?.points
+  if (!walk) return p
+  const keep = inset + PLAYER_RADIUS
+  const standAt = (x: number): WalkPose => {
+    const q: Pt = clampToPolygon([x, side * Math.abs(p.z)], walk)
+    const toRail = rayToPolygonEdge(q, [0, side], walk)
+    const toOther = rayToPolygonEdge(q, [0, -side], walk)
+    // stand `keep` off the enemy-side rail (the view over it is the point; the e2e runs along the rail from here)
+    if (toOther + toRail < 2 * keep) q[1] -= side * (toOther - toRail) * 0.5
+    else q[1] += side * (toRail - keep)
+    return stepOnDeck({ ...p, x: q[0], z: q[1] }, 0, 0, deck)
+  }
+  const bow = yawToward(1, 0)
+  const candidates: { st: WalkPose; insetOk: boolean; enemy: number; bow: number; any: number; k: number }[] = []
+  for (let k = 0; k * SPAWN_SHIFT_STEP <= SPAWN_SHIFT_MAX + 1e-9; k++) {
+    for (const dir of k === 0 ? [0] : [-1, 1]) {
+      const st = standAt(p.x + dir * k * SPAWN_SHIFT_STEP)
+      if (st.level !== p.level || deck.blocked?.some((b) => inBand(st.x, b))) continue
+      const at: Pt = [st.x, st.z]
+      const see = (y: number) => clearAhead(deck, at, y, SPAWN_OPEN_VIEW, PLAYER_RADIUS, st.level)
+      candidates.push({ st, k, insetOk: rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6, enemy: Math.max(see(yaw), openView(deck, at, yawToward(0, side), st.level)), bow: see(bow), any: see(clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, st.level)) })
+    }
+  }
+  for (const view of ['enemy', 'bow', 'any'] as const) {
+    const hit = candidates.find((c) => c.insetOk && c[view] >= SPAWN_OPEN_VIEW)
+    if (hit) return hit.st
+  }
+  let best = p
+  let bestScore = -Infinity
+  for (const c of candidates) {
+    const score = (c.insetOk ? 1 : 0) + c.any / SPAWN_OPEN_VIEW - c.k * 0.01
+    if (score > bestScore) {
+      bestScore = score
+      best = c.st
+    }
+  }
+  return best
+}
+
+/** The spawn facing from the stand `p`: the enemy when the view that way is open for SPAWN_OPEN_VIEW, else the fallbacks / sweep. */
+export const spawnLookYaw = (deck: DeckAnchors, p: WalkPose, localYaw: number, side: 1 | -1): number => {
+  // the enemy's beam over the rail is the spawn view whenever no deck obstacle (mast, capstan …) stands in it: a higher
+  // castle beside the stand counts as a wall for walking but not for looking out to sea over the rail
+  const beam = yawToward(0, side)
+  if (openView(deck, [p.x, p.z], beam, p.level) >= SPAWN_OPEN_VIEW) return beam
+  return clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, p.level)
+}
+
+/**
+ * Yaws to try after the enemy-facing one: along the deck toward the bow (the waist and the ship in frame — the quarterdeck
+ * beams are lined with shrouds), the enemy's beam (`side` = sign of z toward the enemy), the other beam, the stern.
+ */
+/**
+ * Facings tried when the exact enemy bearing is blocked: the enemy's beam first (the foe is a degree or two off the
+ * beam on a vertically placed ship, and a cleat or ladder on that bearing used to send the spawn facing along the deck,
+ * where a run along the rail walks into the bulwark — e2e footsteps), then the bow, the far beam and the stern.
+ */
+/** Distance to the first deck obstacle along `yaw` (no walk-edge / higher-deck rule): the view over the rail to the sea. */
+export const openView = (deck: DeckAnchors, p: Pt, yaw: number, level?: number): number =>
+  clearAhead({ ...deck, walk: [] }, p, yaw, SPAWN_OPEN_VIEW, PLAYER_RADIUS, level)
+
+export const spawnYawFallbacks = (side: 1 | -1): number[] => [yawToward(0, side), yawToward(1, 0), yawToward(0, -side), yawToward(-1, 0)]
+
 
 /** Yaw (radians, 'YXZ' camera convention: yaw 0 looks down −z) that faces the horizontal direction (dx, dz). */
 export const yawToward = (dx: number, dz: number): number => Math.atan2(-dx, -dz)
@@ -528,10 +812,99 @@ export function nearestStation(stations: readonly Station[], x: number, z: numbe
   return best
 }
 
+// ---- station pick with hysteresis + marker fade (BUG-7xx) --------------------------------------------------------
+
+export interface StationPick {
+  /** `Station.index` of the picked station, −1 for none. */
+  index: number
+  /** Clock time of the last change (`-Infinity` = never). */
+  since: number
+}
+export const NO_PICK: StationPick = { index: -1, since: -Infinity }
+/** A rival stand must be closer than the current one by this fraction of its distance (and by `PICK_MIN_GAIN` at least). */
+export const PICK_HYSTERESIS = 0.15
+export const PICK_MIN_GAIN = 0.05
+/** The pick changes at most this often, seconds (≈ 4 ×/s). */
+export const PICK_MIN_INTERVAL = 0.25
+/** Once picked, a stand stays picked until the player is this far beyond `reach`. */
+export const PICK_RELEASE_MARGIN = 0.03
+
+/**
+ * `nearestStation` with hysteresis: the current pick is kept while it stays within `reach` + margin and no other stand is
+ * clearly closer (15 % / 0.05 u), and any change is at least `PICK_MIN_INTERVAL` after the last one — so two stands at
+ * equal distance can no longer flip the hot marker and the HUD prompt every frame. `stations` is indexed by `Station.index`.
+ */
+export function pickStation(stations: readonly Station[], x: number, z: number, prev: StationPick, now: number, reach = STATION_REACH): StationPick {
+  const cur = prev.index >= 0 ? stations[prev.index] : undefined
+  const settled = now - prev.since >= PICK_MIN_INTERVAL
+  const cand = nearestStation(stations, x, z, reach)
+  if (cur && cur.onDeck) {
+    const dCur = Math.hypot(cur.stand[0] - x, cur.stand[2] - z)
+    if (dCur <= reach + PICK_RELEASE_MARGIN) {
+      if (!cand || cand.index === cur.index || !settled) return prev
+      const dNew = Math.hypot(cand.stand[0] - x, cand.stand[2] - z)
+      return dNew < dCur - Math.max(PICK_MIN_GAIN, dCur * PICK_HYSTERESIS) ? { index: cand.index, since: now } : prev
+    }
+  }
+  if (!settled) return prev
+  if (!cand) return prev.index < 0 ? prev : { index: -1, since: now }
+  return cand.index === prev.index ? prev : { index: cand.index, since: now }
+}
+
+/** The ring / glow fade and shrink as the eye comes close: full at `MARKER_FADE_FAR`, gone at `MARKER_FADE_NEAR`. */
+export const MARKER_FADE_FAR = 0.6
+export const MARKER_FADE_NEAR = 0.25
+export function markerFade(distance: number): number {
+  const t = clamp((distance - MARKER_FADE_NEAR) / (MARKER_FADE_FAR - MARKER_FADE_NEAR), 0, 1)
+  return t * t * (3 - 2 * t)
+}
+
+/** The glow never subtends more than this on screen (radians of its diameter). */
+export const GLOW_MAX_ANGLE = (3 * Math.PI) / 180
+export const GLOW_RADIUS = 0.018
+/** Largest glow scale at `distance` that keeps it under `GLOW_MAX_ANGLE` (an icosahedron of `GLOW_RADIUS`). */
+export const glowScaleCap = (distance: number): number => (Math.max(0, distance) * Math.tan(GLOW_MAX_ANGLE / 2)) / GLOW_RADIUS
+
+/** The walking eye sits at least this far over the lowest cap rail of the ship's reachable guns. */
+export const WALK_EYE_OVER_RAIL = 0.04
+export const WALK_EYE_MAX = 0.5
+/**
+ * Eye height over the feet while walking `deck`: `EYE_HEIGHT` (0.17), lifted to see over the bulwark where the authored
+ * rails are taller than that (man-o'-war / galleon 0.27 u, frigate 0.235 u) — the sailor's eye was below the cap rail
+ * on three classes, so standing at the side showed nothing but the inside of the planking (BUG-7xx, owner's clip b).
+ * A deck may author `eyeHeight` instead when that lift still leaves the rail mid-frame (galleon, BUG-893: the cap rail
+ * + belaying pins must start in the bottom fifth of a 1440×900 first frame).
+ */
+export function walkEyeHeight(deck: DeckAnchors, stations: readonly Station[]): number {
+  // the lowest rail of each deck level (a quarterdeck's low rail must not drop the eye under the waist's bulwark), then the
+  // tallest of those: one eye height per ship, so crossing a ramp never bobs the view
+  const lowestPerLevel = new Map<number, number>()
+  for (const s of stations) {
+    if (!s.onDeck || s.rail === undefined) continue
+    const key = Math.round(s.stand[1] * 1000)
+    lowestPerLevel.set(key, Math.min(lowestPerLevel.get(key) ?? Infinity, s.rail - s.stand[1]))
+  }
+  let eye = deck.eyeHeight ?? eyeFor(deck)
+  for (const rail of lowestPerLevel.values()) eye = Math.max(eye, rail + WALK_EYE_OVER_RAIL)
+  return Math.min(WALK_EYE_MAX, eye)
+}
+
 /** The manned eye clears the authored rail / netting top by this much. */
 export const GUN_EYE_OVER_RAIL = 0.08
 /** Horizontal distance behind the muzzle: just inside the bulwark planking on every class (muzzles poke 0.015–0.05 u out). */
 export const GUN_EYE_BACK = 0.1
+/**
+ * Horizontal distance the eye stands behind the breech (BUG-800). The eye used to be GUN_EYE_BACK behind the *muzzle*:
+ * on the man-o'-war (muzzles 0.14 u out) that is outside the planking over the water, and everywhere the barrel was
+ * 0.3 u below and 0.1 u ahead of the eye — 70° down, outside the 70° deck fov — so no barrel showed in the manned view.
+ */
+export const GUN_EYE_BEHIND_BREECH = 0.12
+/** The view centre passes at least this far above the rail where it crosses the bulwark (the muzzle plane). */
+export const GUN_RAY_OVER_RAIL = 0.02
+/** The cap rail is about this far inboard of the muzzle plane (muzzles poke 0.015–0.14 u out of the planking). */
+export const GUN_RAIL_INSET = 0.08
+/** The cap rail sits this far below the view centre while manning (just inside the bottom edge of the 70° fov). */
+export const GUN_RAIL_BELOW_CENTRE = 0.55
 /** Default pitch while manning: a little down, so the near water shows under the horizon (horizon ≈ 7° above centre). */
 export const GUN_PITCH = -0.12
 
@@ -542,15 +915,97 @@ export const GUN_PITCH = -0.12
  * which on the galleon and man-o'-war waists is below the rail and on the frigate inside the netting roll (BUG-770).
  * Without a rail (fallback deck) the muzzle-relative height is kept; the muzzle is the one anchor guaranteed outside the planking.
  */
-export function gunnerPose(s: Station): { position: Vec3; yaw: number; pitch: number } {
+/** The manned view cone (owner): no deck obstacle within GUN_CONE_CLEAR u inside ±GUN_CONE_HALF of the view centre. */
+export const GUN_CONE_HALF = (25 * Math.PI) / 180
+export const GUN_CONE_CLEAR = 1.0
+
+/** Smallest clear distance over 11 rays across the manned view cone from `p` looking `yaw` (deck obstacles only). */
+export function gunnerConeClear(obstacles: DeckAnchors['obstacles'], p: Pt, yaw: number): number {
+  const deck = { walk: [], obstacles } as unknown as DeckAnchors
+  let worst = GUN_CONE_CLEAR
+  for (let i = -5; i <= 5; i++) worst = Math.min(worst, clearAhead(deck, p, yaw + (i / 5) * GUN_CONE_HALF, GUN_CONE_CLEAR, 0, 99))
+  return worst
+}
+
+/** True when a sample of `view` (breast rails …) lies within GUN_CONE_CLEAR of `eye` inside the ±GUN_CONE_HALF view cone. */
+export function viewConeBlocked(view: NonNullable<DeckAnchors['viewObstacles']>, eye: Vec3, yaw: number, pitch: number): boolean {
+  const f = lookForward(yaw, pitch)
+  const cosHalf = Math.cos(GUN_CONE_HALF)
+  for (const seg of view) {
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16
+      const dx = seg.a[0] + (seg.b[0] - seg.a[0]) * t - eye[0]
+      const dy = seg.a[1] + (seg.b[1] - seg.a[1]) * t - eye[1]
+      const dz = seg.a[2] + (seg.b[2] - seg.a[2]) * t - eye[2]
+      const d = Math.hypot(dx, dy, dz)
+      if (d < GUN_CONE_CLEAR && (dx * f[0] + dy * f[1] + dz * f[2]) / (d || 1) > cosHalf) return true
+    }
+  }
+  return false
+}
+
+/** The eye never rises more than this over its rail-based height to clear view obstacles. */
+export const GUN_EYE_RAISE_MAX = 0.5
+
+export function gunnerPose(s: Station, obstacles: DeckAnchors['obstacles'] = [], view: DeckAnchors['viewObstacles'] = []): { position: Vec3; yaw: number; pitch: number } {
   const [dx, , dz] = s.direction
   const h = Math.hypot(dx, dz) || 1
   const fx = dx / h
   const fz = dz / h
   const yaw = yawToward(fx, fz)
   if (s.rail === undefined) return { position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06], yaw, pitch: -0.08 }
-  const y = Math.max(s.muzzle[1] + 0.11, s.rail + GUN_EYE_OVER_RAIL)
-  return { position: [s.muzzle[0] - fx * GUN_EYE_BACK, y, s.muzzle[2] - fz * GUN_EYE_BACK], yaw, pitch: GUN_PITCH }
+  let [ex, ez] = gunnerEyeXZ(s)
+  if (obstacles.length && gunnerConeClear(obstacles, [ex, ez], yaw) < GUN_CONE_CLEAR) {
+    // a mast / pin rail / post in the cone: slide the eye outboard along the barrel (never past GUN_EYE_BACK behind the muzzle)
+    const maxT = s.muzzle[0] * fx + s.muzzle[2] * fz - GUN_EYE_BACK
+    let best: Pt = [ex, ez]
+    let bestClear = gunnerConeClear(obstacles, best, yaw)
+    for (let t = 0.02; bestClear < GUN_CONE_CLEAR && ex * fx + ez * fz + t <= maxT + 1e-9; t += 0.02) {
+      const q: Pt = [ex + fx * t, ez + fz * t]
+      const c = gunnerConeClear(obstacles, q, yaw)
+      if (c > bestClear) {
+        best = q
+        bestClear = c
+      }
+    }
+    ;[ex, ez] = best
+  }
+  // the cap rail sits at the bottom edge of the frame, not mid-frame: the eye stands high enough over the rail for the
+  // rail (≈ GUN_RAIL_INSET inboard of the muzzle plane) to be GUN_RAIL_BELOW_CENTRE under the view centre at GUN_PITCH
+  const toRail = Math.max(0.15, Math.hypot(s.muzzle[0] - ex, s.muzzle[2] - ez) - GUN_RAIL_INSET)
+  const over = Math.max(GUN_EYE_OVER_RAIL, toRail * Math.tan(GUN_RAIL_BELOW_CENTRE + GUN_PITCH))
+  let y = Math.max(s.muzzle[1] + 0.11, s.rail + over)
+  let pitch = gunnerPitch([ex, y, ez], s)
+  // a breast rail / pin rail inside the cone: the eye rises until the rail drops out of it
+  for (let raised = 0; view.length && raised < GUN_EYE_RAISE_MAX && viewConeBlocked(view, [ex, y, ez], yaw, pitch); raised += 0.02) {
+    y += 0.02
+    pitch = gunnerPitch([ex, y, ez], s)
+  }
+  return { position: [ex, y, ez], yaw, pitch }
+}
+
+/** Horizontal eye while manning: GUN_EYE_BEHIND_BREECH behind the breech, on the barrel's axis (sighting along it). */
+export function gunnerEyeXZ(s: Pick<Station, 'muzzle' | 'breech' | 'direction'>): Pt {
+  const [dx, , dz] = s.direction
+  const h = Math.hypot(dx, dz) || 1
+  const fx = dx / h
+  const fz = dz / h
+  const t = s.breech[0] * fx + s.breech[2] * fz - GUN_EYE_BEHIND_BREECH
+  // keep the muzzle's across-axis offset (the eye sights along the barrel), move only along the barrel
+  const across = -s.muzzle[0] * fz + s.muzzle[2] * fx
+  return [t * fx - across * fz, t * fz + across * fx]
+}
+
+/**
+ * Manning pitch: GUN_PITCH (a little down, near water under the horizon) unless the view centre would then meet the
+ * bulwark — it stays GUN_RAY_OVER_RAIL above the rail where it crosses the muzzle plane (the eye now stands inboard,
+ * behind the breech, so the bulwark is further away and a flatter pitch is needed on high-railed classes).
+ */
+export function gunnerPitch(eye: Vec3, s: Pick<Station, 'muzzle' | 'rail' | 'direction'>): number {
+  if (s.rail === undefined) return GUN_PITCH
+  const dist = Math.max(0.05, Math.hypot(s.muzzle[0] - eye[0], s.muzzle[2] - eye[2]))
+  const maxDown = Math.atan2(eye[1] - s.rail - GUN_RAY_OVER_RAIL, dist)
+  return clamp(GUN_PITCH, -maxDown, -0.02)
 }
 
 /** Walking pose while manning (feet stay on the stand) — the eye is `EYE_HEIGHT` above it. */

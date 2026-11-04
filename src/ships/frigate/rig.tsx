@@ -91,9 +91,11 @@ export interface FrigateMastProps {
   lod: Lod
   fallSide: 1 | -1
   flag?: ReactNode
+  /** Hide this mast's standing rigging (manning a cannon beside it, kit/rigCull). */
+  hideRigging?: boolean
 }
 
-export function FrigateMast({ index, mats, livery, sails, snapped, torn, phase, lod, fallSide, flag }: FrigateMastProps) {
+export function FrigateMast({ index, mats, livery, sails, snapped, torn, phase, lod, fallSide, flag, hideRigging = false }: FrigateMastProps) {
   const m = MASTS[index]
   const spanker = index === MASTS.length - 1
   const geoms = useMemo(() => buildMastGeoms(m, lod, spanker), [m, lod, spanker])
@@ -126,7 +128,7 @@ export function FrigateMast({ index, mats, livery, sails, snapped, torn, phase, 
           {flag && <group position={[0.07, m.height - breakY, 0]}>{flag}</group>}
         </group>
       </group>
-      <RopeBundle segments={rigging} material={mats.rope} visible={snapped < 0.15} lod={lod} />
+      <RopeBundle segments={rigging} material={mats.rope} visible={snapped < 0.15 && !hideRigging} lod={lod} />
     </group>
   )
 }

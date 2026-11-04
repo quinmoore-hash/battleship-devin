@@ -17,8 +17,17 @@ import type { Vec3 } from '../scene/layout'
 
 /** Camera eye height above `ShipAnchors.deckY`, ship units. */
 export const EYE_HEIGHT = 0.17
-/** Camera near plane while on deck (the default 0.1 clips the rail). */
-export const DECK_NEAR = 0.01
+/**
+ * Deck lens (`src/deck/lens.ts` applies / restores it). Near 0.03: the default 0.5 clips the rail and the pirate, but the
+ * depth resolution of a 24-bit buffer scales with 1/near (≈ z² / (2·near·2²⁴)), so it is as large as the collision radius
+ * allows (`PLAYER_RADIUS` ≥ near + margin keeps the near plane out of masts and bulwarks). Far 300: the sea plane is 300 u,
+ * fog ends at 230 u and the sky dome is drawn on the far plane itself — the overview's 1500 bought nothing on deck.
+ */
+export const DECK_NEAR = 0.03
+export const DECK_FAR = 300
+/** The overview Canvas lens (`src/scene/index.tsx`), restored exactly when the deck hands the camera back. */
+export const OVERVIEW_NEAR = 0.5
+export const OVERVIEW_FAR = 1500
 /** Vertical field of view on deck, degrees. */
 export const DECK_FOV = 70
 
@@ -55,12 +64,20 @@ export interface DeckActions {
 export interface DeckAnchors {
   /** Where the player appears when boarding (typically the quarterdeck behind the helm). */
   spawn: Vec3
+  /**
+   * Walking eye height over the feet for this deck (ship units), when the class needs more than `EYE_HEIGHT` lifted
+   * `WALK_EYE_OVER_RAIL` over its lowest cap rail — e.g. the galleon's belaying pins stand 0.11 u proud of the waist rail
+   * (BUG-893). Still lifted over the lowest rail and capped by `WALK_EYE_MAX`.
+   */
+  eyeHeight?: number
   /** Walkable region: a convex polygon in the x/z plane (CCW), at `ShipAnchors.deckY`. Multiple polygons = multiple deck levels joined by `ramps`. */
   walk: { points: [number, number][]; y: number }[]
   /** Short ramps/stairs between two walkable polygons: walking across the segment lerps y from `from.y` to `to.y`. */
   ramps: { from: number; to: number; a: [number, number]; b: [number, number] }[]
   /** Things you cannot walk through (masts, capstan, hatches): circles in x/z. */
   obstacles: { center: [number, number]; radius: number }[]
+  /** Thin ship-space segments above the deck (breast rails, pin rails) that must not cross the manned view cone (BUG-800). */
+  viewObstacles?: { a: Vec3; b: Vec3 }[]
   /**
    * One entry per `ShipAnchors.cannons[i]`: where the gunner stands and the yaw (radians, ship space) they face when
    * manning it. `breech` (optional, session C) is the inboard end of that gun's barrel on its deck — the spot to mark /

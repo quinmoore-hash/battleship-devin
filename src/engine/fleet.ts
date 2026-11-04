@@ -6,7 +6,7 @@ export const FLEET: readonly ShipSpec[] = [
     id: 'man-o-war',
     name: 'Man-o’-War',
     length: 5,
-    description: 'Three masts, two gun decks and a gilded stern. The flagship.',
+    description: 'Three masts, two cannon decks and a gilded stern. The flagship.',
   },
   {
     id: 'galleon',
@@ -18,7 +18,7 @@ export const FLEET: readonly ShipSpec[] = [
     id: 'frigate',
     name: 'Frigate',
     length: 3,
-    description: 'Sleek, fast and copper-bottomed. A single deadly gun deck.',
+    description: 'Sleek, fast and copper-bottomed. A single deadly cannon deck.',
   },
   {
     id: 'brigantine',
@@ -30,7 +30,7 @@ export const FLEET: readonly ShipSpec[] = [
     id: 'sloop',
     name: 'Sloop',
     length: 2,
-    description: 'One mast, two guns, and a crew that fears nothing.',
+    description: 'One mast, two cannons, and a crew that fears nothing.',
   },
 ]
 

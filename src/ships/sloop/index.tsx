@@ -14,12 +14,13 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { Cannon } from '../kit'
-import type { CannonRef, ShipDefinition, ShipModelProps } from '../types'
+import type { CannonRef, Lod, ShipDefinition, ShipModelProps } from '../types'
 import { SLOOP_ANCHORS } from './anchors'
 import { blockGeometry, mergeGeometries, placed } from './geometry'
 import { BOW_CHASER, CANNON_SCALE, clamp01, deckY, gunStation, SLOOP_DIMS } from './hull'
 import { sloopMaterials, type SloopMaterials } from './materials'
 import { Bulwarks, CAP_RAIL_Y, CellDamageFx, CHAINPLATE_X, deadeyePos, Deck, HullShell } from './parts'
+import { rigCulled } from '../kit/rigCull'
 import { along, ratlineSegments, ropesGeometry, type RopeSeg } from './rigging'
 import { Ensign, QuadSail } from './sails'
 
@@ -50,7 +51,7 @@ function spars(set: number) {
   return { throat, peak, ang, boomEnd }
 }
 
-function Model({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [] }: ShipModelProps) {
+function Model({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sails = 1, phase = 0, firing = [], rigCullX = null }: ShipModelProps) {
   const m = sloopMaterials(livery)
   const L = quality === 'low' ? Math.max(lod, 1) : lod
   const sink = clamp01(sinkProgress)
@@ -71,19 +72,20 @@ function Model({ livery, damage, sinkProgress = 0, lod = 0, quality = 'high', sa
       <Bulwarks m={m} lod={L} lids={lids} />
       <Deck m={m} livery={livery} lod={L} />
       <Bowsprit m={m} lod={L} sink={sink} />
-      {L < 2 &&
-        SLOOP_ANCHORS.cannons.map((c) => (
-          <Cannon
-            key={`${c.cell}-${c.side}`}
-            position={gunStation(c.cell, c.side)}
-            rotationY={c.side === 'starboard' ? 0 : Math.PI}
-            livery={livery}
-            recoil={isFiring(c) ? 1 : 0}
-            scale={CANNON_SCALE}
-          />
-        ))}
+      {/* broadside guns at every lod: the player's gun stations stand at them (a ring without a cannon otherwise) */}
+      {SLOOP_ANCHORS.cannons.map((c) => (
+        <Cannon
+          key={`${c.cell}-${c.side}`}
+          position={gunStation(c.cell, c.side)}
+          rotationY={c.side === 'starboard' ? 0 : Math.PI}
+          livery={livery}
+          recoil={isFiring(c) ? 1 : 0}
+          scale={CANNON_SCALE}
+          lod={L as Lod}
+        />
+      ))}
       {L < 2 && <Cannon position={BOW_CHASER} rotationY={Math.PI / 2} livery={livery} scale={0.4} />}
-      <Rig m={m} lod={L} set={set} torn={Math.max(torn, hitStern ? 0.2 : 0)} scorch={scorch} snapped={snapped} flagDrop={flagDrop} phase={phase} />
+      <Rig m={m} lod={L} set={set} torn={Math.max(torn, hitStern ? 0.2 : 0)} scorch={scorch} snapped={snapped} flagDrop={flagDrop} phase={phase} rigCullX={rigCullX} />
       <CellDamageFx damage={damage} m={m} lod={L} />
     </group>
   )
@@ -93,6 +95,7 @@ Model.displayName = 'Sloop'
 /* ------------------------------------------------------------------ rig */
 
 interface RigProps {
+  rigCullX?: number | null
   m: SloopMaterials
   lod: number
   set: number
@@ -103,7 +106,7 @@ interface RigProps {
   phase: number
 }
 
-function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) {
+function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase, rigCullX = null }: RigProps) {
   const { throat, peak, ang, boomEnd } = spars(set)
   const standing = snapped < 0.12
   // mast pivots at the break point so the stump stays on deck when it goes
@@ -179,7 +182,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
       [world([0.0, 1.6, -0.015]), [-0.9, CAP_RAIL_Y(-0.9) + 0.03, -0.185], 0.009],
       [[-1.1, BOOM_Y + MAST_BASE[1] - 0.01, 0.125], [-0.975, 0.49, 0.0], 0.008], // main sheet to the horse
     ]
-    for (const s of [1, -1] as const) {
+    for (const s of rigCulled(MAST_BASE[0], rigCullX) ? [] : ([1, -1] as const)) {
       const shrouds: [Vec3, Vec3][] = CHAINPLATE_X.map((x) => {
         const d = deadeyePos(x, s)
         return [[d[0], d[1] + 0.03, d[2]], [houndsW[0], houndsW[1], s * 0.03]] as [Vec3, Vec3]
@@ -194,7 +197,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
       if (lod < 2) segs.push(...ratlineSegments(shrouds, 0.62, 1.36, lod === 0 ? 0.065 : 0.13))
     }
     return ropesGeometry(segs, lod === 0 ? 5 : 3, 0, lod)
-  }, [lod])
+  }, [lod, rigCullX])
 
   // sheets for the headsails (ship frame, hidden with the mast)
   const jibTack: Vec3 = [BOWSPRIT_TIP[0] - 0.03, BOWSPRIT_TIP[1] + 0.02, 0]
