@@ -33,7 +33,14 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.
 const gzipCache = new Map()
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://x')
-  let file = path.join(DIST, decodeURIComponent(url.pathname))
+  let pathname
+  try {
+    pathname = decodeURIComponent(url.pathname)
+  } catch {
+    res.statusCode = 400
+    return res.end()
+  }
+  let file = path.join(DIST, pathname)
   if (!file.startsWith(DIST) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html')
   const ext = path.extname(file)
   const type = MIME[ext] ?? 'application/octet-stream'
@@ -50,7 +57,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Length', body.length)
   res.end(body)
 })
-await new Promise((resolve) => server.listen(PORT, resolve))
+await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve))
 
 // Runs before any page script: timestamps the splash, the menu's DOM, the first idle frame after it, and the first WebGL draw.
 const INIT = `(() => {
@@ -110,7 +117,7 @@ try {
       })
       const label = `${width}x${height}-run${run}`
       const t0 = Date.now()
-      await page.goto(`http://localhost:${PORT}/${QUERY}`, { waitUntil: 'commit' })
+      await page.goto(`http://127.0.0.1:${PORT}/${QUERY}`, { waitUntil: 'commit' })
       if (SHOT_DIR) {
         // the splash (when present) is in the HTML, so it is on screen long before the menu
         await page.waitForSelector('#boot-splash', { state: 'attached', timeout: 10_000 }).then(() => page.screenshot({ path: path.join(SHOT_DIR, `${label}-splash.png`) })).catch(() => {})
