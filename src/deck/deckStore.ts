@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useGameStore } from '../store/gameStore'
 
 /**
  * Transient On-deck runtime the HTML HUD reads (the DeckController inside the Canvas writes it once per change,
@@ -63,6 +64,18 @@ export const useDeckStore = create<DeckRuntime>((set, get) => ({
   setLabelEl: (labelEl) => (get().labelEl !== labelEl ? set({ labelEl }) : undefined),
   setCompassEl: (compassEl) => (get().compassEl !== compassEl ? set({ compassEl }) : undefined),
 }))
+
+/** Toast shown for `CANNON_RELEASED_MS` when the gunner leaves a manned cannon (Esc, E or the HUD button). */
+export const CANNON_RELEASED = 'Cannon released'
+export const CANNON_RELEASED_MS = 1500
+
+/** Leave the manned cannon (back to the walking pose at its stand) and say so; a no-op while walking. */
+export function releaseCannon() {
+  const g = useGameStore.getState()
+  if (g.deck.station === null) return
+  g.manStation(null)
+  useDeckStore.getState().showNudge(CANNON_RELEASED, CANNON_RELEASED_MS)
+}
 
 /** Back to the idle runtime (deck off / battle over). */
 export function resetDeckRuntime() {

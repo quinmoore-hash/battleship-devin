@@ -26,7 +26,7 @@ import { useUiStore } from '../ui/uiStore'
 import { lastHitIndex, placedShipSeed, sinkPose } from '../vfx/sinking'
 import { DECK_FOV, deckBus, deckCameraLease, type DeckBusEvent } from './contract'
 import { applyDeckLens, applyOverviewLens, hasDeckLens } from './lens'
-import { resetDeckRuntime, useDeckStore } from './deckStore'
+import { releaseCannon, resetDeckRuntime, useDeckStore } from './deckStore'
 import { GunMarkers } from './GunMarkers'
 import {
   ACCEL_TIME,
@@ -79,7 +79,7 @@ const TOUCH_PER_PIXEL = 0.006
 const GUN_GLANCE_YAW = 0.7
 const GUN_GLANCE_PITCH = 0.35
 /** First-entry hint. */
-const HINT = 'Walk to a glowing gun and press E'
+const HINT = 'Walk to a glowing cannon and press E'
 const HINT_MS = 3000
 
 const tmp = {
@@ -301,11 +301,11 @@ export function DeckController() {
 
     const toggleStation = () => {
       const g = game()
-      if (g.deck.station !== null) return g.manStation(null)
+      if (g.deck.station !== null) return releaseCannon()
       const geom = geomRef.current
       if (!geom) return
       const near = nearestStation(geom.stations, pose.current.x, pose.current.z)
-      if (!near) return runtime().showNudge('Walk to a glowing gun and press E')
+      if (!near) return runtime().showNudge(HINT)
       const st = geom.stations[near.index]
       if (!st.usable) return runtime().showNudge('No target that side')
       man(st)
@@ -407,7 +407,7 @@ export function DeckController() {
         if (game().deck.station !== st.index) man(st)
         return
       }
-      if (d.touch && game().deck.station === null) runtime().showNudge('Tap a glowing gun to man it, then tap the chart to fire')
+      if (d.touch && game().deck.station === null) runtime().showNudge('Tap a glowing cannon to man it, then tap the chart to fire')
     }
 
     const onNextEvent = () => nextShip()
@@ -428,7 +428,7 @@ export function DeckController() {
         }
       }
       if (best) man(best)
-      else runtime().showNudge('No gun on this ship bears on the enemy waters')
+      else runtime().showNudge('No cannon on this ship bears on the enemy waters')
     }
     window.addEventListener('battleship:deck-man', onManEvent)
     window.addEventListener('battleship:deck-next', onNextEvent)
