@@ -30,8 +30,13 @@ export function Modal({ title, testId, onClose, children }: ModalProps) {
       const last = items[items.length - 1]
       const current = document.activeElement
       const inside = ref.current.contains(current)
-      if (e.shiftKey && (!inside || current === first)) (e.preventDefault(), last.focus())
-      else if (!e.shiftKey && (!inside || current === last)) (e.preventDefault(), first.focus())
+      if (e.shiftKey && (!inside || current === first)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && (!inside || current === last)) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => {
