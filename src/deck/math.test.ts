@@ -960,12 +960,12 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
      */
     const ownLines = (cullX: number) => {
       const p = (v: Vec3): Vec3 => [v[0] * BRIG_FIT.scale + BRIG_FIT.dx, v[1] * BRIG_FIT.scale, v[2] * BRIG_FIT.scale]
-      const cullM = (cullX - BRIG_FIT.dx) / BRIG_FIT.scale
+      const shipX = (x: number) => BRIG_FIT.dx + BRIG_FIT.scale * x
       const segs: { a: Vec3; b: Vec3 }[] = []
       const seg = (a: Vec3, b: Vec3) => segs.push({ a: p(a), b: p(b) })
       for (const [a, b] of hullRopes(0)) seg(a, b)
-      if (!rigCulled(FOREMAST_X, cullM)) for (const [a, b] of foreRopes(0)) seg(a, b)
-      if (!rigCulled(MAINMAST_X, cullM)) for (const [a, b] of mainRopes(0, 1)) seg(a, b)
+      if (!rigCulled(shipX(FOREMAST_X), cullX)) for (const [a, b] of foreRopes(0)) seg(a, b)
+      if (!rigCulled(shipX(MAINMAST_X), cullX)) for (const [a, b] of mainRopes(0, 1)) seg(a, b)
       for (const m of BRIGANTINE_MODEL_ANCHORS.masts) seg(m.base, [m.base[0], m.base[1] + m.height, m.base[2]])
       for (const y of foreYards(FOREMAST_HEIGHT)) seg([FOREMAST_X, BRIG_DECK_Y + y.y, -y.w / 2], [FOREMAST_X, BRIG_DECK_Y + y.y, y.w / 2])
       const boomEnd: Vec3 = [MAINMAST_X - MAIN_BOOM_LENGTH, BRIG_DECK_Y + MAIN_BOOM_Y, 0]
@@ -981,7 +981,7 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
       }
       for (let x = BRIG_TRANSOM_X + 0.05; x < BRIG_STEM_X - 0.3; x += 0.1) for (const s of [1, -1] as const) seg(railPoint(x, s), railPoint(x + 0.1, s))
       for (const [x0, x1] of [[-1.0, -0.65], [0.0, 0.5]]) {
-        if (spanCulled(x0, x1, cullM)) continue
+        if (spanCulled(shipX(x0), shipX(x1), cullX)) continue
         for (const s of [1, -1] as const) {
           const a = railPoint(x0, s)
           const b = railPoint(x1, s)

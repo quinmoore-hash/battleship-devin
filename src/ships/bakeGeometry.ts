@@ -63,6 +63,8 @@ interface Bucket {
   receiveShadow: boolean
   renderOrder: number
   types: Set<string>
+  /** `userData.bakePart` of the source subtree (standing-ship rigging parts), kept as its own mesh. */
+  part: string
 }
 
 const tmpM = new THREE.Matrix4()
@@ -113,7 +115,7 @@ function silhouette(g: THREE.BufferGeometry): THREE.BufferGeometry {
  * `collapse`, every plain mesh instead becomes ONE silhouette mesh in that material (settled wrecks under the
  * surface, BUG-404): instanced / multi-material / line parts are still kept as-is.
  */
-export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material): THREE.Group {
+export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material, parts = false): THREE.Group {
   // the caller usually hides the live copy under `root`; bake its subtree regardless
   const wasVisible = root.visible
   root.visible = true
@@ -125,12 +127,20 @@ export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material): THR
   let sourceMeshes = 0
 
   const labels: string[] = []
+  // with `parts`, the nearest `userData.bakePart` tag above a mesh (`kit/rigCull` rigPart / spanPart) keeps it in its own bucket
+  const partOf = (o: THREE.Object3D): string => {
+    if (!parts) return ''
+    for (let p: THREE.Object3D | null = o; p && p !== root; p = p.parent) if (typeof p.userData.bakePart === 'string') return p.userData.bakePart
+    return ''
+  }
   const keepAsIs = (o: THREE.Object3D) => {
     labels.push(`${o.type}:${(o as THREE.Mesh).geometry?.type ?? ''} as-is`)
     const c = o.clone(false)
     tmpM.multiplyMatrices(inv, o.matrixWorld)
     tmpM.decompose(c.position, c.quaternion, c.scale)
     c.updateMatrix()
+    const part = partOf(o)
+    if (part) c.userData.bakePart = part
     out.add(c)
     return c
   }
@@ -138,10 +148,11 @@ export function bakeObject(root: THREE.Object3D, collapse?: THREE.Material): THR
   const addToBucket = (o: THREE.Object3D, material: THREE.Material, g: THREE.BufferGeometry, type: string, kind: Bucket['kind']) => {
     const wreck = !!collapse && kind === 'mesh'
     if (wreck) g = silhouette(g)
-    const key = wreck ? 'mesh|wreck' : `${kind}|${o.renderOrder}|${materialKey(material)}|${geometrySignature(g)}`
+    const part = wreck ? '' : partOf(o)
+    const key = wreck ? 'mesh|wreck' : `${kind}|${o.renderOrder}|${materialKey(material)}|${geometrySignature(g)}|${part}`
     let b = buckets.get(key)
     if (!b) {
-      b = { kind, material: wreck ? collapse! : material, geoms: [], castShadow: false, receiveShadow: false, renderOrder: wreck ? 0 : o.renderOrder, types: new Set() }
+      b = { kind, material: wreck ? collapse! : material, geoms: [], castShadow: false, receiveShadow: false, renderOrder: wreck ? 0 : o.renderOrder, types: new Set(), part }
       buckets.set(key, b)
     }
     b.geoms.push(g)
@@ -231,6 +242,7 @@ function makeObject(b: Bucket, g: THREE.BufferGeometry) {
   o.receiveShadow = b.receiveShadow
   o.renderOrder = b.renderOrder
   o.matrixAutoUpdate = false
+  if (b.part) o.userData.bakePart = b.part
   return o
 }
 

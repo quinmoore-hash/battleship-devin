@@ -290,8 +290,9 @@ function BattleWorld({ quality, over }: { quality: 'low' | 'high'; over: boolean
   const standing = useMemo(() => (onDeck ? own.ships.filter((s) => s.uid === deck.shipUid) : []), [onDeck, own.ships, deck.shipUid])
   // rigging beside the player is hidden on deck: the manned cannon's x, else the player's own deck x (walkCullX: seeded
   // with the spawn x on the first look, re-committed only after walking WALK_CULL_STEP, so nothing pops while standing
-  // still; null once no mast is in reach, and the standing ship then drops back to the baked lod — a live Man-o'-War
-  // while walking measured up to 349 draws at Medium)
+  // still; null once no mast is in reach). The standing ship keeps the tier's lod: at Medium / Low the cull hides the
+  // baked copy's per-mast rigging parts (`rigPart`), at High the live model's (a live Man-o'-War looking along its deck
+  // is ~450 draws, over the Medium budget)
   const standingId = standing[0]?.spec.id
   const mastXs = useMemo(() => (standingId ? SHIPS[standingId].anchors.masts.map((m) => m.base[0]) : []), [standingId])
   const spawnCull = useMemo(() => (standingId ? walkCullX(null, resolveDeckAnchors(SHIPS[standingId].anchors, standingId).spawn[0], mastXs) : null), [standingId, mastXs])

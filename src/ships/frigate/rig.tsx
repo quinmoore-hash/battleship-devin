@@ -9,6 +9,7 @@ import type { Vec3 } from '../../scene/layout'
 import type { Livery, Lod } from '../types'
 import { ClothTime } from './clothTime'
 import { ropeRadiusAtLod } from '../kit/Rope'
+import { rigPart } from '../kit/rigCull'
 import { MASTS, deckY } from './form'
 import { sailGeometry } from './geometry'
 import { applyClothUniforms, clothTextures, makeClothDepthMaterial, makeClothMaterial, makeClothUniforms, type FrigateMaterials } from './materials'
@@ -128,7 +129,9 @@ export function FrigateMast({ index, mats, livery, sails, snapped, torn, phase, 
           {flag && <group position={[0.07, m.height - breakY, 0]}>{flag}</group>}
         </group>
       </group>
-      <RopeBundle segments={rigging} material={mats.rope} visible={snapped < 0.15 && !hideRigging} lod={lod} />
+      <group userData={{ bakePart: rigPart(m.x) }}>
+        <RopeBundle segments={rigging} material={mats.rope} visible={snapped < 0.15 && !hideRigging} lod={lod} />
+      </group>
     </group>
   )
 }

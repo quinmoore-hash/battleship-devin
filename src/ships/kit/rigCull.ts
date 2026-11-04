@@ -27,3 +27,20 @@ export function walkCullX(prev: number | null, playerX: number, mastXs: readonly
   if (Math.abs(playerX - prev) < WALK_CULL_STEP) return prev
   return nearest < RIG_CULL_RADIUS + WALK_CULL_STEP ? playerX : null
 }
+
+/**
+ * Baked rigging parts: a live model tags each mast's rigging `userData={{ bakePart: rigPart(mastX) }}` (a run between
+ * two x, e.g. boarding netting: `spanPart(x0, x1)`), the standing ship's bake keeps those meshes separate
+ * (`bakeObject(root, undefined, true)`) and `<BakedShip rigCullX>` hides the ones `partCulled()` says — the same rule the
+ * live model applies — so the Medium / Low standing ship never has to go live for the cull (a live Man-o'-War looking
+ * along its deck is ~450 draws).
+ */
+export const rigPart = (mastX: number): string => `rig:${mastX}`
+export const spanPart = (x0: number, x1: number): string => `span:${x0}:${x1}`
+export function partCulled(part: string, cullX: number | null): boolean {
+  const [kind, ...rest] = part.split(':')
+  const xs = rest.map(Number)
+  if (kind === 'rig' && xs.length === 1) return rigCulled(xs[0], cullX)
+  if (kind === 'span' && xs.length === 2) return spanCulled(xs[0], xs[1], cullX)
+  return false
+}

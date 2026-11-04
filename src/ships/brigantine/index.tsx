@@ -57,7 +57,7 @@ import {
   SwivelGun,
   Windlass,
 } from './parts'
-import { rigCulled, spanCulled } from '../kit/rigCull'
+import { rigCulled, rigPart, spanCulled, spanPart } from '../kit/rigCull'
 import { Cloth, Ensign, ForeMast, MAIN_BOOM_LENGTH, MAIN_BOOM_Y, MainMast, Pennant, RopeSet, type RopeLine, gaffPose, shroudLines } from './rig'
 
 export { BRIGANTINE_ANCHORS } from './anchors'
@@ -186,7 +186,8 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const motion = reducedMotion ? 0 : 1
   const mats = useMemo(() => brigMaterials(livery), [livery])
-  const cullX = rigCullX == null ? null : (rigCullX - FIT.dx) / FIT.scale // ship-local → model frame (the root FIT group)
+  // the rigging cull compares in the ship frame (the model sits under the root FIT group), live and baked alike
+  const shipX = (x: number) => FIT.dx + FIT.scale * x
   const geo = useMemo(sharedGeometry, [])
   const shadows = quality === 'high'
   const sink = clamp01(sinkProgress)
@@ -325,10 +326,18 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
           <RopeCoil position={[MAINMAST_X - 0.14, DECK_Y, -0.1]} livery={livery} />
           <RopeCoil position={[1.0, DECK_Y, 0]} livery={livery} />
           <Cleats xs={[1.05, 0.45, -0.05, -0.75, -1.3]} mats={mats} />
-          {!spanCulled(-1.0, -0.65, cullX) && <Netting x0={-1.0} x1={-0.65} side="port" height={0.07} mats={mats} />}
-          {!spanCulled(-1.0, -0.65, cullX) && <Netting x0={-1.0} x1={-0.65} side="starboard" height={0.07} mats={mats} />}
-          {!spanCulled(0.0, 0.5, cullX) && <Netting x0={0.0} x1={0.5} side="port" height={0.07} mats={mats} />}
-          {!spanCulled(0.0, 0.5, cullX) && <Netting x0={0.0} x1={0.5} side="starboard" height={0.07} mats={mats} />}
+          {!spanCulled(shipX(-1.0), shipX(-0.65), rigCullX) && (
+            <group userData={{ bakePart: spanPart(shipX(-1.0), shipX(-0.65)) }}>
+              <Netting x0={-1.0} x1={-0.65} side="port" height={0.07} mats={mats} />
+              <Netting x0={-1.0} x1={-0.65} side="starboard" height={0.07} mats={mats} />
+            </group>
+          )}
+          {!spanCulled(shipX(0.0), shipX(0.5), rigCullX) && (
+            <group userData={{ bakePart: spanPart(shipX(0.0), shipX(0.5)) }}>
+              <Netting x0={0.0} x1={0.5} side="port" height={0.07} mats={mats} />
+              <Netting x0={0.0} x1={0.5} side="starboard" height={0.07} mats={mats} />
+            </group>
+          )}
           <BrigLantern position={[MAINMAST_X + 0.12, DECK_Y + 0.22, 0.02]} mats={mats} scale={0.7} />
         </>
       )}
@@ -404,8 +413,12 @@ function BrigantineModel({ livery, damage, sinkProgress = 0, lod = 0, quality = 
       {lod < 2 && (
         <>
           <RopeSet lines={hullLines} mats={mats} lod={lod} visible={bowspritSnap < 0.3} />
-          <RopeSet lines={foreLines} mats={mats} lod={lod} visible={foreSnap < 0.15 && !rigCulled(FOREMAST_X, cullX)} />
-          <RopeSet lines={mainLines} mats={mats} lod={lod} visible={mainSnap < 0.15 && !rigCulled(MAINMAST_X, cullX)} />
+          <group userData={{ bakePart: rigPart(shipX(FOREMAST_X)) }}>
+            <RopeSet lines={foreLines} mats={mats} lod={lod} visible={foreSnap < 0.15 && !rigCulled(shipX(FOREMAST_X), rigCullX)} />
+          </group>
+          <group userData={{ bakePart: rigPart(shipX(MAINMAST_X)) }}>
+            <RopeSet lines={mainLines} mats={mats} lod={lod} visible={mainSnap < 0.15 && !rigCulled(shipX(MAINMAST_X), rigCullX)} />
+          </group>
         </>
       )}
 

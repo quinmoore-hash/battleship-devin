@@ -7,6 +7,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { hashString } from '../../vfx/random'
+import { rigPart } from '../kit/rigCull'
 import { Anchor, Barrel, Cannon, Crate, Flag, HullHole, Lantern, loftHull, RopeCoil, shipMaterials, Wheel, type HullSection } from '../kit'
 import type { CannonRef, CellDamage, Livery, Lod, Side } from '../types'
 import {
@@ -894,7 +895,7 @@ const bowRiggingGeo = cached((lodKey: string) =>
 export function Rigging({ m, lod, snaps, hide = [] }: PartProps & { snaps: number[]; hide?: boolean[] }) {
   return (
     <group>
-      {MASTS.map((_, i) => (snaps[i] > 0.05 || hide[i] ? null : <mesh key={i} geometry={riggingGeo(`${i},${lod}`)} material={m.rope} />))}
+      {MASTS.map((s, i) => (snaps[i] > 0.05 || hide[i] ? null : <mesh key={i} geometry={riggingGeo(`${i},${lod}`)} material={m.rope} userData={{ bakePart: rigPart(s.x) }} />))}
       <mesh geometry={bowRiggingGeo(String(lod))} material={m.rope} />
       <Channels m={m} lod={lod} />
     </group>

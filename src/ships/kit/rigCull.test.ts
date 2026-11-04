@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS, standingShipLod } from '..'
-import { RIG_CULL_RADIUS, rigCulled, spanCulled, WALK_CULL_STEP, walkCullX } from './rigCull'
+import { RIG_CULL_RADIUS, rigCulled, spanCulled, WALK_CULL_STEP, walkCullX, partCulled, rigPart, spanPart } from './rigCull'
 import { resolveDeckAnchors } from '../../deck/math'
 
 describe('standing-rigging cull while manning (BUG-800)', () => {
@@ -30,13 +30,20 @@ describe('standing-rigging cull while manning (BUG-800)', () => {
   })
 })
 
-describe('standing ship lod while manning', () => {
-  it('the dressed ship goes live (lod 0) only while a cannon is manned; other ships keep the tier lod', () => {
-    expect(standingShipLod(1, true, true)).toBe(0)
-    expect(standingShipLod(2, true, true)).toBe(0)
-    expect(standingShipLod(1, true, false)).toBe(1)
-    expect(standingShipLod(1, false, true)).toBe(1)
-    expect(standingShipLod('auto', false, false)).toBe(2)
+describe('standing ship lod', () => {
+  it('keeps the tier lod — the cull works on the baked copy, never forces a live model (BUG-894)', () => {
+    expect(standingShipLod(1)).toBe(1)
+    expect(standingShipLod(2)).toBe(2)
+    expect(standingShipLod(0)).toBe(0)
+    expect(standingShipLod('auto')).toBe(2)
+  })
+  it('partCulled applies the live rule to a baked part tag', () => {
+    expect(partCulled(rigPart(1.4), 0.9)).toBe(true)
+    expect(partCulled(rigPart(1.4), -0.5)).toBe(false)
+    expect(partCulled(rigPart(1.4), null)).toBe(false)
+    expect(partCulled(spanPart(-1, -0.65), -0.8)).toBe(true)
+    expect(partCulled(spanPart(-1, -0.65), 1.5)).toBe(false)
+    expect(partCulled('deck', 0)).toBe(false)
   })
 })
 

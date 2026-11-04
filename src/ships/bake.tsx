@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { bakeObject, bakeStats, type BakeStats } from './bakeGeometry'
+import { partCulled } from './kit/rigCull'
 import { LiveShip } from './LiveShip'
 
 export { bakeObject, bakeStats, materialKey, geometrySignature, type BakeStats } from './bakeGeometry'
@@ -44,6 +45,8 @@ interface Entry {
   idleSince: number
   /** Collapse every part into one dark silhouette mesh (settled wreck under the surface). */
   wreck: boolean
+  /** Keep `userData.bakePart` rigging as separate meshes (the standing ship's rigging cull, `kit/rigCull`). */
+  parts: boolean
 }
 
 const entries = new Map<BakeKey, Entry>()
@@ -71,9 +74,9 @@ export function useBakeryActive(): boolean {
   return bakeryActive()
 }
 
-export function requestBake(key: BakeKey, element: ReactElement, wreck = false) {
+export function requestBake(key: BakeKey, element: ReactElement, wreck = false, parts = false) {
   if (entries.has(key)) return
-  entries.set(key, { key, element, object: null, framesMounted: 0, users: 0, idleSince: 0, wreck })
+  entries.set(key, { key, element, object: null, framesMounted: 0, users: 0, idleSince: 0, wreck, parts })
   emit()
 }
 
@@ -168,7 +171,7 @@ export function ShipBakery() {
       const g = groups.current.get(e.key)
       if (!g) continue
       if (e.framesMounted++ < 1) continue
-      e.object = bakeObject(g, e.wreck ? wreckMaterial() : undefined)
+      e.object = bakeObject(g, e.wreck ? wreckMaterial() : undefined, e.parts)
       changed = true
       if (typeof location !== 'undefined' && /[?&]perf/.test(location.search)) console.info('[bake]', e.key, JSON.stringify(e.object.userData.bakeStats), JSON.stringify(e.object.children.map((c, i) => `${(e.object!.userData.buckets as string[])[i] ?? c.type}:${bakeStats(c).triangles}`)))
     }
@@ -197,6 +200,10 @@ export interface BakedShipProps {
   element: ReactElement
   /** Bake as one waterlogged silhouette mesh instead of one mesh per material (settled wrecks, BUG-404). */
   wreck?: boolean
+  /** Keep the model's `bakePart`-tagged rigging as separate meshes so `rigCullX` can hide them (the standing ship). */
+  parts?: boolean
+  /** Ship-local x whose nearby rigging parts are hidden (`partCulled`); null shows them all. */
+  rigCullX?: number | null
 }
 
 let wreckMat: THREE.MeshStandardMaterial | null = null
@@ -207,9 +214,9 @@ export function wreckMaterial(): THREE.MeshStandardMaterial {
 }
 
 /** Renders the shared baked group for `bakeKey`, requesting the bake on first use. */
-export function BakedShip({ bakeKey: key, element, wreck = false }: BakedShipProps) {
+export function BakedShip({ bakeKey: key, element, wreck = false, parts = false, rigCullX = null }: BakedShipProps) {
   useSyncExternalStore(subscribe, getVersion)
-  useEffect(() => requestBake(key, element, wreck), [key, element, wreck])
+  useEffect(() => requestBake(key, element, wreck, parts), [key, element, wreck, parts])
   useEffect(() => {
     const e = entries.get(key)
     if (e) {
@@ -223,6 +230,10 @@ export function BakedShip({ bakeKey: key, element, wreck = false }: BakedShipPro
   }, [key])
   const baked = getBaked(key)
   const inst = useMemo(() => baked?.clone() ?? null, [baked])
+  useEffect(() => {
+    if (!inst) return
+    for (const c of inst.children) if (typeof c.userData.bakePart === 'string') c.visible = !partCulled(c.userData.bakePart, rigCullX)
+  }, [inst, rigCullX])
   if (!inst) return null
   return <primitive object={inst} />
 }
