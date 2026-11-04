@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FLEET_BY_ID, type Coord, type PlacedShip, type ShotResult } from '../engine'
 import { BoardGrid, OceanScene, type CameraView } from '../scene'
 import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../scene/layout'
@@ -84,6 +84,14 @@ export function VfxDamageDemo() {
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
   const updateSettings = useGameStore((s) => s.updateSettings)
   const nextId = useRef(1)
+  const hitTimers = useRef(new Set<number>())
+  useEffect(() => {
+    const pending = hitTimers.current
+    return () => {
+      pending.forEach((t) => window.clearTimeout(t))
+      pending.clear()
+    }
+  }, [])
   const rnd = useMemo(() => seededRandom(Number(q.get('seed') ?? 7)), []) // eslint-disable-line react-hooks/exhaustive-deps
   const origin = BOARD_LAYOUT.player.origin
 
@@ -102,9 +110,11 @@ export function VfxDamageDemo() {
       const normal: Vec3 = [s, 0, c]
       const id = nextId.current++
       setBursts((b) => [...b, { id, position: world, normal, seed: id * 31 + 7 }])
-      window.setTimeout(() => {
+      const timer = window.setTimeout(() => {
+        hitTimers.current.delete(timer)
         setShips((prev) => prev.map((p, i) => (i === shipIdx && !p.hits.some((h) => h.x === cell.x && h.y === cell.y) ? { ...p, hits: [...p.hits, cell] } : p)))
       }, 180)
+      hitTimers.current.add(timer)
     },
     [ships, origin],
   )

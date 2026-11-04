@@ -28,7 +28,7 @@ export interface PerfState {
   dismissNotice: () => void
 }
 
-export const LOWERED_NOTICE = 'Lowered quality for smoother play — change it any time in Settings › Graphics quality'
+const LOWERED_NOTICE = 'Lowered quality for smoother play — change it any time in Settings › Graphics quality'
 
 function readUrlQuality(): QualitySetting | null {
   if (typeof window === 'undefined') return null

@@ -7,7 +7,7 @@ import type { Vec3 } from '../../scene/layout'
 import { loftHullParts } from '../kit/hull'
 import type { Lod } from '../types'
 import { FRIGATE, GUN_PORT_W, GUN_X, MASTS, bulwarkHalfWidth, deckOutline, deckY, gunX, halfBeamAtDeck, hullSections, hullStations, keelY, railY, sectionHalfWidth } from './form'
-import { box, cyl, deckPlate, mergeGeometries, remapHullUvs, ridge, triangleCount, tube, wallStrip, wallStripPair } from './geometry'
+import { box, cyl, deckPlate, mergeGeometries, remapHullUvs, ridge, tube, wallStrip, wallStripPair } from './geometry'
 import type { FrigateMaterials } from './materials'
 
 export type PartKey = keyof FrigateMaterials
@@ -232,8 +232,4 @@ export function buildHullParts(lod: Lod): HullParts {
   for (const key of Object.keys(parts) as PartKey[]) out[key] = mergeGeometries(parts[key]!)
   cache.set(lod, out)
   return out
-}
-
-export function hullTriangleCount(lod: Lod): number {
-  return Object.values(buildHullParts(lod)).reduce((n, g) => n + (g ? triangleCount(g) : 0), 0)
 }

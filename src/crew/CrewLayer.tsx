@@ -342,7 +342,7 @@ export function CrewLayer({ ships, livery, revealed = true, boardOrigin = BOARD_
         if (!clip.loop && f.time >= clip.duration && f.state === 'deck') play(f, f.resume)
 
         if (f.state === 'deck') {
-          stepAside(f, crew, anchors, onThisDeck)
+          stepAside(f, anchors, onThisDeck)
           figM.compose(v.set(f.x, f.y, f.z), q.setFromEuler(e.set(0, f.yaw, 0)), FIG).premultiply(shipM)
           writeFigure(mesh, base, figM, samplePoseOf(f, poseA))
         } else if (f.state === 'jump') {
@@ -490,10 +490,10 @@ function throwFig(f: Fig, ship: PlacedShip, boardOrigin: Vec3, random: () => num
 }
 
 /** Keep the figure ≥ PLAYER_CLEARANCE from the player (and off a manned station); drift home when the way is clear. */
-function stepAside(f: Fig, crew: ShipCrew, anchors: (typeof SHIPS)[keyof typeof SHIPS]['anchors'], onThisDeck: boolean): void {
+function stepAside(f: Fig, anchors: (typeof SHIPS)[keyof typeof SHIPS]['anchors'], onThisDeck: boolean): void {
   if (!onThisDeck) {
     if (!f.displaced) return
-    moveToward(f, f.slot.x, f.slot.z, 1)
+    moveToward(f, f.slot.x, f.slot.z)
     return
   }
   const dx = f.x - playerDeck.x
@@ -512,18 +512,17 @@ function stepAside(f: Fig, crew: ShipCrew, anchors: (typeof SHIPS)[keyof typeof 
     // if the clamp pushed us back into the player, slide along the rail instead
     if (dist(p, [playerDeck.x, playerDeck.z]) < PLAYER_CLEARANCE - 0.02) p = [f.x + uz * 0.2, f.z - ux * 0.2]
     f.displaced = true
-    moveToward(f, p[0], p[1], 1)
-    void crew
+    moveToward(f, p[0], p[1])
     return
   }
   if (f.displaced) {
     const homeD = Math.hypot(f.slot.x - playerDeck.x, f.slot.z - playerDeck.z)
-    if (homeD > PLAYER_CLEARANCE + 0.1 && !(manned)) moveToward(f, f.slot.x, f.slot.z, 1)
+    if (homeD > PLAYER_CLEARANCE + 0.1 && !(manned)) moveToward(f, f.slot.x, f.slot.z)
     else if (f.anim === 'shuffle') play(f, 'idle', f.resume)
   }
 }
 
-function moveToward(f: Fig, tx: number, tz: number, _unused: number): void {
+function moveToward(f: Fig, tx: number, tz: number): void {
   const dx = tx - f.x
   const dz = tz - f.z
   const d = Math.hypot(dx, dz)

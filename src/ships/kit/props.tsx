@@ -570,6 +570,7 @@ export function Netting({ position, length, height = 0.5, livery, rotationY = 0,
   }, [length, height, pitch])
   useEffect(() => () => geom.dispose(), [geom])
   const line = useMemo(() => new THREE.LineBasicMaterial({ color: (m.rope as THREE.MeshStandardMaterial).color.clone().multiplyScalar(0.45) }), [m])
+  useEffect(() => () => line.dispose(), [line])
   return (
     <group position={position} rotation-y={rotationY}>
       <lineSegments geometry={geom} material={line} />

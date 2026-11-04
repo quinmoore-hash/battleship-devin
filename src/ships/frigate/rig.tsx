@@ -40,7 +40,7 @@ export function RopeBundle({ segments, material, visible = true, lod = 0 }: { se
     })
     mesh.count = segments.length
     mesh.instanceMatrix.needsUpdate = true
-  }, [segments])
+  }, [segments, lod])
   if (segments.length === 0) return null
   return <instancedMesh ref={ref} args={[UNIT_CYL, material, segments.length]} visible={visible} frustumCulled={false} />
 }

@@ -22,19 +22,14 @@ export function GameUI({ menuExtras }: { menuExtras?: MenuExtras } = {}) {
   // hot-seat curtain: both boards leave the DOM while the laptop changes hands
   const handoff = useGameStore((s) => s.handoff)
   const reducedMotion = useGameStore((s) => s.settings.reducedMotion)
-  const winner = useGameStore((s) => s.winner)
   const colorblind = useGameStore((s) => s.settings.colorblind)
   const timeOfDay = useGameStore((s) => s.settings.timeOfDay)
   const weather = useGameStore(selectSkyWeather)
   const [modal, setModal] = useState<UiModal>(null)
 
-
   useEffect(() => {
     document.body.style.cursor = ''
   }, [phase])
-
-  useEffect(() => {
-  }, [phase, winner])
 
   const openModal = useCallback((m: UiModal) => setModal(m), [])
   const closeModal = useCallback(() => setModal(null), [])

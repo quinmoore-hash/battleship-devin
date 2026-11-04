@@ -151,6 +151,7 @@ export function BoardGrid({
 }: BoardGridProps) {
   const extent = size * cellSize
   const center: Vec3 = [origin[0] + extent / 2, origin[1], origin[2] + extent / 2]
+  const originY = origin[1]
   const highlightRef = useRef<THREE.Group>(null)
   const floatsRef = useRef<THREE.InstancedMesh>(null)
   const ropesRef = useRef<THREE.InstancedMesh>(null)
@@ -164,6 +165,9 @@ export function BoardGrid({
   const floatMat = useMemo(() => rideTheWaves(new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.85), roughness: 0.9 }), 0.03), [color])
   const plateMat = useMemo(() => rideTheWaves(new THREE.MeshBasicMaterial({ color: highlightColor, transparent: true, opacity: 0.4, toneMapped: false, depthWrite: false })), [highlightColor])
   useEffect(() => () => void (ropeGeo.dispose(), floatGeo.dispose(), ropeTex.dispose()), [ropeGeo, floatGeo, ropeTex])
+  useEffect(() => () => ropeMat.dispose(), [ropeMat])
+  useEffect(() => () => floatMat.dispose(), [floatMat])
+  useEffect(() => () => plateMat.dispose(), [plateMat])
 
   const ropeCount = 2 * size * (size + 1)
   const floatCount = (size + 1) * (size + 1)
@@ -171,7 +175,7 @@ export function BoardGrid({
   // Static rest-level layout; the wave motion is added per vertex on the GPU (`rideTheWaves`).
   useEffect(() => {
     const h = extent / 2
-    const rest = -center[1] + 0.075
+    const rest = -originY + 0.075
     const floats = floatsRef.current
     const ropes = ropesRef.current
     if (floats) {
@@ -208,7 +212,7 @@ export function BoardGrid({
       ropes.instanceMatrix.needsUpdate = true
       ropes.computeBoundingSphere()
     }
-  }, [size, cellSize, extent, center, dummy])
+  }, [size, cellSize, extent, originY, dummy, ropeMat, floatMat])
 
   useFrame((state) => {
     const t = state.clock.elapsedTime

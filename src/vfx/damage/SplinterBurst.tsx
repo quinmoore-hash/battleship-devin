@@ -1,10 +1,10 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { BOARD_LAYOUT, type Vec3 } from '../../scene/layout'
 import { ParticleBurst } from '../ParticleFx'
 import { makeBurst, particleAt, burstDuration } from '../particles'
-import { attachParams, makeSpriteMaterial, spriteQuad } from './sprites'
+import { attachParams, disposeParams, makeSpriteMaterial, spriteQuad } from './sprites'
 import { makeSplinters, splinterAt, splinterDuration } from './splinters'
 import { useReducedMotion } from './useReducedMotion'
 import { scaleCount, useParticlesScale } from '../../perf/store'
@@ -49,7 +49,8 @@ export function SplinterBurst({ position, normal, seed = 1, count, waterY = BOAR
   )
   const dustTotal = useMemo(() => burstDuration(dustParts), [dustParts])
   const dustMat = useMemo(() => makeSpriteMaterial('smoke', { color: '#8d7a62', opacity: 0.55 }), [])
-  useEffect(() => () => dustMat.dispose(), [dustMat])
+  // layout cleanup: runs before React detaches the child refs, so the dust mesh (and its aParam geometry clone) is still reachable
+  useLayoutEffect(() => () => void (dustMat.dispose(), disposeParams(dust.current)), [dustMat])
   const start = useRef<number | null>(null)
   const done = useRef(false)
   const nrm = useMemo(() => new THREE.Vector3(...normal).normalize(), [normal])

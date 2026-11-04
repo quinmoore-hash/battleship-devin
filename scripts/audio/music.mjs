@@ -35,7 +35,7 @@ const PHRASE_B_END = [
 ]
 export const MELODY = [...PHRASE_A, ...PHRASE_B, ...PHRASE_A, ...PHRASE_B_END] // 16 bars
 
-const Dm = { root: 50, tones: [0, 3, 7] }, C = { root: 48, tones: [0, 4, 7] }, F = { root: 53, tones: [0, 4, 7] }, Am = { root: 57, tones: [0, 3, 7] }, G = { root: 55, tones: [0, 4, 7] }
+const Dm = { root: 50, tones: [0, 3, 7] }, C = { root: 48, tones: [0, 4, 7] }, F = { root: 53, tones: [0, 4, 7] }, G = { root: 55, tones: [0, 4, 7] }
 /** One chord per bar for the 16-bar form. */
 export const CHORDS = [Dm, Dm, C, Dm, F, Dm, C, Dm, Dm, Dm, C, Dm, F, G, C, Dm]
 
