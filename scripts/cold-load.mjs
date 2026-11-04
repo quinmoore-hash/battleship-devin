@@ -31,10 +31,21 @@ const PROFILES = {
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.png': 'image/png', '.webp': 'image/webp', '.md': 'text/markdown' }
 const gzipCache = new Map()
+// Decoding can turn `..%2f` into a real `../`, so containment is checked on the resolved path, not a string prefix.
+function resolveInDist(reqUrl) {
+  let decoded
+  try {
+    decoded = decodeURIComponent(new URL(reqUrl ?? '/', 'http://x').pathname)
+  } catch {
+    return null
+  }
+  const file = path.resolve(DIST, '.' + path.sep + decoded)
+  const rel = path.relative(DIST, file)
+  return rel.startsWith('..') || path.isAbsolute(rel) ? null : file
+}
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url ?? '/', 'http://x')
-  let file = path.join(DIST, decodeURIComponent(url.pathname))
-  if (!file.startsWith(DIST) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html')
+  let file = resolveInDist(req.url)
+  if (!file || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html')
   const ext = path.extname(file)
   const type = MIME[ext] ?? 'application/octet-stream'
   const compressible = /^(text\/|application\/(json|javascript)|image\/svg)/.test(type)
@@ -50,7 +61,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Length', body.length)
   res.end(body)
 })
-await new Promise((resolve) => server.listen(PORT, resolve))
+await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve))
 
 // Runs before any page script: timestamps the splash, the menu's DOM, the first idle frame after it, and the first WebGL draw.
 const INIT = `(() => {
