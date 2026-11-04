@@ -20,7 +20,7 @@ import { blockGeometry, mergeGeometries, placed } from './geometry'
 import { BOW_CHASER, CANNON_SCALE, clamp01, deckY, gunStation, SLOOP_DIMS } from './hull'
 import { sloopMaterials, type SloopMaterials } from './materials'
 import { Bulwarks, CAP_RAIL_Y, CellDamageFx, CHAINPLATE_X, deadeyePos, Deck, HullShell } from './parts'
-import { rigCulled } from '../kit/rigCull'
+import { rigCulled, rigPart } from '../kit/rigCull'
 import { along, ratlineSegments, ropesGeometry, type RopeSeg } from './rigging'
 import { Ensign, QuadSail } from './sails'
 
@@ -174,7 +174,6 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase, rigCullX = n
 
   // standing rigging in ship frame: stays, shrouds, ratlines, backstays, sheets
   const standingGeom = useMemo(() => {
-    const houndsW = world([0.0, 1.22, 0])
     const segs: RopeSeg[] = [
       [world([0.0, 1.25, 0]), STEMHEAD, 0.011], // forestay
       [world([0.035, MH - 0.08, 0]), [BOWSPRIT_TIP[0] - 0.03, BOWSPRIT_TIP[1] + 0.01, 0], 0.01], // jibstay
@@ -182,7 +181,14 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase, rigCullX = n
       [world([0.0, 1.6, -0.015]), [-0.9, CAP_RAIL_Y(-0.9) + 0.03, -0.185], 0.009],
       [[-1.1, BOOM_Y + MAST_BASE[1] - 0.01, 0.125], [-0.975, 0.49, 0.0], 0.008], // main sheet to the horse
     ]
-    for (const s of rigCulled(MAST_BASE[0], rigCullX) ? [] : ([1, -1] as const)) {
+    return ropesGeometry(segs, lod === 0 ? 5 : 3, 0, lod)
+  }, [lod])
+  // shrouds, lanyards and ratlines: their own mesh (tagged for the baked rigging cull), hidden with the mast
+  const shroudGeom = useMemo(() => {
+    if (rigCulled(MAST_BASE[0], rigCullX)) return null
+    const houndsW = world([0.0, 1.22, 0])
+    const segs: RopeSeg[] = []
+    for (const s of [1, -1] as const) {
       const shrouds: [Vec3, Vec3][] = CHAINPLATE_X.map((x) => {
         const d = deadeyePos(x, s)
         return [[d[0], d[1] + 0.03, d[2]], [houndsW[0], houndsW[1], s * 0.03]] as [Vec3, Vec3]
@@ -285,6 +291,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase, rigCullX = n
         />
       )}
       {standing && <mesh geometry={standingGeom} material={m.kit.rope} />}
+      {standing && shroudGeom && <mesh geometry={shroudGeom} material={m.kit.rope} userData={{ bakePart: rigPart(MAST_BASE[0]) }} />}
       {standing && sheets && <mesh geometry={sheets} material={m.kit.rope} />}
     </group>
   )

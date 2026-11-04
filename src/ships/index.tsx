@@ -74,7 +74,7 @@ export function Ship({ id, staticWreck: _staticWreck, dressed = false, ...rest }
   // separate ~12-draw layer, so it rides along with the bake instead of being lost with lod 0.
   return (
     <>
-      <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality) + (wreck ? '|wreck' : '')} element={element} wreck={wreck} />
+      <BakedShip bakeKey={bakeKey(id, rest.livery, lod, quality) + (wreck ? '|wreck' : '') + (dressed ? '|parts' : '')} element={element} wreck={wreck} parts={dressed} rigCullX={dressed ? (rest.rigCullX ?? null) : null} />
       {dressed && lod <= 1 && !wreck && <DeckDressing shipId={id} livery={rest.livery} damage={rest.damage} />}
     </>
   )
@@ -136,12 +136,10 @@ function Afloat({ position, depth, rotationY, children }: { position: Vec3; dept
 }
 
 /**
- * Lod of a ship in a fixed-lod fleet. The dressed (standing) ship goes live (lod 0) whenever a rigging cull applies (on deck): the
- * Medium / Low tiers render the standing ship from the bake (one merged mesh per material), where neither the
- * rigging cull (`kit/rigCull`) nor per-mast hiding can apply — the gunner's view cone would keep its own shrouds.
+ * The standing ship keeps the tier's lod even while its rigging is culled: the cull hides the baked copy's `bakePart`
+ * meshes (`<BakedShip parts rigCullX>`), so Medium / Low never pay for a live model (BUG-894).
  */
-export function standingShipLod(lod: Lod | 'auto', dressed: boolean, cull: boolean): Lod {
-  if (dressed && cull) return 0
+export function standingShipLod(lod: Lod | 'auto'): Lod {
   return lod === 'auto' ? 2 : lod
 }
 
@@ -165,7 +163,7 @@ export function Fleet({ ships, livery, revealed = true, boardOrigin = BOARD_LAYO
                   {(autoLod) => <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={dressedUid === ship.uid ? 0 : autoLod} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />}
                 </LodGroup>
               ) : (
-                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={standingShipLod(lod ?? 'auto', dressedUid === ship.uid, rigCullX != null)} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />
+                <Ship id={ship.spec.id} livery={livery} damage={damageOf(ship)} sinkProgress={sink} firing={firing?.[ship.uid]} lod={standingShipLod(lod ?? 'auto')} quality={quality} staticWreck={staticWrecks} dressed={dressedUid === ship.uid} rigCullX={dressedUid === ship.uid ? rigCullX : null} phase={ship.origin.x * 1.7 + ship.origin.y} />
               )}
             </group>
           </Afloat>

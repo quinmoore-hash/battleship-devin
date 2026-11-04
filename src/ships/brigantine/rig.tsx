@@ -201,15 +201,18 @@ export interface MastProps {
 export const FORE_BREAK = 0.32
 export const MAIN_BREAK = 0.3
 
+/** Course / topsail / topgallant yards of a foremast of `height` (y above the mast base, width across). */
+export const foreYards = (height: number): { y: number; w: number; sail: [number, number] }[] => [
+  { y: height * 0.4, w: 1.15, sail: [1.1, 0.42] },
+  { y: height * 0.74, w: 0.9, sail: [0.86, height * 0.74 - height * 0.4 - 0.08] },
+  { y: height * 0.93, w: 0.6, sail: [0.56, height * 0.93 - height * 0.74 - 0.06] },
+]
+
 /** Square-rigged foremast: lower mast + top + topmast, course / topsail / topgallant yards and sails. */
 export function ForeMast({ base, height, sails, snapped, damaged, phase, lod, mats, motion, shadows }: MastProps) {
   const lowerH = height * 0.6
   const breakY = height * FORE_BREAK
-  const yards: { y: number; w: number; sail: [number, number] }[] = [
-    { y: height * 0.4, w: 1.15, sail: [1.1, 0.42] },
-    { y: height * 0.74, w: 0.9, sail: [0.86, height * 0.74 - height * 0.4 - 0.08] },
-    { y: height * 0.93, w: 0.6, sail: [0.56, height * 0.93 - height * 0.74 - 0.06] },
-  ]
+  const yards = foreYards(height)
   const torn = Math.max(damaged ? 0.55 : 0, snapped)
   const tilt = snapped
   const lower = (
@@ -322,7 +325,7 @@ export function gaffPose(height: number, set: number) {
 }
 
 export const MAIN_BOOM_LENGTH = 1.06
-export const MAIN_BOOM_Y = 0.42
+export const MAIN_BOOM_Y = 0.6 // clears the walking eye (0.34 model) on the cabin roof (BUG-895 eye lift)
 
 /** Gaff-rigged mainmast: boom, gaff, big fore-and-aft mainsail, gaff topsail. */
 export function MainMast({ base, height, sails, snapped, damaged, phase, lod, mats, motion, shadows }: MastProps) {

@@ -11,7 +11,7 @@ import * as THREE from 'three'
 import type { Vec3 } from '../../scene/layout'
 import { useGameStore } from '../../store/gameStore'
 import { Anchor, Barrel, Cannon, Crate, Flag, HullHole, Lantern, Railing, Ratlines, Rope, RopeCoil, SternLantern, Wheel } from '../kit'
-import { rigCulled } from '../kit/rigCull'
+import { rigCulled, rigPart } from '../kit/rigCull'
 import type { CannonRef, CellDamage, Livery, Lod, ShipDefinition, ShipModelProps } from '../types'
 import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, PIN_HEIGHT, SHROUD_SPREAD, cannonPlacements, cellCenterX, cellOfX, mastBase, shroudRig, sideSign, staySpecs, waistPins, type CannonPlacement, type MastSpec } from './anchors'
 import { GALLEON as G, crossPlane, deckStrip, deckY, halfWidth, keelLine, loftProfile, railY, stations, stemCurve, triangleCount, wale } from './hull'
@@ -589,13 +589,20 @@ function StandingRigging({ lod, livery, sink, cullX = null }: { lod: Lod; livery
         if (rigCulled(s.x, cullX)) return null
         const { from, to } = shroudRig(s)
         return (
-          <group key={s.name}>
+          <group key={s.name} userData={{ bakePart: rigPart(s.x) }}>
             <Ratlines from={from} to={[to[0], to[1], 0.03]} livery={livery} rungs={rungs} spread={SHROUD_SPREAD} lod={lod} />
           </group>
         )
       })}
       {/* stays and backstays: hidden with the mast they rise from while that mast's rigging is culled (first look / manning) */}
-      {staySpecs().map((st, i) => !rigCulled(mastX(st.mast), cullX) && <Rope key={i} from={st.from} to={st.to} livery={livery} sag={st.sag} lod={lod} />)}
+      {staySpecs().map(
+        (st, i) =>
+          !rigCulled(mastX(st.mast), cullX) && (
+            <group key={i} userData={{ bakePart: rigPart(mastX(st.mast)) }}>
+              <Rope from={st.from} to={st.to} livery={livery} sag={st.sag} lod={lod} />
+            </group>
+          ),
+      )}
     </group>
   )
 }

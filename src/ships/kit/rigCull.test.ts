@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS, standingShipLod } from '..'
-import { RIG_CULL_RADIUS, rigCulled, spanCulled } from './rigCull'
+import { RIG_CULL_RADIUS, rigCulled, spanCulled, WALK_CULL_STEP, walkCullX, partCulled, rigPart, spanPart } from './rigCull'
 import { resolveDeckAnchors } from '../../deck/math'
 
 describe('standing-rigging cull while manning (BUG-800)', () => {
@@ -30,13 +30,20 @@ describe('standing-rigging cull while manning (BUG-800)', () => {
   })
 })
 
-describe('standing ship lod while manning', () => {
-  it('the dressed ship goes live (lod 0) only while a cannon is manned; other ships keep the tier lod', () => {
-    expect(standingShipLod(1, true, true)).toBe(0)
-    expect(standingShipLod(2, true, true)).toBe(0)
-    expect(standingShipLod(1, true, false)).toBe(1)
-    expect(standingShipLod(1, false, true)).toBe(1)
-    expect(standingShipLod('auto', false, false)).toBe(2)
+describe('standing ship lod', () => {
+  it('keeps the tier lod — the cull works on the baked copy, never forces a live model (BUG-894)', () => {
+    expect(standingShipLod(1)).toBe(1)
+    expect(standingShipLod(2)).toBe(2)
+    expect(standingShipLod(0)).toBe(0)
+    expect(standingShipLod('auto')).toBe(2)
+  })
+  it('partCulled applies the live rule to a baked part tag', () => {
+    expect(partCulled(rigPart(1.4), 0.9)).toBe(true)
+    expect(partCulled(rigPart(1.4), -0.5)).toBe(false)
+    expect(partCulled(rigPart(1.4), null)).toBe(false)
+    expect(partCulled(spanPart(-1, -0.65), -0.8)).toBe(true)
+    expect(partCulled(spanPart(-1, -0.65), 1.5)).toBe(false)
+    expect(partCulled('deck', 0)).toBe(false)
   })
 })
 
@@ -65,5 +72,31 @@ describe('first look after V / Tab / respawn (BUG-802) and the brigantine nettin
       expect(fore === (c.muzzle[0] > -0.3 && c.muzzle[0] < 0.8), `cannon ${c.cell} fore panel`).toBe(true)
     }
     expect(spanCulled(0, 0.5, null)).toBe(false)
+  })
+})
+
+describe('walking cull follows the player, nothing pops while standing still (BUG-894)', () => {
+  const masts = [0.5, -0.6]
+  it('seeds from the spawn x only when a mast is within RIG_CULL_RADIUS', () => {
+    expect(walkCullX(null, 0.1, masts)).toBe(0.1)
+    expect(walkCullX(null, 2.0, masts)).toBeNull()
+    expect(walkCullX(null, 0, [])).toBeNull()
+  })
+  it('holds the committed x through sub-step drift (standing still, settling), re-commits after WALK_CULL_STEP', () => {
+    expect(walkCullX(0.1, 0.1 + WALK_CULL_STEP * 0.9, masts)).toBe(0.1)
+    expect(walkCullX(0.1, 0.1 - WALK_CULL_STEP * 0.9, masts)).toBe(0.1)
+    expect(walkCullX(0.1, 0.1 + WALK_CULL_STEP, masts)).toBe(0.1 + WALK_CULL_STEP)
+  })
+  it('hysteresis: live until the nearest mast is RIG_CULL_RADIUS + WALK_CULL_STEP away, back when it is within RIG_CULL_RADIUS', () => {
+    expect(walkCullX(1.3, 1.6, masts)).toBe(1.6) // 1.1 from the fore mast: still live
+    expect(walkCullX(1.6, 1.85, masts)).toBeNull() // 1.35 away: baked
+    expect(walkCullX(null, 1.6, masts)).toBeNull() // not back yet
+    expect(walkCullX(null, 1.4, masts)).toBe(1.4)
+  })
+  it('a committed cull never changes without the player moving (same x in → same x out)', () => {
+    for (const x of [-1.5, -0.3, 0.1, 0.9, 1.7]) {
+      const c = walkCullX(null, x, masts)
+      expect(walkCullX(c, x, masts)).toBe(c)
+    }
   })
 })

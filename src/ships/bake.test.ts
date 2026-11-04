@@ -116,6 +116,25 @@ describe('bakeObject', () => {
   })
 })
 
+describe('bakeObject parts (standing-ship rigging cull, BUG-894)', () => {
+  it('keeps `userData.bakePart` subtrees as their own tagged meshes only when asked', () => {
+    const mat = new THREE.MeshStandardMaterial({ color: '#8b5a2b' })
+    const root = new THREE.Group()
+    root.add(box(mat, 0), box(mat, 1))
+    const rig = new THREE.Group()
+    rig.userData.bakePart = 'rig:1.4'
+    rig.add(box(mat, 2), box(mat, 3))
+    root.add(rig)
+    const plain = bakeObject(root)
+    expect(plain.children).toHaveLength(1)
+    const parts = bakeObject(root, undefined, true)
+    expect(parts.children).toHaveLength(2)
+    const tagged = parts.children.filter((c) => c.userData.bakePart === 'rig:1.4')
+    expect(tagged).toHaveLength(1)
+    expect(bakeStats(parts).triangles).toBe(bakeStats(plain).triangles)
+  })
+})
+
 describe('bakeObject collapse (settled wrecks)', () => {
   it('merges every plain mesh and unrolled instance into one silhouette draw in the wreck material', () => {
     const root = new THREE.Group()
