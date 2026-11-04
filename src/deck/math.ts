@@ -673,7 +673,7 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
       if (st.level !== p.level || deck.blocked?.some((b) => inBand(st.x, b))) continue
       const at: Pt = [st.x, st.z]
       const see = (y: number) => clearAhead(deck, at, y, SPAWN_OPEN_VIEW, PLAYER_RADIUS, st.level)
-      candidates.push({ st, k, insetOk: rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6, enemy: see(yaw), bow: see(bow), any: see(clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, st.level)) })
+      candidates.push({ st, k, insetOk: rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6, enemy: Math.max(see(yaw), openView(deck, at, yawToward(0, side), st.level)), bow: see(bow), any: see(clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, st.level)) })
     }
   }
   for (const view of ['enemy', 'bow', 'any'] as const) {
@@ -693,8 +693,13 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
 }
 
 /** The spawn facing from the stand `p`: the enemy when the view that way is open for SPAWN_OPEN_VIEW, else the fallbacks / sweep. */
-export const spawnLookYaw = (deck: DeckAnchors, p: WalkPose, localYaw: number, side: 1 | -1): number =>
-  clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, p.level)
+export const spawnLookYaw = (deck: DeckAnchors, p: WalkPose, localYaw: number, side: 1 | -1): number => {
+  // the enemy's beam over the rail is the spawn view whenever no deck obstacle (mast, capstan …) stands in it: a higher
+  // castle beside the stand counts as a wall for walking but not for looking out to sea over the rail
+  const beam = yawToward(0, side)
+  if (openView(deck, [p.x, p.z], beam, p.level) >= SPAWN_OPEN_VIEW) return beam
+  return clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, p.level)
+}
 
 /**
  * Yaws to try after the enemy-facing one: along the deck toward the bow (the waist and the ship in frame — the quarterdeck
@@ -705,6 +710,10 @@ export const spawnLookYaw = (deck: DeckAnchors, p: WalkPose, localYaw: number, s
  * beam on a vertically placed ship, and a cleat or ladder on that bearing used to send the spawn facing along the deck,
  * where a run along the rail walks into the bulwark — e2e footsteps), then the bow, the far beam and the stern.
  */
+/** Distance to the first deck obstacle along `yaw` (no walk-edge / higher-deck rule): the view over the rail to the sea. */
+export const openView = (deck: DeckAnchors, p: Pt, yaw: number, level?: number): number =>
+  clearAhead({ ...deck, walk: [] }, p, yaw, SPAWN_OPEN_VIEW, PLAYER_RADIUS, level)
+
 export const spawnYawFallbacks = (side: 1 | -1): number[] => [yawToward(0, side), yawToward(1, 0), yawToward(0, -side), yawToward(-1, 0)]
 
 

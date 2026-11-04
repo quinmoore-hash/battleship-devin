@@ -815,7 +815,7 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw, SPAWN_OPEN_VIEW, undefined, v.p.level)).toBe(SPAWN_OPEN_VIEW)
     expect(lookForward(v.yaw, 0)[2] * v.side).toBeGreaterThan(0.9) // toward the enemy's side of the deck
     const h = controllerSpawn('man-o-war', 'horizontal')
-    expect(h.yaw).toBe(h.localYaw)
+    expect(Math.abs(angleDelta(h.yaw, h.localYaw))).toBeLessThan(0.1) // the enemy beam (openView) ≈ the enemy bearing
     expect(clearAhead(h.deck, [h.p.x, h.p.z], h.yaw, SPAWN_OPEN_VIEW, undefined, h.p.level)).toBe(SPAWN_OPEN_VIEW)
   })
 
@@ -878,7 +878,7 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     const v = controllerSpawn('man-o-war', 'vertical')
     expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw)).toBe(SPAWN_CLEAR_AHEAD)
     const h = controllerSpawn('man-o-war', 'horizontal')
-    expect(h.yaw).toBe(h.localYaw)
+    expect(Math.abs(angleDelta(h.yaw, h.localYaw))).toBeLessThan(0.1) // the enemy beam (openView) ≈ the enemy bearing
   })
 })
 
