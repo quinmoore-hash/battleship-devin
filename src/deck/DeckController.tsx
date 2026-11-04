@@ -183,7 +183,7 @@ export function DeckController() {
     vel.current = { x: 0, z: 0 }
     air.current = GROUNDED
     // a vertical ship faces the enemy along its own deck — into a mast trunk; look where the near view is clear
-    look.current = { yaw: clearLookYaw(geometry.deckA, [p.x, p.z], localYaw, spawnYawFallbacks(side)), pitch: SPAWN_PITCH }
+    look.current = { yaw: clearLookYaw(geometry.deckA, [p.x, p.z], localYaw, spawnYawFallbacks(side), undefined, p.level), pitch: SPAWN_PITCH }
     glance.current = { yaw: 0, pitch: 0 }
     tumble.current = 0
   }, [foeCenter])

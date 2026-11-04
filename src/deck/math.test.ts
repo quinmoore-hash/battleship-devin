@@ -753,7 +753,7 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     let p = spawnPoseAvoiding(deck, [], n)
     const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
     p = spawnStand(deck, p, side, localYaw)
-    return { deck, p, localYaw, side, yaw: clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side)) }
+    return { deck, p, localYaw, side, yaw: clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side), undefined, p.level) }
   }
 
   it('clearAhead: ray–circle distance, player radius wide', () => {
@@ -764,6 +764,16 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(clearAhead(d, [0.45, 0], yawToward(1, 0))).toBe(0) // standing inside it, looking into it
     expect(clearAhead(d, [0.5 - 0.1 - PLAYER_RADIUS, 0], yawToward(-1, 0))).toBe(SPAWN_CLEAR_AHEAD) // on its clearance ring, looking away
     expect(clearAhead(d, [0, 0], yawToward(1, 0), 0.3)).toBe(0.3) // shorter reach: clear
+  })
+
+  it('clearAhead: the front of a higher level is a wall, a break down to a lower deck or a rail is not', () => {
+    const quarter = rectPolygon(1, 1, 0).map(([x, z]): [number, number] => [x + 0.5, z]) // x ∈ [0, 1]
+    const waist = rectPolygon(1, 1, 0).map(([x, z]): [number, number] => [x - 0.5, z]) // x ∈ [-1, 0]
+    const d: DeckAnchors = { spawn: [0, 0, 0], walk: [{ points: waist, y: 0 }, { points: quarter, y: 0.1 }], ramps: [], obstacles: [], stations: [] }
+    expect(clearAhead(d, [-0.3, 0], yawToward(1, 0), undefined, undefined, 0)).toBeCloseTo(0.3, 9) // waist → quarterdeck front: wall
+    expect(clearAhead(d, [0.3, 0], yawToward(-1, 0), undefined, undefined, 1)).toBe(SPAWN_CLEAR_AHEAD) // quarterdeck → down to the waist: clear
+    expect(clearAhead(d, [-0.3, 0], yawToward(-1, 0), undefined, undefined, 0)).toBe(SPAWN_CLEAR_AHEAD) // over the stern rail: clear
+    expect(clearAhead(d, [-0.3, 0.3], yawToward(0, 1), undefined, undefined, 0)).toBe(SPAWN_CLEAR_AHEAD) // over the beam rail: clear
   })
 
   it('clearLookYaw keeps the enemy facing when clear, else the first clear fallback, else the farthest view', () => {
@@ -783,8 +793,8 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
       for (const orientation of ['horizontal', 'vertical'] as const) {
         const { deck, p, localYaw, side, yaw } = controllerSpawn(id, orientation)
         const label = `${id} ${orientation}`
-        const d = clearAhead(deck, [p.x, p.z], yaw)
-        const alternatives = [localYaw, ...spawnYawFallbacks(side), ...Array.from({ length: 16 }, (_, i) => localYaw + (i * Math.PI) / 8)].map((y) => clearAhead(deck, [p.x, p.z], y))
+        const d = clearAhead(deck, [p.x, p.z], yaw, undefined, undefined, p.level)
+        const alternatives = [localYaw, ...spawnYawFallbacks(side), ...Array.from({ length: 16 }, (_, i) => localYaw + (i * Math.PI) / 8)].map((y) => clearAhead(deck, [p.x, p.z], y, undefined, undefined, p.level))
         expect(d, label).toBeGreaterThanOrEqual(Math.min(SPAWN_CLEAR_AHEAD, Math.max(...alternatives)) - 1e-9)
         expect(d, label).toBeGreaterThan(0.1)
       }

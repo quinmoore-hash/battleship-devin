@@ -534,10 +534,33 @@ export function spawnPoseAvoiding(deck: WalkableDeck, hit: readonly number[], n:
 /** How far ahead of a freshly spawned player the view must be clear of obstacles (a mast trunk 0.2 u ahead fills the screen). */
 export const SPAWN_CLEAR_AHEAD = 0.6
 
-/** Distance along the look direction `yaw` from `p` before the ray (a player-radius wide) meets an obstacle; ≥ `reach` when clear. */
-export function clearAhead(deck: DeckAnchors, p: Pt, yaw: number, reach = SPAWN_CLEAR_AHEAD, radius = PLAYER_RADIUS): number {
+/** A deck level this much higher than the one ahead of the player is a wall in the view (a cabin front, a poop break). */
+export const WALL_STEP = 0.02
+
+/**
+ * Distance along the look direction `yaw` from `p` before the ray (a player-radius wide) meets an obstacle or the front of
+ * a higher deck level; ≥ `reach` when clear. Rails and breaks down to a lower deck do not block (looking over them is the
+ * point). `level` is the walk level `p` stands on (found from `p` when omitted).
+ */
+export function clearAhead(deck: DeckAnchors, p: Pt, yaw: number, reach = SPAWN_CLEAR_AHEAD, radius = PLAYER_RADIUS, level?: number): number {
   const f = lookForward(yaw, 0)
   let best = reach
+  const lv = level ?? Math.max(0, levelAt(p, deck))
+  const walk = deck.walk[lv]
+  if (walk) {
+    const len = Math.hypot(f[0], f[2]) || 1
+    const dir: Pt = [f[0] / len, f[2] / len]
+    const edge = rayToPolygonEdge(p, dir, walk.points)
+    if (edge < best) {
+      for (const probe of [0.03, 0.1, 0.2]) {
+        const q: Pt = [p[0] + dir[0] * (edge + probe), p[1] + dir[1] * (edge + probe)]
+        if (deck.walk.some((w, i) => i !== lv && w.y > walk.y + WALL_STEP && pointInPolygon(q, w.points))) {
+          best = edge
+          break
+        }
+      }
+    }
+  }
   for (const o of deck.obstacles) {
     // ray–circle: |p + t·f − c| = r + radius, smallest t ≥ 0
     const r = o.radius + radius
@@ -563,12 +586,12 @@ export function clearAhead(deck: DeckAnchors, p: Pt, yaw: number, reach = SPAWN_
  * of `fallbacks` that is (the enemy's side of the ship, then the other beam, then along the deck), else the yaw that
  * sees farthest (fallbacks, then a 16-point sweep).
  */
-export function clearLookYaw(deck: DeckAnchors, p: Pt, yaw: number, fallbacks: readonly number[], reach = SPAWN_CLEAR_AHEAD): number {
+export function clearLookYaw(deck: DeckAnchors, p: Pt, yaw: number, fallbacks: readonly number[], reach = SPAWN_CLEAR_AHEAD, level?: number): number {
   let best = yaw
-  let bestD = clearAhead(deck, p, yaw, reach)
+  let bestD = clearAhead(deck, p, yaw, reach, PLAYER_RADIUS, level)
   if (bestD >= reach) return yaw
   const consider = (y: number) => {
-    const d = clearAhead(deck, p, y, reach)
+    const d = clearAhead(deck, p, y, reach, PLAYER_RADIUS, level)
     if (d > bestD + 1e-9) {
       best = y
       bestD = d
@@ -645,7 +668,7 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
       if (st.level !== p.level || deck.blocked?.some((b) => inBand(st.x, b))) continue
       const at: Pt = [st.x, st.z]
       const insetOk = rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6
-      const view = clearAhead(deck, at, clearLookYaw(deck, at, yaw, spawnYawFallbacks(side)))
+      const view = clearAhead(deck, at, clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_CLEAR_AHEAD, st.level), SPAWN_CLEAR_AHEAD, PLAYER_RADIUS, st.level)
       if (insetOk && view >= SPAWN_CLEAR_AHEAD) return st
       const score = (insetOk ? 1 : 0) + view / SPAWN_CLEAR_AHEAD - k * 0.01
       if (score > bestScore) {
