@@ -16,7 +16,7 @@ import { CinematicCamera } from './CinematicCamera'
 import { CinematicLayer } from './CinematicLayer'
 import { Letterbox } from './Letterbox'
 import { director } from './director'
-import { deckEye, readDeckState, standingCell, standingShip } from './pov'
+import { cannonEngineCell, deckEye, readDeckState, standingCell, standingShip } from './pov'
 import { localToWorld } from '../vfx/cannon/anchors'
 import type { CinematicEvent } from './types'
 
@@ -162,7 +162,8 @@ export function CinematicsDemo() {
     const pose = shipWorldTransform(ship, BOARD_LAYOUT.player.origin)
     // the section the player is on: the manned gun's cell (the demo mans station 0), else the one under the eye
     const station = readDeckState().station
-    const manned = station !== null ? SHIPS[ship.spec.id].anchors.cannons[station]?.cell : undefined
+    const mannedCell = station !== null ? SHIPS[ship.spec.id].anchors.cannons[station]?.cell : undefined
+    const manned = mannedCell !== undefined ? cannonEngineCell(mannedCell, ship.spec.length) : undefined
     const cell = ship.cells[manned ?? standingCell(ship, pose, deckEye.position ?? deckEyePosition(ship))]
     if (ship.hits.some((h) => h.x === cell.x && h.y === cell.y)) return say('my section is already hit')
     const result: ShotResult = { coord: cell, outcome: ship.hits.length + 1 >= ship.spec.length ? 'sunk' : 'hit', shipId: ship.spec.id, shipUid: ship.uid }
