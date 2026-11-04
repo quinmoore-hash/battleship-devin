@@ -583,8 +583,8 @@ export function clearAhead(deck: DeckAnchors, p: Pt, yaw: number, reach = SPAWN_
 
 /**
  * The spawn facing: `yaw` (toward the enemy waters) when the first `reach` ahead is free of obstacles, else the first
- * of `fallbacks` that is (the enemy's side of the ship, then the other beam, then along the deck), else the yaw that
- * sees farthest (fallbacks, then a 16-point sweep).
+ * of `fallbacks` that is (`spawnYawFallbacks`: bow, the enemy's beam, the other beam, stern), else the yaw that sees
+ * farthest (fallbacks, then a 16-point sweep).
  */
 export function clearLookYaw(deck: DeckAnchors, p: Pt, yaw: number, fallbacks: readonly number[], reach = SPAWN_CLEAR_AHEAD, level?: number): number {
   let best = yaw
@@ -680,8 +680,11 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
   return best ?? p
 }
 
-/** Yaws to try after the enemy-facing one: the enemy's beam (`side` = sign of z toward the enemy), the other beam, bow, stern. */
-export const spawnYawFallbacks = (side: 1 | -1): number[] => [yawToward(0, side), yawToward(0, -side), yawToward(1, 0), yawToward(-1, 0)]
+/**
+ * Yaws to try after the enemy-facing one: along the deck toward the bow (the waist and the ship in frame — the quarterdeck
+ * beams are lined with shrouds), the enemy's beam (`side` = sign of z toward the enemy), the other beam, the stern.
+ */
+export const spawnYawFallbacks = (side: 1 | -1): number[] => [yawToward(1, 0), yawToward(0, side), yawToward(0, -side), yawToward(-1, 0)]
 
 
 /** Yaw (radians, 'YXZ' camera convention: yaw 0 looks down −z) that faces the horizontal direction (dx, dz). */
