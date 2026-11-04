@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS } from '../ships'
-import { MASTS, mastBase, mastTop, riggingSegments } from '../ships/galleon/anchors'
+import { MASTS, bulwarkSegments, mastBase, mastTop, riggingSegments } from '../ships/galleon/anchors'
 import { YARDS } from '../ships/galleon'
 import { GALLEON } from '../ships/galleon/hull'
 import type { Vec3 } from '../scene/layout'
@@ -8,6 +8,7 @@ import { BOARD_LAYOUT, boardCenter, cellToWorld } from '../scene/layout'
 import { shipRotationY, shipWorldTransform } from '../ships'
 import { FLEET_BY_ID, type PlacedShip } from '../engine'
 import { DECK_FOV, DECK_NEAR, EYE_HEIGHT, type DeckAnchors } from './contract'
+const DECK_FOV_RAD = (DECK_FOV * Math.PI) / 180
 import {
   EYE_CLEARANCE,
   FALLBACK_EYE,
@@ -41,7 +42,6 @@ import {
   gunnerEyeXZ,
   viewConeBlocked,
   SPAWN_PITCH,
-  GUN_CONE_HALF,
   GUN_CONE_CLEAR,
   GUN_EYE_BACK,
   GUN_EYE_BEHIND_BREECH,
@@ -566,7 +566,7 @@ describe('station pick hysteresis + marker fade (BUG-7xx)', () => {
 
 describe('eye outside the geometry (BUG-7xx, owner clips a + b)', () => {
   it('the walking eye sees over the lowest reachable cap rail on every class (0.17 u was under the bulwark on three of five)', () => {
-    const want: Record<string, number> = { 'man-o-war': 0.31, galleon: 0.31, frigate: 0.275, brigantine: 0.183, sloop: 0.18 }
+    const want: Record<string, number> = { 'man-o-war': 0.31, galleon: 0.46, frigate: 0.275, brigantine: 0.183, sloop: 0.18 }
     for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
       const a = SHIPS[id].anchors
       const deck = resolveDeckAnchors(a, id)
@@ -888,41 +888,65 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(Math.abs(angleDelta(h.yaw, h.localYaw))).toBeLessThan(0.1) // the enemy beam (openView) ≈ the enemy bearing
   })
 
-  describe('galleon spawn view cone (BUG-893): the waist stand looks over the cap rail, not into the shroud fans', () => {
-    /** Own-ship geometry that can cross a first look: shrouds + stays, mast trunks, yards, and the guns (breech → muzzle). */
-    const ownGeometry = () => {
-      const segs = [...riggingSegments()]
+  describe('galleon spawn first frame (BUG-893): 1440×900 central box clear of own-ship lines, cap rail in the bottom fifth', () => {
+    /** Own-ship lines a first look can cross: shrouds + stays, mast trunks, yards, guns (breech → muzzle), cap rail + pins, and a crew figure at every on-deck gun stand. */
+    const ownLines = (stations: readonly Station[]) => {
+      const segs = [...riggingSegments(), ...bulwarkSegments()]
       for (const m of MASTS) {
         segs.push({ a: mastBase(m), b: mastTop(m) })
         for (const y of YARDS[m.name]) segs.push({ a: [m.x, mastBase(m)[1] + y.y, -y.width / 2], b: [m.x, mastBase(m)[1] + y.y, y.width / 2] })
       }
       for (const c of SHIPS.galleon.anchors.cannons) segs.push({ a: [c.muzzle[0], c.muzzle[1], c.muzzle[2] * 0.4], b: c.muzzle })
+      for (const s of stations) if (s.onDeck) segs.push({ a: s.stand, b: [s.stand[0], s.stand[1] + CREW_FIGURE_HEIGHT, s.stand[2]] })
       return segs
     }
+    const CREW_FIGURE_HEIGHT = 0.3
+    const W = 1440
+    const H = 900
+    const BOX = { x0: 480, x1: 960, y0: 180, y1: 720 }
+    /** Pixel position of ship-space point `q` for an eye at `eye` looking (`yaw`, `pitch`) through the deck camera (vertical fov DECK_FOV). */
+    const project = (eye: Vec3, yaw: number, pitch: number, q: Vec3) => {
+      const f = lookForward(yaw, pitch)
+      const r: Vec3 = [-f[2], 0, f[0]]
+      const rl = Math.hypot(r[0], r[2])
+      r[0] /= rl
+      r[2] /= rl
+      const u: Vec3 = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]]
+      const d: Vec3 = [q[0] - eye[0], q[1] - eye[1], q[2] - eye[2]]
+      const z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2]
+      const x = d[0] * r[0] + d[1] * r[1] + d[2] * r[2]
+      const y = d[0] * u[0] + d[1] * u[1] + d[2] * u[2]
+      const t = Math.tan(DECK_FOV_RAD / 2)
+      return { z, px: W / 2 + ((x / z) * (W / 2)) / (t * (W / H)), py: H / 2 - ((y / z) * (H / 2)) / t, dist: Math.hypot(d[0], d[1], d[2]) }
+    }
 
-    it.each(['horizontal', 'vertical'] as const)('%s placement: stand on the waist at the enemy rail, nothing nearer than 1 u inside the central ±25° cone', (orientation) => {
+    it.each(['horizontal', 'vertical'] as const)('%s placement', (orientation) => {
       const { deck, p, side, yaw } = controllerSpawn('galleon', orientation)
+      const stations = stationsOf(SHIPS.galleon.anchors, deck)
       expect(p.y).toBeCloseTo(GALLEON.mainDeckY, 6)
       expect(Math.sign(p.z)).toBe(side)
       expect(Math.abs(lookForward(yaw, 0)[2])).toBeGreaterThan(0.95)
-      const eye: Vec3 = [p.x, p.y + walkEyeHeight(deck, stationsOf(SHIPS.galleon.anchors, deck)), p.z]
-      const segs = ownGeometry()
-      expect(segs.length).toBeGreaterThan(30)
-      expect(viewConeBlocked(segs, eye, yaw, SPAWN_PITCH)).toBe(false)
-      const f = lookForward(yaw, SPAWN_PITCH)
+      const eye: Vec3 = [p.x, p.y + walkEyeHeight(deck, stations), p.z]
+      const segs = ownLines(stations)
+      expect(segs.length).toBeGreaterThan(60)
+      let railTop = Infinity
       for (const seg of segs) {
         for (let i = 0; i <= 16; i++) {
           const t = i / 16
-          const d: Vec3 = [seg.a[0] + (seg.b[0] - seg.a[0]) * t - eye[0], seg.a[1] + (seg.b[1] - seg.a[1]) * t - eye[1], seg.a[2] + (seg.b[2] - seg.a[2]) * t - eye[2]]
-          const len = Math.hypot(d[0], d[1], d[2])
-          if ((d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / len > Math.cos(GUN_CONE_HALF)) expect(len, `${JSON.stringify(seg)} inside the spawn cone`).toBeGreaterThanOrEqual(GUN_CONE_CLEAR)
+          const q: Vec3 = [seg.a[0] + (seg.b[0] - seg.a[0]) * t, seg.a[1] + (seg.b[1] - seg.a[1]) * t, seg.a[2] + (seg.b[2] - seg.a[2]) * t]
+          const { z, px, py, dist } = project(eye, yaw, SPAWN_PITCH, q)
+          if (z <= 0 || px < BOX.x0 || px > BOX.x1) continue
+          if (dist <= 1.5) railTop = Math.min(railTop, py)
+          // (b) nothing of the own ship nearer than 1 u inside the central box
+          if (dist <= GUN_CONE_CLEAR) expect(py, `${JSON.stringify(seg)} at ${px.toFixed(0)},${py.toFixed(0)} (${dist.toFixed(2)} u) inside the central box`).toBeGreaterThan(BOX.y1)
         }
       }
+      // (a) the nearest own-ship line across the box columns (the cap rail) starts in the bottom fifth of the frame
+      expect(railTop).toBeGreaterThanOrEqual(BOX.y1)
     })
   })
 })
 
-const DECK_FOV_RAD = (DECK_FOV * Math.PI) / 180
 
 describe('manned eye stays inboard with the barrel in frame (BUG-800)', () => {
   it('every on-deck station of every class: eye GUN_EYE_BEHIND_BREECH behind the breech on the barrel axis, inside the bulwark, muzzle in the lower half of the frame', () => {

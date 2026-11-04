@@ -64,6 +64,12 @@ export interface DeckActions {
 export interface DeckAnchors {
   /** Where the player appears when boarding (typically the quarterdeck behind the helm). */
   spawn: Vec3
+  /**
+   * Walking eye height over the feet for this deck (ship units), when the class needs more than `EYE_HEIGHT` lifted
+   * `WALK_EYE_OVER_RAIL` over its lowest cap rail — e.g. the galleon's belaying pins stand 0.11 u proud of the waist rail
+   * (BUG-893). Still lifted over the lowest rail and capped by `WALK_EYE_MAX`.
+   */
+  eyeHeight?: number
   /** Walkable region: a convex polygon in the x/z plane (CCW), at `ShipAnchors.deckY`. Multiple polygons = multiple deck levels joined by `ramps`. */
   walk: { points: [number, number][]; y: number }[]
   /** Short ramps/stairs between two walkable polygons: walking across the segment lerps y from `from.y` to `to.y`. */

@@ -13,7 +13,7 @@ import { useGameStore } from '../../store/gameStore'
 import { Anchor, Barrel, Cannon, Crate, Flag, HullHole, Lantern, Railing, Ratlines, Rope, RopeCoil, SternLantern, Wheel } from '../kit'
 import { rigCulled } from '../kit/rigCull'
 import type { CannonRef, CellDamage, Livery, Lod, ShipDefinition, ShipModelProps } from '../types'
-import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, SHROUD_SPREAD, cannonPlacements, cellCenterX, cellOfX, mastBase, shroudRig, sideSign, staySpecs, type CannonPlacement, type MastSpec } from './anchors'
+import { CANNON_SCALE, GALLEON_ANCHORS, GUN_PORT_SIZE, GUN_PORT_Y, IMPACT_Y, MASTS, PIN_HEIGHT, SHROUD_SPREAD, cannonPlacements, cellCenterX, cellOfX, mastBase, shroudRig, sideSign, staySpecs, waistPins, type CannonPlacement, type MastSpec } from './anchors'
 import { GALLEON as G, crossPlane, deckStrip, deckY, halfWidth, keelLine, loftProfile, railY, stations, stemCurve, triangleCount, wale } from './hull'
 import { galleonMaterials, type GalleonMaterials } from './materials'
 import { Beam, ClothSail, Door, Ensign, FurledBundle, Grating, Instanced, Splinters, Stairs, Window } from './parts'
@@ -603,13 +603,9 @@ function StandingRigging({ lod, livery, sink, cullX = null }: { lod: Lod; livery
 /* ---------------------------------------------------------------------------------------------- deck fittings */
 
 function DeckFittings({ lod, m, livery }: { lod: Lod; m: GalleonMaterials; livery: Livery }) {
-  const pinGeom = useMemo(() => new THREE.CylinderGeometry(0.006, 0.006, 0.07, 5), [])
+  const pinGeom = useMemo(() => new THREE.CylinderGeometry(0.006, 0.006, PIN_HEIGHT, 5), [])
   const cleatGeom = useMemo(() => new THREE.BoxGeometry(0.06, 0.018, 0.02), [])
-  const pins = useMemo(() => {
-    const out: { position: Vec3 }[] = []
-    for (let x = -0.35; x <= 0.85; x += 0.1) for (const s of [1, -1]) out.push({ position: [x, G.waistRailY + 0.04, s * (halfWidth(x, G.waistRailY) - G.plank - 0.035)] })
-    return out
-  }, [])
+  const pins = useMemo(() => waistPins().map((position) => ({ position })), [])
   const cleats = useMemo(() => {
     const out: { position: Vec3 }[] = []
     for (const x of [-1.7, -1.4, -0.9, -0.6, 1.1, 1.4]) for (const s of [1, -1]) out.push({ position: [x, railY(x) + 0.04, s * (halfWidth(x, railY(x)) - G.plank - 0.02)] })

@@ -867,11 +867,13 @@ export const glowScaleCap = (distance: number): number => (Math.max(0, distance)
 
 /** The walking eye sits at least this far over the lowest cap rail of the ship's reachable guns. */
 export const WALK_EYE_OVER_RAIL = 0.04
-export const WALK_EYE_MAX = 0.4
+export const WALK_EYE_MAX = 0.5
 /**
  * Eye height over the feet while walking `deck`: `EYE_HEIGHT` (0.17), lifted to see over the bulwark where the authored
  * rails are taller than that (man-o'-war / galleon 0.27 u, frigate 0.235 u) — the sailor's eye was below the cap rail
  * on three classes, so standing at the side showed nothing but the inside of the planking (BUG-7xx, owner's clip b).
+ * A deck may author `eyeHeight` instead when that lift still leaves the rail mid-frame (galleon, BUG-893: the cap rail
+ * + belaying pins must start in the bottom fifth of a 1440×900 first frame).
  */
 export function walkEyeHeight(deck: DeckAnchors, stations: readonly Station[]): number {
   // the lowest rail of each deck level (a quarterdeck's low rail must not drop the eye under the waist's bulwark), then the
@@ -882,7 +884,7 @@ export function walkEyeHeight(deck: DeckAnchors, stations: readonly Station[]): 
     const key = Math.round(s.stand[1] * 1000)
     lowestPerLevel.set(key, Math.min(lowestPerLevel.get(key) ?? Infinity, s.rail - s.stand[1]))
   }
-  let eye = eyeFor(deck)
+  let eye = deck.eyeHeight ?? eyeFor(deck)
   for (const rail of lowestPerLevel.values()) eye = Math.max(eye, rail + WALK_EYE_OVER_RAIL)
   return Math.min(WALK_EYE_MAX, eye)
 }

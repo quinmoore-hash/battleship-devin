@@ -106,6 +106,31 @@ export function staySpecs(): StaySpec[] {
   return out
 }
 
+/** Belaying pins along the waist cap rail: a pin every 0.1 u from x −0.35 to 0.85, both sides (DeckFittings). */
+export const PIN_HEIGHT = 0.07
+export function waistPins(): Vec3[] {
+  const G = GALLEON
+  const out: Vec3[] = []
+  for (let x = -0.35; x <= 0.85; x += 0.1) for (const s of [1, -1]) out.push([x, G.waistRailY + 0.04, s * (halfWidth(x, G.waistRailY) - G.plank - 0.035)])
+  return out
+}
+
+/** Height of the cap rail's top face above the deck plane at `x` (hull `railCap` loft: railY + 0.03). */
+export const capRailTop = (x: number): number => railY(x) + 0.03
+
+/**
+ * The bulwark as seen from the waist, as thin segments (BUG-893): the cap rail's inboard top edge along the waist, and the
+ * belaying pins standing on it. Together with `riggingSegments()` this is every own-ship line a first look can cross.
+ */
+export function bulwarkSegments(): { a: Vec3; b: Vec3 }[] {
+  const G = GALLEON
+  const out: { a: Vec3; b: Vec3 }[] = []
+  const edge = (x: number, s: number): Vec3 => [x, capRailTop(x), s * (halfWidth(x, capRailTop(x)) - G.plank - 0.012)]
+  for (const s of [1, -1]) for (let x = G.quarterX; x < G.forecastleX - 1e-9; x += 0.05) out.push({ a: edge(x, s), b: edge(Math.min(x + 0.05, G.forecastleX), s) })
+  for (const p of waistPins()) out.push({ a: [p[0], p[1] - PIN_HEIGHT / 2, p[2]], b: [p[0], p[1] + PIN_HEIGHT / 2, p[2]] })
+  return out
+}
+
 /** Every standing-rigging line (shrouds of all three masts, stays, backstays) as ship-space segments, for view-cone tests. */
 export function riggingSegments(): { a: Vec3; b: Vec3 }[] {
   return [...MASTS.flatMap((m) => shroudLines(shroudRig(m).from, shroudRig(m).to, 3, SHROUD_SPREAD)), ...staySpecs().map(({ from, to }) => ({ a: from, b: to }))]
@@ -141,6 +166,7 @@ export function buildGalleonDeck(cannons: ShipAnchors['cannons'], masts: ShipAnc
     ]
   return {
     spawn: [0.55, G.mainDeckY, 0.25],
+    eyeHeight: 0.46,
     walk,
     ramps: [breakRamp(0, 1, G.quarterX, 0.12), breakRamp(1, 2, G.poopX, 0.1, 0.15), breakRamp(0, 3, G.forecastleX, 0.12)],
     obstacles,
