@@ -560,22 +560,101 @@ export function clearAhead(deck: DeckAnchors, p: Pt, yaw: number, reach = SPAWN_
 
 /**
  * The spawn facing: `yaw` (toward the enemy waters) when the first `reach` ahead is free of obstacles, else the first
- * of `fallbacks` that is (the enemy's side of the ship, then the other beam, then along the deck), else whichever of
- * them sees farthest.
+ * of `fallbacks` that is (the enemy's side of the ship, then the other beam, then along the deck), else the yaw that
+ * sees farthest (fallbacks, then a 16-point sweep).
  */
 export function clearLookYaw(deck: DeckAnchors, p: Pt, yaw: number, fallbacks: readonly number[], reach = SPAWN_CLEAR_AHEAD): number {
   let best = yaw
   let bestD = clearAhead(deck, p, yaw, reach)
   if (bestD >= reach) return yaw
-  for (const y of fallbacks) {
+  const consider = (y: number) => {
     const d = clearAhead(deck, p, y, reach)
-    if (d >= reach) return y
-    if (d > bestD) {
+    if (d > bestD + 1e-9) {
       best = y
       bestD = d
     }
+    return d >= reach
+  }
+  for (const y of fallbacks) if (consider(y)) return y
+  // boxed in on every preferred side (a cramped cabin roof): sweep the compass for the farthest view
+  for (let i = 0; i < 16; i++) consider(yaw + (i * Math.PI) / 8)
+  return best
+}
+
+/** Distance from `p` along the unit xz direction `dir` to the first edge of `poly` (Infinity when the ray meets none). */
+export function rayToPolygonEdge(p: Pt, dir: Pt, poly: readonly Pt[]): number {
+  let best = Infinity
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]
+    const b = poly[(i + 1) % poly.length]
+    const ex = b[0] - a[0]
+    const ez = b[1] - a[1]
+    const den = dir[0] * ez - dir[1] * ex
+    if (Math.abs(den) < 1e-12) continue
+    const wx = a[0] - p[0]
+    const wz = a[1] - p[1]
+    const t = (wx * ez - wz * ex) / den
+    const u = (wx * dir[1] - wz * dir[0]) / den
+    if (t >= -1e-9 && u >= -1e-9 && u <= 1 + 1e-9 && t < best) best = Math.max(0, t)
   }
   return best
+}
+
+/** Deck the spawn keeps between the stand and the rail it faces (the eye over the rail would otherwise see only water). */
+export const RAIL_INSET = 0.12
+/** The spawn look starts a touch downward so rail and planks are in frame. */
+export const SPAWN_PITCH = -0.12
+
+/** Deck ahead of `p` along `yaw` on `level` before the rail (the walk polygon's edge). */
+export function railAhead(deck: DeckAnchors, p: Pt, level: number, yaw: number): number {
+  const f = lookForward(yaw, 0)
+  const len = Math.hypot(f[0], f[2]) || 1
+  const walk = deck.walk[level]?.points
+  return walk ? rayToPolygonEdge(p, [f[0] / len, f[2] / len], walk) : Infinity
+}
+
+/** How far along the deck (±x, in `SPAWN_SHIFT_STEP`s) the spawn stand may back off to find a clear view. */
+export const SPAWN_SHIFT_MAX = 0.3
+export const SPAWN_SHIFT_STEP = 0.05
+
+/**
+ * The stand a boarding player takes from the chosen pose `p`: on the enemy's side of the deck (`side` = sign of z toward
+ * the enemy) but at least `RAIL_INSET` (+ the player radius) from that rail, settled on the deck, out of obstacles and
+ * blocked bands — and, when the view from there is boxed in (a mast trunk, a cabin fixture), backed off along the deck
+ * up to `SPAWN_SHIFT_MAX` to the nearest stand whose look (`clearLookYaw` from `yaw`) is clear. A deck too narrow for the
+ * inset stands on its centreline.
+ */
+export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: number, inset = RAIL_INSET): WalkPose {
+  const walk = deck.walk[p.level]?.points
+  if (!walk) return p
+  const keep = inset + PLAYER_RADIUS
+  const standAt = (x: number): WalkPose => {
+    const q: Pt = clampToPolygon([x, side * Math.abs(p.z)], walk)
+    const toRail = rayToPolygonEdge(q, [0, side], walk)
+    if (toRail < keep) {
+      const toOther = rayToPolygonEdge(q, [0, -side], walk)
+      q[1] = toOther + toRail < 2 * keep ? q[1] - side * (toOther - toRail) * 0.5 : q[1] - side * (keep - toRail)
+    }
+    return stepOnDeck({ ...p, x: q[0], z: q[1] }, 0, 0, deck)
+  }
+  let best: WalkPose | null = null
+  let bestScore = -Infinity
+  for (let k = 0; k * SPAWN_SHIFT_STEP <= SPAWN_SHIFT_MAX + 1e-9; k++) {
+    for (const dir of k === 0 ? [0] : [-1, 1]) {
+      const st = standAt(p.x + dir * k * SPAWN_SHIFT_STEP)
+      if (st.level !== p.level || deck.blocked?.some((b) => inBand(st.x, b))) continue
+      const at: Pt = [st.x, st.z]
+      const insetOk = rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6
+      const view = clearAhead(deck, at, clearLookYaw(deck, at, yaw, spawnYawFallbacks(side)))
+      if (insetOk && view >= SPAWN_CLEAR_AHEAD) return st
+      const score = (insetOk ? 1 : 0) + view / SPAWN_CLEAR_AHEAD - k * 0.01
+      if (score > bestScore) {
+        bestScore = score
+        best = st
+      }
+    }
+  }
+  return best ?? p
 }
 
 /** Yaws to try after the enemy-facing one: the enemy's beam (`side` = sign of z toward the enemy), the other beam, bow, stern. */

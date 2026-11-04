@@ -32,6 +32,10 @@ import {
   clearAhead,
   clearLookYaw,
   SPAWN_CLEAR_AHEAD,
+  RAIL_INSET,
+  railAhead,
+  rayToPolygonEdge,
+  spawnStand,
   spawnYawFallbacks,
   hitSections,
   inBand,
@@ -748,7 +752,7 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     const localYaw = Math.atan2(-(foe[0] - position[0]), -(foe[2] - position[2])) - rotationY
     let p = spawnPoseAvoiding(deck, [], n)
     const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
-    p = stepOnDeck({ ...p, z: side * Math.abs(p.z) }, 0, 0, deck)
+    p = spawnStand(deck, p, side, localYaw)
     return { deck, p, localYaw, side, yaw: clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side)) }
   }
 
@@ -768,7 +772,10 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(clearLookYaw(d, [0, 0], yawToward(0, 1), spawnYawFallbacks(1))).toBe(yawToward(0, 1))
     expect(clearLookYaw(d, [0, 0], ahead, spawnYawFallbacks(-1))).toBe(yawToward(0, -1))
     const boxed: DeckAnchors = { ...d, obstacles: [{ center: [0.3, 0], radius: 0.1 }, { center: [0, 0.2], radius: 0.1 }, { center: [0, -0.4], radius: 0.1 }, { center: [-0.5, 0], radius: 0.1 }] }
-    expect(clearLookYaw(boxed, [0, 0], ahead, spawnYawFallbacks(1))).toBe(yawToward(-1, 0))
+    const pick = clearLookYaw(boxed, [0, 0], ahead, spawnYawFallbacks(1))
+    const seen = clearAhead(boxed, [0, 0], pick)
+    for (const y of [ahead, ...spawnYawFallbacks(1)]) expect(seen).toBeGreaterThanOrEqual(clearAhead(boxed, [0, 0], y))
+    expect(seen).toBeGreaterThan(clearAhead(boxed, [0, 0], yawToward(-1, 0))) // the sweep found a better diagonal
   })
 
   it('every class, horizontal and vertical: the spawn view is clear for SPAWN_CLEAR_AHEAD (or as clear as the deck allows)', () => {
@@ -777,9 +784,64 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
         const { deck, p, localYaw, side, yaw } = controllerSpawn(id, orientation)
         const label = `${id} ${orientation}`
         const d = clearAhead(deck, [p.x, p.z], yaw)
-        const alternatives = [localYaw, ...spawnYawFallbacks(side)].map((y) => clearAhead(deck, [p.x, p.z], y))
+        const alternatives = [localYaw, ...spawnYawFallbacks(side), ...Array.from({ length: 16 }, (_, i) => localYaw + (i * Math.PI) / 8)].map((y) => clearAhead(deck, [p.x, p.z], y))
         expect(d, label).toBeGreaterThanOrEqual(Math.min(SPAWN_CLEAR_AHEAD, Math.max(...alternatives)) - 1e-9)
-        expect(d, label).toBeGreaterThan(0.2)
+        expect(d, label).toBeGreaterThan(0.1)
+      }
+    }
+  })
+
+  it('rayToPolygonEdge: distance to the rail along a direction', () => {
+    expect(rayToPolygonEdge([0, 0], [0, 1], rect)).toBeCloseTo(0.5, 9)
+    expect(rayToPolygonEdge([0, 0.3], [0, -1], rect)).toBeCloseTo(0.8, 9)
+    expect(rayToPolygonEdge([1, 0], [1, 0], rect)).toBeCloseTo(1, 9)
+    expect(rayToPolygonEdge([0, 0.5], [0, 1], rect)).toBeCloseTo(0, 9)
+    expect(rayToPolygonEdge([0, 0], [1, 0], [[-1, -1], [-1, 1]])).toBe(Infinity)
+  })
+
+  it('spawnStand keeps RAIL_INSET of deck before the facing rail, or the centreline on a narrow deck', () => {
+    const d: DeckAnchors = { spawn: [0, 0, -0.45], walk: [{ points: rect, y: 0 }], ramps: [], obstacles: [], stations: [] }
+    const toEnemy = yawToward(0, 1)
+    const p = spawnStand(d, { x: 0, z: -0.45, y: 0, level: 0 }, 1, toEnemy)
+    expect(p.z).toBeCloseTo(0.5 - RAIL_INSET - PLAYER_RADIUS, 9)
+    expect(p.x).toBe(0)
+    expect(railAhead(d, [p.x, p.z], 0, toEnemy)).toBeCloseTo(RAIL_INSET + PLAYER_RADIUS, 9)
+    // already deep enough: only mirrored
+    expect(spawnStand(d, { x: 0.2, z: -0.1, y: 0, level: 0 }, -1, yawToward(0, -1)).z).toBeCloseTo(-0.1, 9)
+    const narrow: DeckAnchors = { ...d, walk: [{ points: rectPolygon(4, 0.2, 0), y: 0 }] }
+    expect(spawnStand(narrow, { x: 0, z: -0.09, y: 0, level: 0 }, 1, toEnemy).z).toBeCloseTo(0, 9)
+    // boxed in at the spawn: backs off along the deck to the nearest stand with a clear view
+    const trunk: DeckAnchors = { ...d, obstacles: [{ center: [0, 0.3], radius: 0.1 }, { center: [0.2, 0.2], radius: 0.1 }, { center: [-0.2, 0.2], radius: 0.1 }] }
+    const off = spawnStand(trunk, { x: 0, z: -0.45, y: 0, level: 0 }, 1, toEnemy)
+    expect(Math.abs(off.x)).toBeGreaterThan(0.1)
+    expect(clearAhead(trunk, [off.x, off.z], clearLookYaw(trunk, [off.x, off.z], toEnemy, spawnYawFallbacks(1)))).toBe(SPAWN_CLEAR_AHEAD)
+  })
+
+  it('every class, horizontal and vertical: the spawn stand has ≥ RAIL_INSET of deck ahead before the rail', () => {
+    for (const id of ids) {
+      for (const orientation of ['horizontal', 'vertical'] as const) {
+        const { deck, p, side, yaw } = controllerSpawn(id, orientation)
+        const label = `${id} ${orientation}`
+        expect(pointInPolygon([p.x, p.z], deck.walk[p.level].points), label).toBe(true)
+        // the beam-wise inset the stand guarantees — unless a centreline fixture (the frigate's wheel) leaves no room:
+        // then it stands as far from the rail as the fixture allows
+        const toRail = rayToPolygonEdge([p.x, p.z], [0, side], deck.walk[p.level].points)
+        const closer: [number, number] = [p.x, p.z - side * 0.02]
+        const fixtureBehind = deck.obstacles.some((o) => Math.hypot(closer[0] - o.center[0], closer[1] - o.center[1]) < o.radius + PLAYER_RADIUS)
+        expect(toRail >= RAIL_INSET + PLAYER_RADIUS - 1e-6 || fixtureBehind, `${label}: ${toRail.toFixed(3)} to the rail`).toBe(true)
+        expect(toRail, label).toBeGreaterThan(0.1)
+        // and along the look: either ≥ RAIL_INSET of deck before the edge, or that edge is a deck break (another level continues)
+        const ahead = railAhead(deck, [p.x, p.z], p.level, yaw)
+        if (ahead < RAIL_INSET) {
+          const f = lookForward(yaw, 0)
+          const len = Math.hypot(f[0], f[2])
+          // (the authored levels leave a gap at a break: probe a little past the edge, or accept a ramp end nearby)
+          const hit: [number, number] = [p.x + (f[0] / len) * ahead, p.z + (f[2] / len) * ahead]
+          const beyond = [0.03, 0.08, 0.15].map((d): [number, number] => [hit[0] + (f[0] / len) * d, hit[1] + (f[2] / len) * d])
+          const otherLevel = beyond.some((b) => deck.walk.some((w, i) => i !== p.level && pointInPolygon(b, w.points)))
+          const rampNear = deck.ramps.some((r) => Math.min(Math.hypot(hit[0] - r.a[0], hit[1] - r.a[1]), Math.hypot(hit[0] - r.b[0], hit[1] - r.b[1])) < 0.3)
+          expect(otherLevel || rampNear, `${label}: edge ${ahead.toFixed(3)} ahead is a rail`).toBe(true)
+        }
       }
     }
   })

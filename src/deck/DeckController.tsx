@@ -50,7 +50,9 @@ import {
   blockedBands,
   clearLookYaw,
   hitSections,
+  SPAWN_PITCH,
   spawnPoseAvoiding,
+  spawnStand,
   spawnYawFallbacks,
   withBlocked,
   startJump,
@@ -175,13 +177,13 @@ export function DeckController() {
     const localYaw = worldYaw - rotationY
     // an intact, unburning section (farthest from the fire), never a breach
     let p = spawnPoseAvoiding(geometry.deckA, geometry.hit, geometry.sections)
-    const side = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
-    p = stepOnDeck({ ...p, z: side * Math.abs(p.z) }, 0, 0, geometry.deckA)
+    const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
+    p = spawnStand(geometry.deckA, p, side, localYaw) // their side of the deck, RAIL_INSET back from the rail, view clear
     pose.current = p
     vel.current = { x: 0, z: 0 }
     air.current = GROUNDED
     // a vertical ship faces the enemy along its own deck — into a mast trunk; look where the near view is clear
-    look.current = { yaw: clearLookYaw(geometry.deckA, [p.x, p.z], localYaw, spawnYawFallbacks(side)), pitch: 0 }
+    look.current = { yaw: clearLookYaw(geometry.deckA, [p.x, p.z], localYaw, spawnYawFallbacks(side)), pitch: SPAWN_PITCH }
     glance.current = { yaw: 0, pitch: 0 }
     tumble.current = 0
   }, [foeCenter])
