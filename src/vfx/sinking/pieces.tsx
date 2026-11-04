@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { Livery } from '../../ships/types'
-import type { DebrisKind } from './debris'
+import type { DebrisKind } from './debrisModel'
 import { clothTexture, woodBump, woodTexture } from './textures'
 
 /**

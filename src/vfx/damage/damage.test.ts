@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { impactPointFor } from './DamageLayer'
 import { emberAt, emberSeeds } from './embers'
 import { FireLightBudget, lightCountFor, planFireLights, type FireSource } from './fireBudget'
-import { smokePuffAt, smokeSeeds } from './smoke'
+import { smokePuffAt, smokeSeeds } from './smokeModel'
 import { makeSplinters, splinterAt, splinterDuration } from './splinters'
 
 describe('splinters', () => {

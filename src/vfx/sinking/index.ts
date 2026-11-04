@@ -11,8 +11,8 @@
  */
 export * from './pose'
 export * from './timeline'
-export * from './bubbles'
-export * from './debris'
+export * from './bubbleModel'
+export * from './debrisModel'
 export { SinkingShip, useSinkPose, placedSinkPose, SURFACE_Y, type SinkingShipProps } from './SinkingShip'
 export { HullWash, washIntensity, type HullWashProps } from './HullWash'
 export { Bubbles, type BubblesProps } from './Bubbles'

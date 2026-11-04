@@ -6,7 +6,7 @@ import { BOARD_LAYOUT, cellToWorld, type Vec3 } from '../../scene/layout'
 import { sampleWaveHeight } from '../../scene/waves'
 import type { Livery } from '../../ships/types'
 import { useGameStore } from '../../store/gameStore'
-import { bobAt, debrisState, flotsamLayout, type DebrisPiece, type FlotsamPiece } from './debris'
+import { bobAt, debrisState, flotsamLayout, type DebrisPiece, type FlotsamPiece } from './debrisModel'
 import { DebrisMesh } from './pieces'
 import { BakedGroup } from '../../ships/bake'
 
