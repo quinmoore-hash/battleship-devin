@@ -21,8 +21,12 @@ export const JUMP_APEX = 0.12
 export const JUMP_TIME = 0.5
 export const JUMP_GRAVITY = (8 * JUMP_APEX) / (JUMP_TIME * JUMP_TIME)
 export const JUMP_SPEED = (4 * JUMP_APEX) / JUMP_TIME
-/** The player's collision radius against obstacles (the pirate figure is ~0.06 u wide). */
-export const PLAYER_RADIUS = 0.035
+/**
+ * The player's collision radius against obstacles (the pirate figure is ~0.06 u wide). Also the eye's clearance: it must
+ * stay ≥ `DECK_NEAR` + `EYE_CLEARANCE` so the near plane can never cut into a mast or a bulwark (BUG-7xx).
+ */
+export const PLAYER_RADIUS = 0.045
+export const EYE_CLEARANCE = 0.01
 /** How close (u) to a station's stand the player must be to man the gun. */
 export const STATION_REACH = 0.22
 /** Within this distance of a usable gun the floating "E — Man the gun" label shows. */
@@ -526,6 +530,81 @@ export function nearestStation(stations: readonly Station[], x: number, z: numbe
     }
   }
   return best
+}
+
+// ---- station pick with hysteresis + marker fade (BUG-7xx) --------------------------------------------------------
+
+export interface StationPick {
+  /** `Station.index` of the picked station, −1 for none. */
+  index: number
+  /** Clock time of the last change (`-Infinity` = never). */
+  since: number
+}
+export const NO_PICK: StationPick = { index: -1, since: -Infinity }
+/** A rival stand must be closer than the current one by this fraction of its distance (and by `PICK_MIN_GAIN` at least). */
+export const PICK_HYSTERESIS = 0.15
+export const PICK_MIN_GAIN = 0.05
+/** The pick changes at most this often, seconds (≈ 4 ×/s). */
+export const PICK_MIN_INTERVAL = 0.25
+/** Once picked, a stand stays picked until the player is this far beyond `reach`. */
+export const PICK_RELEASE_MARGIN = 0.03
+
+/**
+ * `nearestStation` with hysteresis: the current pick is kept while it stays within `reach` + margin and no other stand is
+ * clearly closer (15 % / 0.05 u), and any change is at least `PICK_MIN_INTERVAL` after the last one — so two stands at
+ * equal distance can no longer flip the hot marker and the HUD prompt every frame. `stations` is indexed by `Station.index`.
+ */
+export function pickStation(stations: readonly Station[], x: number, z: number, prev: StationPick, now: number, reach = STATION_REACH): StationPick {
+  const cur = prev.index >= 0 ? stations[prev.index] : undefined
+  const settled = now - prev.since >= PICK_MIN_INTERVAL
+  const cand = nearestStation(stations, x, z, reach)
+  if (cur && cur.onDeck) {
+    const dCur = Math.hypot(cur.stand[0] - x, cur.stand[2] - z)
+    if (dCur <= reach + PICK_RELEASE_MARGIN) {
+      if (!cand || cand.index === cur.index || !settled) return prev
+      const dNew = Math.hypot(cand.stand[0] - x, cand.stand[2] - z)
+      return dNew < dCur - Math.max(PICK_MIN_GAIN, dCur * PICK_HYSTERESIS) ? { index: cand.index, since: now } : prev
+    }
+  }
+  if (!settled) return prev
+  if (!cand) return prev.index < 0 ? prev : { index: -1, since: now }
+  return cand.index === prev.index ? prev : { index: cand.index, since: now }
+}
+
+/** The ring / glow fade and shrink as the eye comes close: full at `MARKER_FADE_FAR`, gone at `MARKER_FADE_NEAR`. */
+export const MARKER_FADE_FAR = 0.6
+export const MARKER_FADE_NEAR = 0.25
+export function markerFade(distance: number): number {
+  const t = clamp((distance - MARKER_FADE_NEAR) / (MARKER_FADE_FAR - MARKER_FADE_NEAR), 0, 1)
+  return t * t * (3 - 2 * t)
+}
+
+/** The glow never subtends more than this on screen (radians of its diameter). */
+export const GLOW_MAX_ANGLE = (3 * Math.PI) / 180
+export const GLOW_RADIUS = 0.018
+/** Largest glow scale at `distance` that keeps it under `GLOW_MAX_ANGLE` (an icosahedron of `GLOW_RADIUS`). */
+export const glowScaleCap = (distance: number): number => (Math.max(0, distance) * Math.tan(GLOW_MAX_ANGLE / 2)) / GLOW_RADIUS
+
+/** The walking eye sits at least this far over the lowest cap rail of the ship's reachable guns. */
+export const WALK_EYE_OVER_RAIL = 0.04
+export const WALK_EYE_MAX = 0.4
+/**
+ * Eye height over the feet while walking `deck`: `EYE_HEIGHT` (0.17), lifted to see over the bulwark where the authored
+ * rails are taller than that (man-o'-war / galleon 0.27 u, frigate 0.235 u) — the sailor's eye was below the cap rail
+ * on three classes, so standing at the side showed nothing but the inside of the planking (BUG-7xx, owner's clip b).
+ */
+export function walkEyeHeight(deck: DeckAnchors, stations: readonly Station[]): number {
+  // the lowest rail of each deck level (a quarterdeck's low rail must not drop the eye under the waist's bulwark), then the
+  // tallest of those: one eye height per ship, so crossing a ramp never bobs the view
+  const lowestPerLevel = new Map<number, number>()
+  for (const s of stations) {
+    if (!s.onDeck || s.rail === undefined) continue
+    const key = Math.round(s.stand[1] * 1000)
+    lowestPerLevel.set(key, Math.min(lowestPerLevel.get(key) ?? Infinity, s.rail - s.stand[1]))
+  }
+  let eye = eyeFor(deck)
+  for (const rail of lowestPerLevel.values()) eye = Math.max(eye, rail + WALK_EYE_OVER_RAIL)
+  return Math.min(WALK_EYE_MAX, eye)
 }
 
 /** The manned eye clears the authored rail / netting top by this much. */

@@ -1,10 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import { SHIPS } from '../ships'
 import { BOARD_LAYOUT, boardCenter } from '../scene/layout'
-import { DECK_FOV, type DeckAnchors } from './contract'
+import { DECK_FOV, DECK_NEAR, EYE_HEIGHT, type DeckAnchors } from './contract'
 import {
+  EYE_CLEARANCE,
+  FALLBACK_EYE,
   GROUNDED,
+  MARKER_FADE_FAR,
+  MARKER_FADE_NEAR,
+  NO_PICK,
+  PICK_MIN_INTERVAL,
   PLAYER_RADIUS,
+  STATION_REACH,
+  WALK_EYE_MAX,
+  WALK_EYE_OVER_RAIL,
+  WALK_SPEED,
+  glowScaleCap,
+  markerFade,
+  pickStation,
+  spawnPose,
+  stationsOf,
+  stepOnDeck,
+  walkEyeHeight,
+  type Station,
   JUMP_APEX,
   JUMP_TIME,
   afloatUids,
@@ -29,10 +47,7 @@ import {
   rectPolygon,
   resolveDeckAnchors,
   sinkProgressFor,
-  spawnPose,
-  stationsOf,
   stationUsable,
-  stepOnDeck,
   yawToward,
 } from './math'
 
@@ -433,5 +448,128 @@ describe('walk acceleration and jump', () => {
     expect(inside(pose)).toBe(true)
     for (let i = 0; i < 60; i++) pose = stepOnDeck(pose, 0.1, 0, d)
     expect(inside(pose)).toBe(true)
+  })
+})
+
+describe('station pick hysteresis + marker fade (BUG-7xx)', () => {
+  const st = (index: number, x: number, z: number, onDeck = true): Station => ({ index, cell: 0, side: 'port', muzzle: [x, 0, z - 0.1], direction: [0, 0, -1], stand: [x, 0, z], yaw: 0, breech: [x, 0, z - 0.05], onDeck })
+  const two = [st(0, 0, 0), st(1, 0.2, 0)]
+  it('between two equidistant stands the pick stays put (the hot marker used to flip every frame)', () => {
+    let p = pickStation(two, 0.0, 0, NO_PICK, 0)
+    expect(p.index).toBe(0)
+    // walk to the midpoint and a hair past it, frame by frame: still station 0
+    for (let i = 1; i <= 20; i++) p = pickStation(two, 0.09 + i * 0.001, 0, p, i / 60)
+    expect(p.index).toBe(0)
+    // jitter around the midpoint at 60 Hz: never flips
+    for (let i = 0; i < 120; i++) p = pickStation(two, 0.1 + (i % 2 ? 0.01 : -0.01), 0, p, 1 + i / 60)
+    expect(p.index).toBe(0)
+  })
+  it('switches once the other stand is clearly closer (15 % / 0.05 u) and never more than 4 times a second', () => {
+    let p = pickStation(two, 0.0, 0, NO_PICK, 0)
+    p = pickStation(two, 0.14, 0, p, 1) // 0.14 vs 0.06: 0.06 < 0.14 - 0.05 → switch
+    expect(p).toEqual({ index: 1, since: 1 })
+    p = pickStation(two, 0.05, 0, p, 1.1) // clearly station 0 again, but only 0.1 s later
+    expect(p.index).toBe(1)
+    p = pickStation(two, 0.05, 0, p, 1.25)
+    expect(p).toEqual({ index: 0, since: 1.25 })
+    expect(PICK_MIN_INTERVAL).toBe(0.25)
+  })
+  it('leaving is sticky too: the pick is held until `reach` + 0.03 and dropped at most 4×/s; a fresh pick is immediate', () => {
+    let p = pickStation(two, 0, 0, NO_PICK, 0)
+    p = pickStation(two, 0, STATION_REACH + 0.02, p, 1)
+    expect(p.index).toBe(0)
+    p = pickStation(two, 0, STATION_REACH + 0.04, p, 1.1)
+    expect(p).toEqual({ index: -1, since: 1.1 }) // beyond the margin: dropped
+    p = pickStation(two, 0, 0, p, 1.2)
+    expect(p.index).toBe(-1) // back within reach 0.1 s later: not yet (4×/s)
+    p = pickStation(two, 0, 0, p, 1.35)
+    expect(p).toEqual({ index: 0, since: 1.35 })
+    expect(pickStation(two, 0.2, 0, NO_PICK, 0)).toEqual({ index: 1, since: 0 }) // a fresh pick is immediate
+    // below-deck guns are never picked, and a stale pick of one is dropped
+    expect(pickStation([st(0, 0, 0, false)], 0, 0, NO_PICK, 0).index).toBe(-1)
+    expect(pickStation([st(0, 0, 0, false)], 0, 0, { index: 0, since: -1 }, 0).index).toBe(-1)
+  })
+  it('the real decks: walking the length of every ship at 60 Hz changes the pick at most 4 times a second', () => {
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      const stations = stationsOf(a, deck)
+      const level = deck.walk[0]
+      const xs = level.points.map((p) => p[0])
+      const z = Math.max(...level.points.map((p) => Math.abs(p[1]))) * 0.7
+      let p = NO_PICK
+      const changes: number[] = []
+      let pose: WalkPose = stepOnDeck({ x: Math.min(...xs) + 0.05, z, y: level.y, level: 0 }, 0, 0, deck)
+      for (let f = 0; f < 600; f++) {
+        pose = stepOnDeck(pose, (WALK_SPEED * 0.6) / 60, 0, deck)
+        const next = pickStation(stations, pose.x, pose.z, p, f / 60)
+        if (next.index !== p.index) changes.push(f / 60)
+        p = next
+      }
+      for (let i = 1; i < changes.length; i++) expect(changes[i] - changes[i - 1], `${id}: pick changes too fast`).toBeGreaterThanOrEqual(PICK_MIN_INTERVAL - 1e-9)
+    }
+  })
+  it('markerFade: 1 beyond 0.6 u, 0 inside 0.25 u, smooth and monotonic between', () => {
+    expect(markerFade(1)).toBe(1)
+    expect(markerFade(MARKER_FADE_FAR)).toBe(1)
+    expect(markerFade(MARKER_FADE_NEAR)).toBe(0)
+    expect(markerFade(0.1)).toBe(0)
+    expect(markerFade(0.425)).toBeCloseTo(0.5, 6)
+    let last = 0
+    for (let d = 0.25; d <= 0.6; d += 0.01) {
+      const f = markerFade(d)
+      expect(f).toBeGreaterThanOrEqual(last)
+      last = f
+    }
+  })
+  it('glowScaleCap keeps the glow under 3° of view: 1.45× at 1 u, 0.73× at 0.5 u, 0 at the eye', () => {
+    expect(glowScaleCap(1)).toBeCloseTo(1.455, 2)
+    expect(glowScaleCap(0.5)).toBeCloseTo(0.727, 2)
+    expect(glowScaleCap(0)).toBe(0)
+    // the hot pulse peaks at 1.65×: capped from 1.13 u inward
+    expect(glowScaleCap(1.13)).toBeLessThan(1.65)
+    expect(glowScaleCap(1.14)).toBeGreaterThan(1.65)
+  })
+})
+
+describe('eye outside the geometry (BUG-7xx, owner clips a + b)', () => {
+  it('the walking eye sees over the lowest reachable cap rail on every class (0.17 u was under the bulwark on three of five)', () => {
+    const want: Record<string, number> = { 'man-o-war': 0.31, galleon: 0.31, frigate: 0.275, brigantine: 0.183, sloop: 0.18 }
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      const stations = stationsOf(a, deck)
+      const eye = walkEyeHeight(deck, stations)
+      expect(eye, id).toBeGreaterThanOrEqual(EYE_HEIGHT)
+      expect(eye, id).toBeLessThanOrEqual(WALK_EYE_MAX)
+      expect(eye, id).toBeCloseTo(want[id], 2)
+      // the lowest rail of the main deck (level 0) is cleared; a higher castle gun's rail (man-o'-war 0.40) is not chased
+      const lowest = Math.min(...stations.filter((s) => s.onDeck && s.rail !== undefined && Math.abs(s.stand[1] - deck.walk[0].y) < 1e-3).map((s) => s.rail! - s.stand[1]))
+      expect(eye - lowest, id).toBeGreaterThanOrEqual(WALK_EYE_OVER_RAIL - 1e-9)
+    }
+    // no authored rails → the deck's own eye height (contract 0.17; the marked fallback rectangle keeps its 0.3)
+    expect(walkEyeHeight(fallbackDeckAnchors(SHIPS.sloop.anchors), [])).toBe(EYE_HEIGHT)
+    const fallback = resolveDeckAnchors({ ...SHIPS.sloop.anchors, deck: undefined }, 'sloop')
+    expect(isFallbackDeck(fallback) ? walkEyeHeight(fallback, []) : FALLBACK_EYE).toBe(FALLBACK_EYE)
+  })
+  it('after spawn (either side, as the controller mirrors it) and after any step the feet keep PLAYER_RADIUS from every obstacle and stay inside the plan — on every class', () => {
+    expect(PLAYER_RADIUS).toBeGreaterThanOrEqual(DECK_NEAR + EYE_CLEARANCE)
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      for (const side of [1, -1]) {
+        const p0 = spawnPose(deck)
+        const p = stepOnDeck({ ...p0, z: side * Math.abs(p0.z) }, 0, 0, deck)
+        expect(pointInPolygon([p.x, p.z], deck.walk[p.level].points), `${id} spawn side ${side} inside the plan`).toBe(true)
+        for (const o of deck.obstacles) expect(Math.hypot(p.x - o.center[0], p.z - o.center[1]), `${id} spawn side ${side} clear of obstacle at ${o.center}`).toBeGreaterThanOrEqual(o.radius + PLAYER_RADIUS - 1e-6)
+        // walk a figure-eight across the deck: never inside an obstacle unless the rail already pins you there
+        let q = p
+        for (let f = 0; f < 400; f++) {
+          const ang = f * 0.11
+          q = stepOnDeck(q, Math.cos(ang) * 0.02, Math.sin(ang * 0.5) * 0.02, deck)
+          expect(pointInPolygon([q.x, q.z], deck.walk[q.level].points), `${id} step ${f} inside the plan`).toBe(true)
+        }
+      }
+    }
   })
 })

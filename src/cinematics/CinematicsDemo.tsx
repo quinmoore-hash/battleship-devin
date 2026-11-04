@@ -4,7 +4,8 @@ import * as THREE from 'three'
 import { useStore } from 'zustand'
 import { FLEET, isSunk, randomPlacement, type Coord, type PlacedShip, type Player, type ShotResult } from '../engine'
 import { OceanScene } from '../scene'
-import { DECK_FOV, DECK_NEAR, EYE_HEIGHT, deckCameraLease } from '../deck/contract'
+import { EYE_HEIGHT, deckCameraLease } from '../deck/contract'
+import { applyDeckLens } from '../deck/lens'
 import { BOARD_LAYOUT, boardCenter, cellToWorld, type Vec3 } from '../scene/layout'
 import { Fleet, SHIPS, shipWorldTransform } from '../ships'
 import { useGameStore, type CinematicsLevel } from '../store/gameStore'
@@ -308,11 +309,7 @@ function DeckEye({ ships }: { ships: PlacedShip[] }) {
     if ((look[0] - eye[0]) ** 2 + (look[2] - eye[2]) ** 2 < 0.2) look = localToWorld([ship.spec.length / 2, anchors.deckY, 0], pose)
     target.current.set(look[0], look[1], look[2])
     camera.lookAt(target.current)
-    if (camera.fov !== DECK_FOV || camera.near !== DECK_NEAR) {
-      camera.fov = DECK_FOV
-      camera.near = DECK_NEAR
-      camera.updateProjectionMatrix()
-    }
+    applyDeckLens(camera)
   })
   return null
 }

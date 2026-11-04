@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FLEET, createBoard, placeShip, type Board, type PlacedShip, type ShipId } from '../engine'
-import { DECK_FOV, DECK_NEAR, EYE_HEIGHT } from '../deck/contract'
+import { EYE_HEIGHT } from '../deck/contract'
+import { applyDeckLens } from '../deck/lens'
 import { OceanScene } from '../scene'
 import type { Weather } from '../scene/sun'
 import { BOARD_LAYOUT, type Vec3 } from '../scene/layout'
@@ -66,9 +67,7 @@ function EyeCamera({ ship, look, eye }: { ship: PlacedShip; look: Vec3; eye?: Ve
   const helm = eye ?? def.anchors.deck?.spawn ?? HELM_GUESS[ship.spec.id]
 
   useEffect(() => {
-    camera.near = DECK_NEAR
-    camera.fov = DECK_FOV
-    camera.updateProjectionMatrix()
+    applyDeckLens(camera)
   }, [camera])
 
   useFrame(({ clock }) => {

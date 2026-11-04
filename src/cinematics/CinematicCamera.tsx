@@ -6,6 +6,7 @@ import { BOARD_LAYOUT, boardCenter, type Vec3 } from '../scene/layout'
 import { CAMERA_SHOTS, battleFraming, fitFov } from '../scene/CameraRig'
 import { SHIPS, shipWorldTransform } from '../ships'
 import { DECK_FOV, deckBus, deckCameraLease } from '../deck/contract'
+import { applyDeckLens, hasDeckLens } from '../deck/lens'
 import { useDeckStore } from '../deck/deckStore'
 import { ownBoardOrigin } from './battery'
 import { POV, deckEye, readDeckState, shipWorldPosition, type OverboardBeat } from './pov'
@@ -336,10 +337,9 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
       deckEye.position = deckOn ? [camera.position.x, camera.position.y, camera.position.z] : null
       lastKey.current = ''
       shake.current = 0
-      if (home.current && deckOn && camera.fov !== DECK_FOV) {
+      if (home.current && deckOn && (camera.fov !== DECK_FOV || !hasDeckLens(camera))) {
         // the sequence ended before its return beat reached the deck pose (slow frame / skip): give the deck lens back (BUG-725)
-        camera.fov = DECK_FOV
-        camera.updateProjectionMatrix()
+        applyDeckLens(camera)
       }
       home.current = null
       return
@@ -416,8 +416,7 @@ export function CinematicCamera({ director = defaultDirector }: CinematicCameraP
     // beat starts (it climbs aboard the next ship under it), so the camera goes back as soon as the screen reads black.
     const black = deckPov?.overboard ? useDeckStore.getState().fade >= 0.98 : false
     if (deckPov && beat?.name === 'return' && (black || k >= 0.999)) {
-      camera.fov = DECK_FOV
-      camera.updateProjectionMatrix()
+      applyDeckLens(camera)
       releaseLease()
     }
   })

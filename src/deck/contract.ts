@@ -17,8 +17,17 @@ import type { Vec3 } from '../scene/layout'
 
 /** Camera eye height above `ShipAnchors.deckY`, ship units. */
 export const EYE_HEIGHT = 0.17
-/** Camera near plane while on deck (the default 0.1 clips the rail). */
-export const DECK_NEAR = 0.01
+/**
+ * Deck lens (`src/deck/lens.ts` applies / restores it). Near 0.03: the default 0.5 clips the rail and the pirate, but the
+ * depth resolution of a 24-bit buffer scales with 1/near (≈ z² / (2·near·2²⁴)), so it is as large as the collision radius
+ * allows (`PLAYER_RADIUS` ≥ near + margin keeps the near plane out of masts and bulwarks). Far 300: the sea plane is 300 u,
+ * fog ends at 230 u and the sky dome is drawn on the far plane itself — the overview's 1500 bought nothing on deck.
+ */
+export const DECK_NEAR = 0.03
+export const DECK_FAR = 300
+/** The overview Canvas lens (`src/scene/index.tsx`), restored exactly when the deck hands the camera back. */
+export const OVERVIEW_NEAR = 0.5
+export const OVERVIEW_FAR = 1500
 /** Vertical field of view on deck, degrees. */
 export const DECK_FOV = 70
 

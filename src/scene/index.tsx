@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { Component, useEffect, useMemo, type ReactNode } from 'react'
 import * as THREE from 'three'
+import { OVERVIEW_FAR, OVERVIEW_NEAR } from '../deck/contract'
 import { useGameStore } from '../store/gameStore'
 import { CameraRig, isBattleView, type CameraView } from './CameraRig'
 import { lazy, Suspense } from 'react'
@@ -125,7 +126,7 @@ export function OceanScene({ children, quality, timeOfDay, view, interactive, ca
         shadows={perf.shadows > 0 ? { type: THREE.PCFShadowMap } : false}
         dpr={resolveDpr(perf)}
         gl={{ antialias: q === 'low', powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
-        camera={{ position: [0, 9, 30], fov: 42, near: 0.5, far: 1500 }}
+        camera={{ position: [0, 9, 30], fov: 42, near: OVERVIEW_NEAR, far: OVERVIEW_FAR }}
         style={{ position: 'fixed', inset: 0, zIndex: 0 }}
         data-testid="ocean-canvas"
       >
