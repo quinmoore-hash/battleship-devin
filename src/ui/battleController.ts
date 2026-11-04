@@ -79,6 +79,8 @@ export const useBattleController = create<BattleControllerState>((set, get) => (
   },
 
   stop: () => {
+    clearTimeout(swingTimer)
+    swingTimer = undefined
     get().flow?.dispose()
     set({ flow: null, beat: { phase: 'idle' }, last: null, exchange: [], busy: false })
   },

@@ -33,20 +33,13 @@ export interface TurnBeat {
 }
 
 let director: CinematicDirector | null = null
-const directorListeners = new Set<() => void>()
-
 /** Integration: the cinematics module calls this once with `createDirector()`. Pass `null` to go back to timers. */
 export function setDirector(d: CinematicDirector | null) {
   director = d
-  directorListeners.forEach((l) => l())
 }
 export const getDirector = () => director
 /** The director the flow will actually use: the real one only when the 3D world is on screen (`?no3d` / no WebGL → timers). */
 export const activeDirector = (fallback: CinematicDirector, no3d: boolean = is3dDisabled()): CinematicDirector => (director && !no3d ? director : fallback)
-export function onDirectorChange(listener: () => void) {
-  directorListeners.add(listener)
-  return () => void directorListeners.delete(listener)
-}
 
 /** Duration the timer fallback waits for `event` at `level`, in ms. Pure, unit-tested. */
 export function fallbackDuration(event: CinematicEvent, level: CinematicsLevel, reducedMotion = false): number {
