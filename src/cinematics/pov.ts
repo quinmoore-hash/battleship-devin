@@ -100,6 +100,8 @@ export const POV = {
   abandonAt: 1.5,
   /** The deck must be at most this far above the surface (ship units) under the player before the abandon fade may start. */
   awashY: 0.02,
+  /** The deck stays visibly awash this long before the abandon-ship fade starts (eye at / below the waterline). */
+  awashHold: 0.5,
   /**
    * An own ship sinking within this half-angle (radians) of the standing ship's long axis is hidden behind its own masts, sails
    * and castles from anywhere on deck, so the director borrows the camera instead of nudging the look.
@@ -299,7 +301,7 @@ export function abandonAtFor(pov: PovContext, seq: Sequence): number {
     else hi = mid
   }
   const end = beatEnd(seq, 'sink') || seq.duration
-  return Math.min(end, Math.max(POV.abandonAt, sinkTimeAt(hi, seq.sink)))
+  return Math.min(end, Math.max(POV.abandonAt, sinkTimeAt(hi, seq.sink) + POV.awashHold))
 }
 
 /** World position of a ship (sink / victory look-at targets). */
