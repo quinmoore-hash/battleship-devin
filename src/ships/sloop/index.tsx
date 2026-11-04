@@ -36,6 +36,8 @@ const THROAT_Y = 1.28
 const BOWSPRIT_ROOT: Vec3 = [0.9, 0.39, 0]
 const BOWSPRIT_TIP: Vec3 = [SLOOP_DIMS.bowspritTip, 0.53, 0]
 const STEMHEAD: Vec3 = [1.0, 0.44, 0]
+const JIB_CLEW: Vec3 = [0.32, 0.36, 0.1]
+const STAY_CLEW: Vec3 = [0.42, 0.27, 0.1]
 
 const world = (local: Vec3): Vec3 => [local[0] + MAST_BASE[0], local[1] + MAST_BASE[1], local[2] + MAST_BASE[2]]
 
@@ -195,8 +197,6 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
   }, [lod])
 
   // sheets for the headsails (ship frame, hidden with the mast)
-  const jibClew: Vec3 = [0.32, 0.36, 0.1]
-  const stayClew: Vec3 = [0.42, 0.27, 0.1]
   const jibTack: Vec3 = [BOWSPRIT_TIP[0] - 0.03, BOWSPRIT_TIP[1] + 0.02, 0]
   const jibHead = world([0.04, MH - 0.1, 0])
   const stayTack: Vec3 = [STEMHEAD[0] - 0.01, STEMHEAD[1] + 0.01, 0]
@@ -204,8 +204,8 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
   const sheets = useMemo(() => {
     if (lod >= 2) return null
     return ropesGeometry([
-      [world(jibClew), [0.45, 0.33, 0.215], 0.006],
-      [world(stayClew), [0.45, 0.33, 0.2], 0.006],
+      [world(JIB_CLEW), [0.45, 0.33, 0.215], 0.006],
+      [world(STAY_CLEW), [0.45, 0.33, 0.2], 0.006],
       [[-1.07, 0.75, 0.125], [-1.07, 0.49, 0.0], 0.007],
     ], 5, 0, lod)
   }, [lod])
@@ -260,7 +260,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
       {snapped < 0.85 && (
         <QuadSail
           m={m}
-          corners={[jibTack, world(jibClew), along(jibHead, jibTack, snapped), along(jibHead, jibTack, snapped)]}
+          corners={[jibTack, world(JIB_CLEW), along(jibHead, jibTack, snapped), along(jibHead, jibTack, snapped)]}
           set={set * (1 - snapped * 0.5)}
           torn={Math.max(torn, snapped)}
           scorch={scorch}
@@ -272,7 +272,7 @@ function Rig({ m, lod, set, torn, scorch, snapped, flagDrop, phase }: RigProps) 
       {lod < 2 && snapped < 0.85 && (
         <QuadSail
           m={m}
-          corners={[stayTack, world(stayClew), along(stayHead, stayTack, snapped), along(stayHead, stayTack, snapped)]}
+          corners={[stayTack, world(STAY_CLEW), along(stayHead, stayTack, snapped), along(stayHead, stayTack, snapped)]}
           set={set * (1 - snapped * 0.5)}
           torn={Math.max(torn, snapped)}
           scorch={scorch}
