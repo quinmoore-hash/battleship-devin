@@ -32,6 +32,12 @@ import {
   clearAhead,
   clearLookYaw,
   SPAWN_CLEAR_AHEAD,
+  SPAWN_OPEN_VIEW,
+  spawnLookYaw,
+  gunnerEyeXZ,
+  GUN_EYE_BACK,
+  GUN_EYE_BEHIND_BREECH,
+  GUN_RAY_OVER_RAIL,
   RAIL_INSET,
   railAhead,
   rayToPolygonEdge,
@@ -55,7 +61,6 @@ import {
   type WalkPose,
   isFallbackDeck,
   gunnerPose,
-  GUN_EYE_BACK,
   GUN_EYE_OVER_RAIL,
   lookForward,
   nearestStation,
@@ -67,6 +72,8 @@ import {
   sinkProgressFor,
   stationUsable,
   yawToward,
+  levelAt,
+  angleDelta,
 } from './math'
 
 const rect = rectPolygon(4, 1, 0)
@@ -249,7 +256,7 @@ describe('stations', () => {
   it('gunnerPose on the authored deck sights from just inside the planking, above the rail', () => {
     const s = stationsOf(manOWar, resolveDeckAnchors(manOWar)).find((x) => x.onDeck && x.side === 'port')!
     const pose = gunnerPose(s)
-    expect(pose.position[2]).toBeCloseTo(s.muzzle[2] + 0.1) // port muzzle is at −z; the eye is 0.1 inboard of it
+    expect(pose.position[2]).toBeCloseTo(s.breech[2] + GUN_EYE_BEHIND_BREECH) // port breech is at −z; the eye stands inboard of it
     expect(pose.position[1]).toBeGreaterThan(s.rail!)
     expect(lookForward(pose.yaw, 0)[2]).toBeLessThan(-0.99)
   })
@@ -287,10 +294,9 @@ describe('manned gun eye looks out of the boat (BUG-770)', () => {
       const along = (v: readonly number[]) => v[0] * fx + v[2] * fz
       // above whatever the gunner must see over
       expect(p.position[1], `station ${s.index} eye over rail`).toBeGreaterThanOrEqual(rail + GUN_EYE_OVER_RAIL - 1e-9)
-      // just inside the planking: behind the muzzle, but outboard of the breech and of the stand (crew figure, shrouds, sails)
-      expect(along(s.muzzle) - along(p.position)).toBeCloseTo(GUN_EYE_BACK)
-      expect(along(p.position)).toBeGreaterThan(along(s.breech))
-      expect(along(p.position)).toBeGreaterThan(along(s.stand))
+      // inboard: GUN_EYE_BEHIND_BREECH behind the breech (BUG-800), well behind the muzzle
+      expect(along(s.breech) - along(p.position)).toBeCloseTo(GUN_EYE_BEHIND_BREECH)
+      expect(along(s.muzzle) - along(p.position)).toBeGreaterThan(GUN_EYE_BACK)
       // the forward ray is still above the rail where it crosses the bulwark (the muzzle plane): it clears the hull
       const look = lookForward(p.yaw, p.pitch)
       const flat = Math.hypot(look[0], look[2])
@@ -753,7 +759,7 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     let p = spawnPoseAvoiding(deck, [], n)
     const side: 1 | -1 = lookForward(localYaw, 0)[2] >= 0 ? 1 : -1
     p = spawnStand(deck, p, side, localYaw)
-    return { deck, p, localYaw, side, yaw: clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side), undefined, p.level) }
+    return { deck, p, localYaw, side, yaw: spawnLookYaw(deck, p, localYaw, side) }
   }
 
   it('clearAhead: ray–circle distance, player radius wide', () => {
@@ -788,17 +794,29 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(seen).toBeGreaterThan(clearAhead(boxed, [0, 0], yawToward(-1, 0))) // the sweep found a better diagonal
   })
 
-  it('every class, horizontal and vertical: the spawn view is clear for SPAWN_CLEAR_AHEAD (or as clear as the deck allows)', () => {
+  it('every class, horizontal and vertical: the spawn view is open for SPAWN_OPEN_VIEW (or as open as the deck allows)', () => {
     for (const id of ids) {
       for (const orientation of ['horizontal', 'vertical'] as const) {
         const { deck, p, localYaw, side, yaw } = controllerSpawn(id, orientation)
         const label = `${id} ${orientation}`
-        const d = clearAhead(deck, [p.x, p.z], yaw, undefined, undefined, p.level)
-        const alternatives = [localYaw, ...spawnYawFallbacks(side), ...Array.from({ length: 16 }, (_, i) => localYaw + (i * Math.PI) / 8)].map((y) => clearAhead(deck, [p.x, p.z], y, undefined, undefined, p.level))
-        expect(d, label).toBeGreaterThanOrEqual(Math.min(SPAWN_CLEAR_AHEAD, Math.max(...alternatives)) - 1e-9)
-        expect(d, label).toBeGreaterThan(0.1)
+        const d = clearAhead(deck, [p.x, p.z], yaw, SPAWN_OPEN_VIEW, undefined, p.level)
+        const alternatives = [localYaw, ...spawnYawFallbacks(side), ...Array.from({ length: 16 }, (_, i) => localYaw + (i * Math.PI) / 8)].map((y) => clearAhead(deck, [p.x, p.z], y, SPAWN_OPEN_VIEW, undefined, p.level))
+        expect(d, label).toBeGreaterThanOrEqual(Math.min(SPAWN_OPEN_VIEW, Math.max(...alternatives)) - 1e-9)
+        expect(d, label).toBeGreaterThanOrEqual(SPAWN_CLEAR_AHEAD)
       }
     }
+  })
+
+  it('vertical man-o-war (BUG-799): the spawn faces the enemy beam over the rail, not the mainmast 0.7 u ahead; horizontal keeps the enemy facing', () => {
+    const v = controllerSpawn('man-o-war', 'vertical')
+    const bow = yawToward(1, 0)
+    expect(clearAhead(v.deck, [v.p.x, v.p.z], bow, SPAWN_OPEN_VIEW, undefined, v.p.level)).toBeLessThan(1) // the mainmast trunk
+    expect(Math.abs(Math.sin(v.yaw - bow))).toBeGreaterThan(0.9) // not along the deck
+    expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw, SPAWN_OPEN_VIEW, undefined, v.p.level)).toBe(SPAWN_OPEN_VIEW)
+    expect(lookForward(v.yaw, 0)[2] * v.side).toBeGreaterThan(0.9) // toward the enemy's side of the deck
+    const h = controllerSpawn('man-o-war', 'horizontal')
+    expect(h.yaw).toBe(h.localYaw)
+    expect(clearAhead(h.deck, [h.p.x, h.p.z], h.yaw, SPAWN_OPEN_VIEW, undefined, h.p.level)).toBe(SPAWN_OPEN_VIEW)
   })
 
   it('rayToPolygonEdge: distance to the rail along a direction', () => {
@@ -862,5 +880,44 @@ describe('spawn facing is clear of obstacles (vertical man-o-war looked into the
     expect(clearAhead(v.deck, [v.p.x, v.p.z], v.yaw)).toBe(SPAWN_CLEAR_AHEAD)
     const h = controllerSpawn('man-o-war', 'horizontal')
     expect(h.yaw).toBe(h.localYaw)
+  })
+})
+
+const DECK_FOV_RAD = (DECK_FOV * Math.PI) / 180
+
+describe('manned eye stays inboard with the barrel in frame (BUG-800)', () => {
+  it('every on-deck station of every class: eye GUN_EYE_BEHIND_BREECH behind the breech on the barrel axis, inside the bulwark, muzzle in the lower half of the frame', () => {
+    for (const id of Object.keys(SHIPS) as (keyof typeof SHIPS)[]) {
+      const a = SHIPS[id].anchors
+      const deck = resolveDeckAnchors(a, id)
+      for (const s of stationsOf(a, deck)) {
+        if (!s.onDeck) continue
+        const label = `${id} station ${s.index}`
+        const h = Math.hypot(s.direction[0], s.direction[2]) || 1
+        const f: [number, number] = [s.direction[0] / h, s.direction[2] / h]
+        const along = (x: number, z: number) => x * f[0] + z * f[1]
+        const { position, pitch, yaw } = gunnerPose(s)
+        const [ex, ez] = gunnerEyeXZ(s)
+        expect(position[0], label).toBeCloseTo(ex, 9)
+        expect(position[2], label).toBeCloseTo(ez, 9)
+        expect(along(ex, ez), label).toBeCloseTo(along(s.breech[0], s.breech[2]) - GUN_EYE_BEHIND_BREECH, 9)
+        expect(along(ex, ez), label).toBeLessThan(along(s.muzzle[0], s.muzzle[2]) - GUN_EYE_BACK)
+        // inside the bulwark: behind the deck's walkable edge along the barrel, and inside the hull's beam
+        const level = Math.max(0, levelAt([s.stand[0], s.stand[2]], deck))
+        const toEdge = rayToPolygonEdge([ex, ez], f, deck.walk[level].points)
+        expect(toEdge, label).toBeGreaterThan(0)
+        expect(Math.abs(ez), label).toBeLessThan(a.hull.beam / 2)
+        // the view centre clears the rail where it crosses the bulwark; the breech / carriage is below the centre (lower frame)
+        if (s.rail !== undefined) {
+          const dist = Math.hypot(s.muzzle[0] - ex, s.muzzle[2] - ez)
+          expect(position[1] + Math.tan(pitch) * dist, label).toBeGreaterThanOrEqual(s.rail + GUN_RAY_OVER_RAIL - 1e-9)
+        }
+        const toBreech = Math.atan2(s.breech[1] - position[1], Math.hypot(s.breech[0] - ex, s.breech[2] - ez))
+        expect(pitch - toBreech, label).toBeGreaterThan(0)
+        expect(pitch, label).toBeLessThanOrEqual(-0.02)
+        expect(pitch, label).toBeGreaterThan(-DECK_FOV_RAD / 2)
+        expect(Math.abs(angleDelta(yaw, yawToward(f[0], f[1]))), label).toBeLessThan(1e-9)
+      }
+    }
   })
 })

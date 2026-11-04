@@ -533,6 +533,11 @@ export function spawnPoseAvoiding(deck: WalkableDeck, hit: readonly number[], n:
 
 /** How far ahead of a freshly spawned player the view must be clear of obstacles (a mast trunk 0.2 u ahead fills the screen). */
 export const SPAWN_CLEAR_AHEAD = 0.6
+/**
+ * How far the spawn *facing* must see before it counts as an open view (BUG-799: a mast trunk 0.7 u ahead was "clear"
+ * for SPAWN_CLEAR_AHEAD and filled the frame). Rails do not block, so the beam over the sea always qualifies.
+ */
+export const SPAWN_OPEN_VIEW = 1.5
 
 /** A deck level this much higher than the one ahead of the player is a wall in the view (a cabin front, a poop break). */
 export const WALL_STEP = 0.02
@@ -667,18 +672,18 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
       const st = standAt(p.x + dir * k * SPAWN_SHIFT_STEP)
       if (st.level !== p.level || deck.blocked?.some((b) => inBand(st.x, b))) continue
       const at: Pt = [st.x, st.z]
-      const see = (y: number) => clearAhead(deck, at, y, SPAWN_CLEAR_AHEAD, PLAYER_RADIUS, st.level)
-      candidates.push({ st, k, insetOk: rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6, enemy: see(yaw), bow: see(bow), any: see(clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_CLEAR_AHEAD, st.level)) })
+      const see = (y: number) => clearAhead(deck, at, y, SPAWN_OPEN_VIEW, PLAYER_RADIUS, st.level)
+      candidates.push({ st, k, insetOk: rayToPolygonEdge(at, [0, side], walk) >= keep - 1e-6, enemy: see(yaw), bow: see(bow), any: see(clearLookYaw(deck, at, yaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, st.level)) })
     }
   }
   for (const view of ['enemy', 'bow', 'any'] as const) {
-    const hit = candidates.find((c) => c.insetOk && c[view] >= SPAWN_CLEAR_AHEAD)
+    const hit = candidates.find((c) => c.insetOk && c[view] >= SPAWN_OPEN_VIEW)
     if (hit) return hit.st
   }
   let best = p
   let bestScore = -Infinity
   for (const c of candidates) {
-    const score = (c.insetOk ? 1 : 0) + c.any / SPAWN_CLEAR_AHEAD - c.k * 0.01
+    const score = (c.insetOk ? 1 : 0) + c.any / SPAWN_OPEN_VIEW - c.k * 0.01
     if (score > bestScore) {
       bestScore = score
       best = c.st
@@ -686,6 +691,10 @@ export function spawnStand(deck: WalkableDeck, p: WalkPose, side: 1 | -1, yaw: n
   }
   return best
 }
+
+/** The spawn facing from the stand `p`: the enemy when the view that way is open for SPAWN_OPEN_VIEW, else the fallbacks / sweep. */
+export const spawnLookYaw = (deck: DeckAnchors, p: WalkPose, localYaw: number, side: 1 | -1): number =>
+  clearLookYaw(deck, [p.x, p.z], localYaw, spawnYawFallbacks(side), SPAWN_OPEN_VIEW, p.level)
 
 /**
  * Yaws to try after the enemy-facing one: along the deck toward the bow (the waist and the ship in frame — the quarterdeck
@@ -868,6 +877,14 @@ export function walkEyeHeight(deck: DeckAnchors, stations: readonly Station[]): 
 export const GUN_EYE_OVER_RAIL = 0.08
 /** Horizontal distance behind the muzzle: just inside the bulwark planking on every class (muzzles poke 0.015–0.05 u out). */
 export const GUN_EYE_BACK = 0.1
+/**
+ * Horizontal distance the eye stands behind the breech (BUG-800). The eye used to be GUN_EYE_BACK behind the *muzzle*:
+ * on the man-o'-war (muzzles 0.14 u out) that is outside the planking over the water, and everywhere the barrel was
+ * 0.3 u below and 0.1 u ahead of the eye — 70° down, outside the 70° deck fov — so no barrel showed in the manned view.
+ */
+export const GUN_EYE_BEHIND_BREECH = 0.12
+/** The view centre passes at least this far above the rail where it crosses the bulwark (the muzzle plane). */
+export const GUN_RAY_OVER_RAIL = 0.02
 /** Default pitch while manning: a little down, so the near water shows under the horizon (horizon ≈ 7° above centre). */
 export const GUN_PITCH = -0.12
 
@@ -886,7 +903,32 @@ export function gunnerPose(s: Station): { position: Vec3; yaw: number; pitch: nu
   const yaw = yawToward(fx, fz)
   if (s.rail === undefined) return { position: [s.muzzle[0] - fx * 0.06, s.muzzle[1] + 0.11, s.muzzle[2] - fz * 0.06], yaw, pitch: -0.08 }
   const y = Math.max(s.muzzle[1] + 0.11, s.rail + GUN_EYE_OVER_RAIL)
-  return { position: [s.muzzle[0] - fx * GUN_EYE_BACK, y, s.muzzle[2] - fz * GUN_EYE_BACK], yaw, pitch: GUN_PITCH }
+  const [ex, ez] = gunnerEyeXZ(s)
+  return { position: [ex, y, ez], yaw, pitch: gunnerPitch([ex, y, ez], s) }
+}
+
+/** Horizontal eye while manning: GUN_EYE_BEHIND_BREECH behind the breech, on the barrel's axis (sighting along it). */
+export function gunnerEyeXZ(s: Pick<Station, 'muzzle' | 'breech' | 'direction'>): Pt {
+  const [dx, , dz] = s.direction
+  const h = Math.hypot(dx, dz) || 1
+  const fx = dx / h
+  const fz = dz / h
+  const t = s.breech[0] * fx + s.breech[2] * fz - GUN_EYE_BEHIND_BREECH
+  // keep the muzzle's across-axis offset (the eye sights along the barrel), move only along the barrel
+  const across = -s.muzzle[0] * fz + s.muzzle[2] * fx
+  return [t * fx - across * fz, t * fz + across * fx]
+}
+
+/**
+ * Manning pitch: GUN_PITCH (a little down, near water under the horizon) unless the view centre would then meet the
+ * bulwark — it stays GUN_RAY_OVER_RAIL above the rail where it crosses the muzzle plane (the eye now stands inboard,
+ * behind the breech, so the bulwark is further away and a flatter pitch is needed on high-railed classes).
+ */
+export function gunnerPitch(eye: Vec3, s: Pick<Station, 'muzzle' | 'rail' | 'direction'>): number {
+  if (s.rail === undefined) return GUN_PITCH
+  const dist = Math.max(0.05, Math.hypot(s.muzzle[0] - eye[0], s.muzzle[2] - eye[2]))
+  const maxDown = Math.atan2(eye[1] - s.rail - GUN_RAY_OVER_RAIL, dist)
+  return clamp(GUN_PITCH, -maxDown, -0.02)
 }
 
 /** Walking pose while manning (feet stay on the stand) — the eye is `EYE_HEIGHT` above it. */
