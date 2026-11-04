@@ -12,7 +12,7 @@ import { Debris } from './Debris'
 import { HullWash } from './HullWash'
 import { Steam } from './Steam'
 import { Whirlpool } from './Whirlpool'
-import { debrisPieces, footprintCenters } from './debris'
+import { debrisPieces, footprintCenters } from './debrisModel'
 import { lastHitIndex, placedShipSeed, sinkBias, sinkPose, window01, type HullDims, type SinkPose } from './pose'
 
 /** Resting height of ship roots above the water plane (the scene's board convention). */
